@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newClient() (*client, error) {
+func newClient() (Client, error) {
 	c, err := New("dev-synology:5001", true)
 	if err != nil {
 		return nil, err

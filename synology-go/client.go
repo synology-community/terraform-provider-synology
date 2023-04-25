@@ -20,13 +20,17 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+type Client interface {
+	Login(user, password, sessionName string) error
+	Do(r api.Request, response api.Response) error
+}
 type client struct {
 	httpClient *http.Client
 	host       string
 }
 
 // New initializes "client" instance with minimal input configuration.
-func New(host string, skipCertificateVerification bool) (*client, error) {
+func New(host string, skipCertificateVerification bool) (Client, error) {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
@@ -73,13 +77,12 @@ func (c *client) Login(user, password, sessionName string) error {
 	q.Add("format", "cookie")
 	u.RawQuery = q.Encode()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return err
 	}
-	// req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
