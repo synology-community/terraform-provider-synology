@@ -30,5 +30,3 @@ output "filestation_hostname" {
 - `is_manager` (Boolean) Indicates whether current user is an administrator.
 - `support_sharing` (Boolean) Indicates whether current user can share files/folders.
 - `support_virtual_protocol` (String) Comma separated list of virtual file system, which current user is able to mount.
-
-
