@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/appkins/terraform-provider-synology/internal/provider/filestation"
+	client "github.com/appkins/terraform-provider-synology/synology-go"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -12,8 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/maksym-nazarenko/terraform-provider-synology/internal/provider/filestation"
-	client "github.com/maksym-nazarenko/terraform-provider-synology/synology-go"
 )
 
 const (

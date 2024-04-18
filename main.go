@@ -5,8 +5,8 @@ import (
 	"flag"
 	"log"
 
+	"github.com/appkins/terraform-provider-synology/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/maksym-nazarenko/terraform-provider-synology/internal/provider"
 )
 
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
@@ -17,7 +17,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/maksym-nazarenko/synology",
+		Address: "registry.terraform.io/appkins/synology",
 		Debug:   debug,
 	}
 

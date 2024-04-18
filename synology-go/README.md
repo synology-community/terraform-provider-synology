@@ -7,12 +7,12 @@ system via HTTP API.
 # Install
 
 ```bash
-go get github.com/maksym-nazarenko/terraform-provider-synology/synology-go@v0.0.1
+go get github.com/appkins/terraform-provider-synology/synology-go@v0.0.1
 ```
 
 or
 ```bash
-go get github.com/maksym-nazarenko/terraform-provider-synology/synology-go
+go get github.com/appkins/terraform-provider-synology/synology-go
 ```
 for the latest version.
 
@@ -24,8 +24,8 @@ package main
 import (
 	"log"
 
-	"github.com/maksym-nazarenko/terraform-provider-synology/synology-go/api"
-	"github.com/maksym-nazarenko/terraform-provider-synology/synology-go/api/filestation"
+	"github.com/appkins/terraform-provider-synology/synology-go/api"
+	"github.com/appkins/terraform-provider-synology/synology-go/api/filestation"
 )
 
 func main() {

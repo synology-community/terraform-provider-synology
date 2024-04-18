@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	client "github.com/appkins/terraform-provider-synology/synology-go"
+	"github.com/appkins/terraform-provider-synology/synology-go/api/filestation"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/maksym-nazarenko/terraform-provider-synology/synology-go"
-	"github.com/maksym-nazarenko/terraform-provider-synology/synology-go/api/filestation"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maksym-nazarenko/terraform-provider-synology/synology-go/api"
+	"github.com/appkins/terraform-provider-synology/synology-go/api"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/net/publicsuffix"
 )

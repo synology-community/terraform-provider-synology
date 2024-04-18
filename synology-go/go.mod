@@ -1,11 +1,11 @@
-module github.com/maksym-nazarenko/terraform-provider-synology/synology-go
+module github.com/appkins/terraform-provider-synology/synology-go
 
 go 1.19
 
 require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/stretchr/testify v1.8.2
-	golang.org/x/net v0.8.0
+	golang.org/x/net v0.22.0
 )
 
 require (

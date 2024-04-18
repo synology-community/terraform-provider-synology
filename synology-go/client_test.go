@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/maksym-nazarenko/terraform-provider-synology/synology-go/api"
+	"github.com/appkins/terraform-provider-synology/synology-go/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

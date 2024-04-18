@@ -1,6 +1,6 @@
 package filestation
 
-import "github.com/maksym-nazarenko/terraform-provider-synology/synology-go/api"
+import "github.com/appkins/terraform-provider-synology/synology-go/api"
 
 type baseFileStationRequest struct {
 	Version   int    `synology:"version"`
