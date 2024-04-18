@@ -2,8 +2,6 @@ module github.com/appkins/terraform-provider-synology
 
 go 1.21
 
-toolchain go1.22.2
-
 require (
 	github.com/appkins/terraform-provider-synology/synology-go v0.0.0-00010101000000-000000000000
 	github.com/hashicorp/terraform-plugin-docs v0.19.0
