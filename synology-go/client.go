@@ -4,18 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"reflect"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/appkins/terraform-provider-synology/synology-go/api"
+	"github.com/appkins/terraform-provider-synology/synology-go/api/filestation"
+	"github.com/appkins/terraform-provider-synology/synology-go/api/virtualization"
+	"github.com/appkins/terraform-provider-synology/synology-go/util"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/net/publicsuffix"
 )
@@ -23,10 +22,34 @@ import (
 type Client interface {
 	Login(user, password, sessionName string) error
 	Do(r api.Request, response api.Response) error
+	CreateFolder(folderPath string, name string, forceParent bool) (*filestation.CreateFolderResponse, error)
+	ListShares() (*filestation.ListShareResponse, error)
+	ListGuests() (*virtualization.ListGuestResponse, error)
 }
 type client struct {
 	httpClient *http.Client
 	host       string
+}
+
+// ListGuests implements Client.
+func (c *client) ListGuests() (*virtualization.ListGuestResponse, error) {
+	request := api.NewRequest("SYNO.Virtualization.API.Guest", "list")
+	response := virtualization.ListGuestResponse{}
+	if err := c.Do(request, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+// ListShares implements Client.
+func (c *client) ListShares() (*filestation.ListShareResponse, error) {
+	panic("unimplemented")
+}
+
+type synologyClient struct {
+	host    string
+	apiInfo map[string]api.InfoData
+	sid     string
 }
 
 // New initializes "client" instance with minimal input configuration.
@@ -95,6 +118,19 @@ func (c *client) Login(user, password, sessionName string) error {
 	return nil
 }
 
+func (c client) CreateFolder(folderPath string, name string, forceParent bool) (*filestation.CreateFolderResponse, error) {
+	request := filestation.NewCreateFolderRequest(2)
+	request.WithFolderPath(folderPath)
+	request.WithName(name)
+	request.WithForceParent(forceParent)
+
+	response := filestation.CreateFolderResponse{}
+
+	err := c.Do(request, &response)
+
+	return &response, err
+}
+
 // Do performs an HTTP request to remote Synology instance.
 //
 // Returns error in case of any transport errors.
@@ -104,7 +140,7 @@ func (c client) Do(r api.Request, response api.Response) error {
 
 	// request can override this path by implementing APIPathProvider interface
 	u.Path = "/webapi/entry.cgi"
-	query, err := marshalURL(r)
+	query, err := util.MarshalURL(r)
 	if err != nil {
 		return err
 	}
@@ -171,74 +207,4 @@ func handleErrors(response api.GenericResponse, errorDescriber api.ErrorDescribe
 	}
 
 	return err
-}
-
-func marshalURL(r interface{}) (url.Values, error) {
-	v := reflect.Indirect(reflect.ValueOf(r))
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected type struct, got %T", reflect.TypeOf(r).Name())
-	}
-	n := v.NumField()
-	vT := v.Type()
-	ret := url.Values{}
-	for i := 0; i < n; i++ {
-		urlFieldName := strings.ToLower(vT.Field(i).Name)
-		synologyTags := []string{}
-		if tags, ok := vT.Field(i).Tag.Lookup("synology"); ok {
-			synologyTags = strings.Split(tags, ",")
-		}
-		if !(vT.Field(i).IsExported() || vT.Field(i).Anonymous || len(synologyTags) > 0) {
-			continue
-		}
-		if len(synologyTags) > 0 {
-			urlFieldName = synologyTags[0]
-		}
-
-		// get field type
-		switch vT.Field(i).Type.Kind() {
-		case reflect.String:
-			ret.Add(urlFieldName, v.Field(i).String())
-		case reflect.Int:
-			ret.Add(urlFieldName, strconv.Itoa(int(v.Field(i).Int())))
-		case reflect.Bool:
-			ret.Add(urlFieldName, strconv.FormatBool(v.Field(i).Bool()))
-		case reflect.Slice:
-			slice := v.Field(i)
-			switch vT.Field(i).Type.Elem().Kind() {
-			case reflect.String:
-				res := []string{}
-				for iSlice := 0; iSlice < slice.Len(); iSlice++ {
-					item := slice.Index(iSlice)
-					res = append(res, item.String())
-				}
-				ret.Add(urlFieldName, "[\""+strings.Join(res, "\",\"")+"\"]")
-			case reflect.Int:
-				res := []string{}
-				for iSlice := 0; iSlice < slice.Len(); iSlice++ {
-					item := slice.Index(iSlice)
-					res = append(res, strconv.Itoa(int(item.Int())))
-				}
-				ret.Add(urlFieldName, "["+strings.Join(res, ",")+"]")
-			}
-		case reflect.Struct:
-			if !vT.Field(i).Anonymous {
-				// support only embedded anonymous structs
-				continue
-			}
-			embStruct := v.Field(i)
-			embStructT := v.Field(i).Type()
-			for j := 0; j < embStruct.NumField(); j++ {
-				synologyTags := strings.Split(embStructT.Field(j).Tag.Get("synology"), ",")
-				fieldName := synologyTags[0]
-				switch embStruct.Field(j).Kind() {
-				case reflect.String:
-					ret.Add(fieldName, embStruct.Field(j).String())
-				case reflect.Int:
-					ret.Add(fieldName, strconv.Itoa(int(embStruct.Field(j).Int())))
-				}
-			}
-		}
-	}
-
-	return ret, nil
 }

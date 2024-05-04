@@ -5,11 +5,11 @@ import (
 )
 
 type FileStationInfoRequest struct {
-	baseFileStationRequest
+	api.BaseRequest
 }
 
 type FileStationInfoResponse struct {
-	baseFileStationResponse
+	api.BaseResponse
 
 	IsManager              bool
 	SupportVirtualProtocol string
@@ -21,7 +21,7 @@ var _ api.Request = (*FileStationInfoRequest)(nil)
 
 func NewFileStationInfoRequest(version int) *FileStationInfoRequest {
 	return &FileStationInfoRequest{
-		baseFileStationRequest: baseFileStationRequest{
+		BaseRequest: api.BaseRequest{
 			Version:   version,
 			APIName:   "SYNO.FileStation.Info",
 			APIMethod: "get",

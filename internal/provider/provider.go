@@ -131,6 +131,8 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		filestation.NewInfoDataSource,
+		NewGuestDataSource,
+		NewGuestsDataSource,
 	}
 }
 

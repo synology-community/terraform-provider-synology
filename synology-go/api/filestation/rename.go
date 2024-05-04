@@ -5,7 +5,7 @@ import (
 )
 
 type FileStationRenameRequest struct {
-	baseFileStationRequest
+	api.BaseRequest
 
 	name string
 	path string
@@ -18,7 +18,7 @@ type File struct {
 }
 
 type FileStationRenameResponse struct {
-	baseFileStationResponse
+	api.BaseResponse
 
 	Files []File
 }
@@ -27,7 +27,7 @@ var _ api.Request = (*FileStationRenameRequest)(nil)
 
 func NewFileStationRenameRequest(version int) *FileStationRenameRequest {
 	return &FileStationRenameRequest{
-		baseFileStationRequest: baseFileStationRequest{
+		BaseRequest: api.BaseRequest{
 			Version:   version,
 			APIName:   "SYNO.FileStation.Rename",
 			APIMethod: "rename",

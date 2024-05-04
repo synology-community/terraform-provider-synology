@@ -1,8 +1,4 @@
-// Package api provides types for common objects required during calls to remote Synology instance.
 package api
-
-// Request defines a contract for all Request implementations.
-type Request interface{}
 
 // Response defines an interface for all responses from Synology API.
 type Response interface {
@@ -24,4 +20,20 @@ type GenericResponse struct {
 	Success bool
 	Data    interface{}
 	Error   SynologyError
+}
+
+type BaseResponse struct {
+	SynologyError
+}
+
+func (b *BaseResponse) SetError(e SynologyError) {
+	b.SynologyError = e
+}
+
+func (b BaseResponse) Success() bool {
+	return b.SynologyError.Code == 0
+}
+
+func (b *BaseResponse) GetError() SynologyError {
+	return b.SynologyError
 }
