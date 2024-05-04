@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/appkins/terraform-provider-synology/internal/provider"
+	"github.com/appkins/terraform-provider-synology/synology/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 

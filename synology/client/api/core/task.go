@@ -1,6 +1,6 @@
 package core
 
-import "github.com/appkins/terraform-provider-synology/synology-go/api"
+import "github.com/appkins/terraform-provider-synology/synology/client/api"
 
 type CreateTaskRequest struct {
 	api.BaseRequest
@@ -115,5 +115,5 @@ func NewListTaskRequest(sortBy string, fileType string, checkDir bool, additiona
 }
 
 func (r ListTaskRequest) ErrorSummaries() []api.ErrorSummary {
-	return []api.ErrorSummary{commonErrors}
+	return []api.ErrorSummary{api.GlobalErrors}
 }

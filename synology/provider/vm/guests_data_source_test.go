@@ -1,8 +1,9 @@
-package provider_test
+package vm_test
 
 import (
 	"testing"
 
+	"github.com/appkins/terraform-provider-synology/synology/acctest"
 	r "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
@@ -12,18 +13,16 @@ func TestAccGuestsDataSource_basic(t *testing.T) {
 	testCases := []struct {
 		Name            string
 		DataSourceBlock string
-		Expected        string
 	}{
 		{
-			"no gzip or b64 - basic content",
+			"contains a guest",
 			`data "synology_guests" "foo" {}`,
-			"Content-Type: multipart/mixed; boundary=\"MIMEBOUNDARY\"\nMIME-Version: 1.0\r\n\r\n--MIMEBOUNDARY\r\nContent-Transfer-Encoding: 7bit\r\nContent-Type: text/x-shellscript\r\nMime-Version: 1.0\r\n\r\nbaz\r\n--MIMEBOUNDARY--\r\n",
 		},
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
 			r.UnitTest(t, r.TestCase{
-				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
 						Config: tt.DataSourceBlock,

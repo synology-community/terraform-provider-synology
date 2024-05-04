@@ -1,6 +1,6 @@
 package filestation
 
-import "github.com/appkins/terraform-provider-synology/synology-go/api"
+import "github.com/appkins/terraform-provider-synology/synology/client/api"
 
 type CreateShareRequest struct {
 	api.BaseRequest

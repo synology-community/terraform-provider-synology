@@ -11,10 +11,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/appkins/terraform-provider-synology/synology-go/api"
-	"github.com/appkins/terraform-provider-synology/synology-go/api/filestation"
-	"github.com/appkins/terraform-provider-synology/synology-go/api/virtualization"
-	"github.com/appkins/terraform-provider-synology/synology-go/util"
+	"github.com/appkins/terraform-provider-synology/synology/client/api"
+	"github.com/appkins/terraform-provider-synology/synology/client/api/filestation"
+	"github.com/appkins/terraform-provider-synology/synology/client/api/virtualization"
+	"github.com/appkins/terraform-provider-synology/synology/client/util"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/net/publicsuffix"
 )

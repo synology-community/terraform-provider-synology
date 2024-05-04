@@ -1,10 +1,10 @@
-package provider
+package vm
 
 import (
 	"context"
 	"fmt"
 
-	client "github.com/appkins/terraform-provider-synology/synology-go"
+	client "github.com/appkins/terraform-provider-synology/synology/client"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"

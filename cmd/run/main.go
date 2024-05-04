@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 
-	client "github.com/appkins/terraform-provider-synology/synology-go"
-	"github.com/appkins/terraform-provider-synology/synology-go/api/filestation"
+	client "github.com/appkins/terraform-provider-synology/synology/client"
+	"github.com/appkins/terraform-provider-synology/synology/client/api/filestation"
 )
 
 func main() {

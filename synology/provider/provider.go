@@ -5,8 +5,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/appkins/terraform-provider-synology/internal/provider/filestation"
-	client "github.com/appkins/terraform-provider-synology/synology-go"
+	client "github.com/appkins/terraform-provider-synology/synology/client"
+	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
+	"github.com/appkins/terraform-provider-synology/synology/provider/vm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -131,8 +132,8 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		filestation.NewInfoDataSource,
-		NewGuestDataSource,
-		NewGuestsDataSource,
+		vm.NewGuestDataSource,
+		vm.NewGuestsDataSource,
 	}
 }
 

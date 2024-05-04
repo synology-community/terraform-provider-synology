@@ -1,6 +1,6 @@
 package virtualization
 
-import "github.com/appkins/terraform-provider-synology/synology-go/api"
+import "github.com/appkins/terraform-provider-synology/synology/client/api"
 
 type Guest struct {
 	ID          string `mapstructure:"guest_id" json:"guest_id"`

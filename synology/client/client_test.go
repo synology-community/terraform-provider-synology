@@ -5,7 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/appkins/terraform-provider-synology/synology-go/api"
+	"github.com/appkins/terraform-provider-synology/synology/client/api"
+	"github.com/appkins/terraform-provider-synology/synology/client/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,7 +120,7 @@ func TestMarshalURL(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := marshalURL(tc.in)
+			result, err := util.MarshalURL(tc.in)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
 		})
