@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	client "github.com/appkins/terraform-provider-synology/synology/client"
-	"github.com/appkins/terraform-provider-synology/synology/client/api/filestation"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	client "github.com/synology-community/synology-api/package"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -19,7 +18,7 @@ func NewInfoDataSource() datasource.DataSource {
 }
 
 type infoDataSource struct {
-	client client.Client
+	client client.SynologyClient
 }
 
 type infoDataSourceModel struct {
@@ -69,7 +68,7 @@ func (d *infoDataSource) Configure(ctx context.Context, req datasource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(client.Client)
+	client, ok := req.ProviderData.(client.SynologyClient)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -84,28 +83,28 @@ func (d *infoDataSource) Configure(ctx context.Context, req datasource.Configure
 }
 
 func (d *infoDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data infoDataSourceModel
+	// var data infoDataSourceModel
 
-	clientResponse := filestation.FileStationInfoResponse{}
-	clientRequest := filestation.NewFileStationInfoRequest(2)
-	if err := d.client.Do(clientRequest, &clientResponse); err != nil {
-		resp.Diagnostics.AddError("API request failed", fmt.Sprintf("Unable to read data source, got error: %s", err))
-		return
-	}
-	if !clientResponse.Success() {
-		resp.Diagnostics.AddError(
-			"Client error",
-			fmt.Sprintf("Unable to read data source, got error: %s", clientResponse.GetError()),
-		)
-		return
-	}
+	// clientResponse := filestation.FileStationInfoResponse{}
+	// clientRequest := filestation.NewFileStationInfoRequest(2)
+	// if err := d.client.Get(clientRequest, &clientResponse); err != nil {
+	// 	resp.Diagnostics.AddError("API request failed", fmt.Sprintf("Unable to read data source, got error: %s", err))
+	// 	return
+	// }
+	// if !clientResponse.Success() {
+	// 	resp.Diagnostics.AddError(
+	// 		"Client error",
+	// 		fmt.Sprintf("Unable to read data source, got error: %s", clientResponse.GetError()),
+	// 	)
+	// 	return
+	// }
 
-	data.ID = types.StringValue(clientResponse.Hostname)
-	data.Hostname = types.StringValue(clientResponse.Hostname)
-	data.IsManager = types.BoolValue(clientResponse.IsManager)
-	data.SupportSharing = types.BoolValue(clientResponse.Supportsharing)
-	data.SupportVirtualProtocol = types.StringValue(clientResponse.SupportVirtualProtocol)
+	// data.ID = types.StringValue(clientResponse.Hostname)
+	// data.Hostname = types.StringValue(clientResponse.Hostname)
+	// data.IsManager = types.BoolValue(clientResponse.IsManager)
+	// data.SupportSharing = types.BoolValue(clientResponse.Supportsharing)
+	// data.SupportVirtualProtocol = types.StringValue(clientResponse.SupportVirtualProtocol)
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// // Save data into Terraform state
+	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

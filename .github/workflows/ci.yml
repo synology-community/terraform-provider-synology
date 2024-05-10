@@ -1,32 +1,59 @@
-name: main
+# Terraform Provider testing workflow.
+name: Tests
+
+# This GitHub action runs your tests for each pull request and push.
+# Optionally, you can turn it on using a schedule for regular testing.
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    paths-ignore:
+      - "README.md"
+  push:
+    paths-ignore:
+      - "README.md"
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
 
 jobs:
-  tests:
-    name: test
-    strategy:
-      matrix:
-        go-version: ['1.19']
-    runs-on: ubuntu-22.04
-    env:
-      CGO_ENABLED: '0'
+  # Ensure project builds before running testing matrix
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup Go v${{ matrix.go-version }}
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: "go.mod"
+          cache: true
+      - run: go mod download
+      - run: go build -v .
 
-      - name: Cache dependencies
-        uses: actions/cache@v2
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          go-version-file: "go.mod"
+          cache: true
+      - run: go generate ./...
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - run: go mod download
 
       - name: Client unit tests
         run: |

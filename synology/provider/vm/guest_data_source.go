@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	client "github.com/appkins/terraform-provider-synology/synology/client"
-	"github.com/appkins/terraform-provider-synology/synology/client/api/virtualization"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	client "github.com/synology-community/synology-api/package"
+	"github.com/synology-community/synology-api/package/api/virtualization"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -21,7 +21,7 @@ func NewGuestDataSource() datasource.DataSource {
 }
 
 type GuestDataSource struct {
-	client client.Client
+	client client.SynologyClient
 }
 
 type GuestDataSourceModel struct {
@@ -89,7 +89,7 @@ func (m GuestDataSourceModel) Value() attr.Value {
 	})
 }
 
-func (m *GuestDataSourceModel) FromGuest(v virtualization.Guest) error {
+func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	m.ID = types.StringValue(v.ID)
 
 	if m.Name.IsNull() {
@@ -264,7 +264,7 @@ func (d *GuestDataSource) Configure(ctx context.Context, req datasource.Configur
 		return
 	}
 
-	client, ok := req.ProviderData.(client.Client)
+	client, ok := req.ProviderData.(client.SynologyClient)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -284,28 +284,18 @@ func (d *GuestDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	clientResponse, err := d.client.ListGuests()
+	name := data.Name.ValueString()
+
+	clientResponse, err := d.client.VirtualizationAPI().GetGuest(name)
 
 	if err != nil {
 		resp.Diagnostics.AddError("API request failed", fmt.Sprintf("Unable to read data source, got error: %s", err))
 		return
 	}
 
-	if !clientResponse.Success() {
-		resp.Diagnostics.AddError(
-			"Client error",
-			fmt.Sprintf("Unable to read data source, got error: %s", clientResponse.GetError()),
-		)
+	if err := data.FromGuest(clientResponse); err != nil {
+		resp.Diagnostics.AddError("Failed to read guest data", err.Error())
 		return
-	}
-
-	for _, v := range clientResponse.Guests {
-		if v.Name == data.Name.ValueString() {
-			if err := data.FromGuest(v); err != nil {
-				resp.Diagnostics.AddError("Failed to read guest data", err.Error())
-				return
-			}
-		}
 	}
 
 	if data.ID.IsNull() {

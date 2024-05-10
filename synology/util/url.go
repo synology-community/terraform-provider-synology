@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func MarshalURL(r interface{}) (url.Values, error) {
+func MarshalURL(r any) (url.Values, error) {
 	v := reflect.Indirect(reflect.ValueOf(r))
 	if v.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("expected type struct, got %T", reflect.TypeOf(r).Name())

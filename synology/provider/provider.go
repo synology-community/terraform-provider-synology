@@ -2,10 +2,11 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 
-	client "github.com/appkins/terraform-provider-synology/synology/client"
 	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
 	"github.com/appkins/terraform-provider-synology/synology/provider/vm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -15,6 +16,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	client "github.com/synology-community/synology-api/package"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -30,8 +34,8 @@ var _ provider.Provider = &SynologyProvider{}
 // SynologyProvider defines the provider implementation.
 type SynologyProvider struct{}
 
-// providerModel describes the provider data model.
-type providerModel struct {
+// SynologyProviderModel describes the provider data model.
+type SynologyProviderModel struct {
 	Host          types.String `tfsdk:"host"`
 	User          types.String `tfsdk:"user"`
 	Password      types.String `tfsdk:"password"`
@@ -40,6 +44,9 @@ type providerModel struct {
 
 func (p *SynologyProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "synology"
+	log.SetFormatter(&log.JSONFormatter{})
+
+	log.Info("Starting")
 }
 
 func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
@@ -67,7 +74,7 @@ func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaReques
 }
 
 func (p *SynologyProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data providerModel
+	var data SynologyProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -115,10 +122,11 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 	// Example client configuration for data sources and resources
 	client, err := client.New(host, skipCertificateCheck)
 	if err != nil {
-		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", err.Error()))
+		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
-	if err := client.Login(user, password, "webui"); err != nil {
-		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", err.Error()))
+
+	if _, err := client.Login(user, password, ""); err != nil {
+		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
 	}
 
 	resp.DataSourceData = client
@@ -126,7 +134,9 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 }
 
 func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		filestation.NewFileResource,
+	}
 }
 
 func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
@@ -134,6 +144,24 @@ func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.
 		filestation.NewInfoDataSource,
 		vm.NewGuestDataSource,
 		vm.NewGuestsDataSource,
+	}
+}
+
+func (p *SynologyProvider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
+	var data SynologyProviderModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if _, err := url.Parse(data.Host.ValueString()); err != nil {
+		resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+			path.Root("host"),
+			"invalid provider configuration",
+			"host is not a valid URL"))
+		return
 	}
 }
 

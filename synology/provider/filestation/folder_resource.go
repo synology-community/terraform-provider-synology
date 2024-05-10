@@ -3,12 +3,12 @@ package filestation
 import (
 	"context"
 
-	client "github.com/appkins/terraform-provider-synology/synology/client"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	client "github.com/synology-community/synology-api/package"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -21,7 +21,7 @@ func NewFolderResource() resource.Resource {
 }
 
 type FolderResource struct {
-	client client.Client
+	client client.SynologyClient
 }
 
 // FolderResourceModel describes the resource data model.

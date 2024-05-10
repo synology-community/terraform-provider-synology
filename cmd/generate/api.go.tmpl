@@ -1,0 +1,155 @@
+{{- $structName := .StructName }}
+
+{{ define "field" }}
+	{{ .FieldName }} {{ if .IsArray }}[]{{end}}{{ .FieldType }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"` {{ if .FieldValidation }}// {{ .FieldValidation }}{{ end }} {{- end }}
+{{ define "field-customUnmarshalType" }}
+	{{- if eq .CustomUnmarshalType "" }}{{else}}
+			{{ .FieldName }} {{ if .IsArray }}[]{{end}}{{ .CustomUnmarshalType }} `json:"{{ .JSONName }}"`{{ end }} {{- end }}
+{{ define "typecast" }}
+	{{- if ne .CustomUnmarshalFunc "" }}
+		dst.{{ .FieldName }}= {{ .CustomUnmarshalFunc }}(aux.{{ .FieldName }})
+	{{- else if eq .CustomUnmarshalType "" }}{{else}}
+		{{- if .IsArray }}
+		dst.{{ .FieldName }}= make([]{{ .FieldType }}, len(aux.{{ .FieldName }}))
+		for i, v := range aux.{{ .FieldName }} {
+				dst.{{ .FieldName }}[i] = {{ .FieldType }}(v)
+		}
+		{{- else }}
+		dst.{{ .FieldName }} = {{ .FieldType }}(aux.{{ .FieldName }})
+		{{- end }}{{- end }}{{- end }}
+// Code generated from ace.jar fields *.json files
+// DO NOT EDIT.
+
+package unifi
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+)
+
+// just to fix compile issues with the import
+var (
+	_ context.Context
+	_ fmt.Formatter
+	_ json.Marshaler
+)
+
+{{ range $k, $v := .Types }}
+type {{ $k }} struct {
+	{{ range $fk, $fv := $v.Fields }}{{ if not $fv }}
+	{{ else }}{{- template "field" $fv }}{{ end }}{{ end }}
+}
+
+func (dst *{{ $k }}) UnmarshalJSON(b []byte) error {
+	type Alias {{ $k }}
+	aux := &struct {
+			{{- range $fk, $fv := $v.Fields }}{{ if not $fv }}
+			{{- else }}{{- template "field-customUnmarshalType" $fv }}{{ end }}{{- end }}
+
+		*Alias
+	}{
+		Alias: (*Alias)(dst),
+	}
+
+	err := json.Unmarshal(b, &aux)
+	if err != nil {
+		return fmt.Errorf("unable to unmarshal alias: %w", err)
+	}
+
+		{{- range $fk, $fv := $v.Fields }}{{ if not $fv }}
+		{{- else }}{{- template "typecast" $fv }}{{ end }}{{ end }}
+
+	return nil
+}
+{{ end }}
+
+func (c *Client) list{{ .StructName }}(ctx context.Context, site string) ([]{{ .StructName }}, error) {
+	var respBody struct {
+		Meta meta `json:"meta"`
+		Data []{{ .StructName }} `json:"data"`
+	}
+
+	err := c.do(ctx, "GET", fmt.Sprintf("s/%s/{{ if eq .StructName "Device" }}stat/{{else if eq .StructName "APGroup" }}{{ else }}rest/{{ end }}{{ .ResourcePath }}", site), nil, &respBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return respBody.Data, nil
+}
+
+func (c *Client) get{{ .StructName }}(ctx context.Context, site{{ if not .IsSetting }}, id{{ end }} string) (*{{ .StructName }}, error) {
+	var respBody struct {
+		Meta meta `json:"meta"`
+		Data []{{ .StructName }} `json:"data"`
+	}
+{{ if .IsSetting }}
+	err := c.do(ctx, "GET", fmt.Sprintf("s/%s/get/setting/{{ .ResourcePath }}", site), nil, &respBody)
+{{- else }}
+	err := c.do(ctx, "GET", fmt.Sprintf("s/%s/{{ if eq .StructName "Device" }}stat{{ else }}rest{{ end }}/{{ .ResourcePath }}/%s", site, id), nil, &respBody)
+{{- end }}
+	if err != nil {
+		return nil, err
+	}
+
+	if len(respBody.Data) != 1 {
+		return nil, &NotFoundError{}
+	}
+
+	d := respBody.Data[0]
+	return &d, nil
+}
+
+{{ if not .IsSetting }}
+func (c *Client) delete{{ .StructName }}(ctx context.Context, site, id string) error {
+	err := c.do(ctx, "DELETE", fmt.Sprintf("s/%s/rest/{{ .ResourcePath }}/%s", site, id), struct{}{}, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) create{{ .StructName }}(ctx context.Context, site string, d *{{ .StructName }}) (*{{ .StructName }}, error) {
+	var respBody struct {
+		Meta meta      `json:"meta"`
+		Data []{{ .StructName }} `json:"data"`
+	}
+
+	err := c.do(ctx, "POST", fmt.Sprintf("s/%s/rest/{{ .ResourcePath }}", site), d, &respBody)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(respBody.Data) != 1 {
+		return nil, &NotFoundError{}
+	}
+
+	new := respBody.Data[0]
+
+	return &new, nil
+}
+{{- end }}
+
+func (c *Client) update{{ .StructName }}(ctx context.Context, site string, d *{{ .StructName }}) (*{{ .StructName }}, error) {
+	var respBody struct {
+		Meta meta      `json:"meta"`
+		Data []{{ .StructName }} `json:"data"`
+	}
+{{ if .IsSetting }}
+	d.Key = "{{ .ResourcePath }}"
+	err := c.do(ctx, "PUT", fmt.Sprintf("s/%s/set/setting/{{ .ResourcePath }}", site), d, &respBody)
+{{- else }}
+	err := c.do(ctx, "PUT", fmt.Sprintf("s/%s/rest/{{ .ResourcePath }}/%s", site, d.ID), d, &respBody)
+{{- end }}
+	if err != nil {
+		return nil, err
+	}
+
+	if len(respBody.Data) != 1 {
+		return nil, &NotFoundError{}
+	}
+
+	new := respBody.Data[0]
+
+	return &new, nil
+}

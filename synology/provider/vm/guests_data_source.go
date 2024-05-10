@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	client "github.com/appkins/terraform-provider-synology/synology/client"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	client "github.com/synology-community/synology-api/package"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -19,7 +19,7 @@ func NewGuestsDataSource() datasource.DataSource {
 }
 
 type GuestsDataSource struct {
-	client client.Client
+	client client.SynologyClient
 }
 
 type GuestsDataSourceModel struct {
@@ -50,7 +50,7 @@ func (d *GuestsDataSource) Configure(ctx context.Context, req datasource.Configu
 		return
 	}
 
-	client, ok := req.ProviderData.(client.Client)
+	client, ok := req.ProviderData.(client.SynologyClient)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -70,18 +70,10 @@ func (d *GuestsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	clientResponse, err := d.client.ListGuests()
+	clientResponse, err := d.client.VirtualizationAPI().ListGuests()
 
 	if err != nil {
 		resp.Diagnostics.AddError("API request failed", fmt.Sprintf("Unable to read data source, got error: %s", err))
-		return
-	}
-
-	if !clientResponse.Success() {
-		resp.Diagnostics.AddError(
-			"Client error",
-			fmt.Sprintf("Unable to read data source, got error: %s", clientResponse.GetError()),
-		)
 		return
 	}
 
@@ -89,7 +81,7 @@ func (d *GuestsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 
 	for _, v := range clientResponse.Guests {
 		m := GuestDataSourceModel{}
-		if err := m.FromGuest(v); err != nil {
+		if err := m.FromGuest(&v); err != nil {
 			resp.Diagnostics.AddError("Failed to read guest data", err.Error())
 			return
 		}
