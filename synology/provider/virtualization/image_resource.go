@@ -68,6 +68,7 @@ func (f *ImageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "ID of the storage device.",
 				Optional:            true,
 				Computed:            true,
+				Default:             stringdefault.StaticString(""),
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
@@ -133,12 +134,10 @@ func (f *ImageResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	imageID := data.Name.ValueString()
+	imageName := data.Name.ValueString()
 
 	// Start Delete the image
-	_, err := f.client.ImageDelete(ctx, imageID)
-
-	if err != nil {
+	if err := f.client.ImageDelete(ctx, imageName); err != nil {
 		resp.Diagnostics.AddError("Failed to delete image", fmt.Sprintf("Unable to delete image, got error: %s", err))
 		return
 	}
@@ -158,12 +157,12 @@ func (f *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 
 	for _, image := range images.Images {
-		if image.Name == data.Name.ValueString() {
+		if image.Name == data.Name.ValueString() && image.Type == virtualization.ImageType(data.ImageType.ValueString()) {
 			data.ID = types.StringValue(image.ID)
-			data.Name = types.StringValue(image.Name)
-			data.Path = types.StringValue(image.FilePath)
-			data.AutoClean = types.BoolValue(image.AutoClean)
-			data.ImageType = types.StringValue(string(image.Type))
+			// data.Name = types.StringValue(image.Name)
+			// data.Path = types.StringValue(image.FilePath)
+			// data.AutoClean = types.BoolValue(image.AutoClean)
+			// data.ImageType = types.StringValue(string(image.Type))
 			continue
 		}
 	}
