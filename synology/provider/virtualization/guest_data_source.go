@@ -100,16 +100,16 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	m.Status = types.StringValue(v.Status)
 	m.StorageID = types.StringValue(v.StorageID)
 	m.StorageName = types.StringValue(v.StorageName)
-	m.Autorun = types.Int64Value(int64(v.AutoRun))
-	m.VcpuNum = types.Int64Value(int64(v.VcpuNum))
-	m.VramSize = types.Int64Value(int64(v.VramSize))
+	m.Autorun = types.Int64Value(v.AutoRun)
+	m.VcpuNum = types.Int64Value(v.VcpuNum)
+	m.VramSize = types.Int64Value(v.VramSize)
 
 	disks := []attr.Value{}
 	for _, d := range v.Disks {
 		disk := VDiskModel{
 			ID:         types.StringValue(d.ID),
-			Size:       types.Int64Value(int64(d.Size)),
-			Controller: types.Int64Value(int64(d.Controller)),
+			Size:       types.Int64Value(d.Size),
+			Controller: types.Int64Value(d.Controller),
 			Unmap:      types.BoolValue(d.Unmap),
 		}.Value()
 
@@ -122,11 +122,10 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	nets := []attr.Value{}
 	for _, n := range v.Networks {
 		m := VNicModel{
-			ID:     types.StringValue(n.ID),
-			Mac:    types.StringValue(n.Mac),
-			Model:  types.Int64Value(int64(n.Model)),
-			Name:   types.StringValue(n.Name),
-			VnicID: types.StringValue(n.VnicID),
+			ID:    types.StringValue(n.ID),
+			Mac:   types.StringValue(n.Mac),
+			Name:  types.StringValue(n.Name),
+			Model: types.Int64Value(n.Model),
 		}.Value()
 		nets = append(nets, m)
 	}
@@ -136,67 +135,6 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	}
 
 	return nil
-}
-
-type VDiskModel struct {
-	ID         types.String `tfsdk:"id"`
-	Size       types.Int64  `tfsdk:"size"`
-	Controller types.Int64  `tfsdk:"controller"`
-	Unmap      types.Bool   `tfsdk:"unmap"`
-}
-
-func (m VDiskModel) ModelType() attr.Type {
-	return types.ObjectType{AttrTypes: m.AttrType()}
-}
-
-func (m VDiskModel) AttrType() map[string]attr.Type {
-	return map[string]attr.Type{
-		"id":         types.StringType,
-		"size":       types.Int64Type,
-		"controller": types.Int64Type,
-		"unmap":      types.BoolType,
-	}
-}
-
-func (m VDiskModel) Value() attr.Value {
-	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"id":         types.StringValue(m.ID.ValueString()),
-		"size":       types.Int64Value(m.Size.ValueInt64()),
-		"controller": types.Int64Value(m.Controller.ValueInt64()),
-		"unmap":      types.BoolValue(m.Unmap.ValueBool()),
-	})
-}
-
-type VNicModel struct {
-	ID     types.String `tfsdk:"id"`
-	Mac    types.String `tfsdk:"mac"`
-	Model  types.Int64  `tfsdk:"model"`
-	Name   types.String `tfsdk:"name"`
-	VnicID types.String `tfsdk:"vnic_id"`
-}
-
-func (m VNicModel) ModelType() attr.Type {
-	return types.ObjectType{AttrTypes: m.AttrType()}
-}
-
-func (m VNicModel) AttrType() map[string]attr.Type {
-	return map[string]attr.Type{
-		"id":      types.StringType,
-		"mac":     types.StringType,
-		"model":   types.Int64Type,
-		"name":    types.StringType,
-		"vnic_id": types.StringType,
-	}
-}
-
-func (m VNicModel) Value() attr.Value {
-	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"id":      types.StringValue(m.ID.ValueString()),
-		"mac":     types.StringValue(m.Mac.ValueString()),
-		"model":   types.Int64Value(m.Model.ValueInt64()),
-		"name":    types.StringValue(m.Name.ValueString()),
-		"vnic_id": types.StringValue(m.VnicID.ValueString()),
-	})
 }
 
 func (d *GuestDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
