@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -54,16 +53,16 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	overwrite := data.Overwrite.ValueBool()
 	path := data.Path.ValueString()
 
+	filePath := filepath.Join(path, fileName)
+
 	// Check if the file exists
 
 	// If it exists, check the MD5 checksum
 
 	// If the checksums match, return
 
-	api := f.client.FileStationAPI()
-
 	// Upload the file
-	_, err := api.Upload(path, &form.File{
+	_, err := f.client.FileStationAPI().Upload(ctx, path, &form.File{
 		Name:    fileName,
 		Content: fileContent,
 	}, createParents, overwrite)
@@ -73,7 +72,7 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	md5, err := f.client.FileStationAPI().MD5(fileName)
+	md5, err := f.client.FileStationAPI().MD5(ctx, filePath)
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
@@ -98,33 +97,11 @@ func (f *FileResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
 
 	// Start Delete the file
-	rdel, err := f.client.FileStationAPI().DeleteStart([]string{fileName}, true)
+	_, err := f.client.FileStationAPI().Delete(ctx, []string{fileName}, true)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
 		return
-	}
-
-	waitUntil := time.Now().Add(5 * time.Minute)
-	completed := false
-	for !completed {
-		// Check the status of the delete operation
-		rstat, err := f.client.FileStationAPI().DeleteStatus(rdel.TaskID)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
-			return
-		}
-
-		if rstat.Finished {
-			completed = true
-		}
-
-		if time.Now().After(waitUntil) {
-			resp.Diagnostics.AddError("Failed to delete file", "Timeout waiting for file to be deleted")
-			break
-		}
-
-		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -137,7 +114,7 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
 
-	md5, err := f.client.FileStationAPI().MD5(fileName)
+	md5, err := f.client.FileStationAPI().MD5(ctx, fileName)
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
@@ -171,6 +148,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	// Upload the file
 	_, err := f.client.FileStationAPI().Upload(
+		ctx,
 		data.Path.ValueString(),
 		&file, data.CreateParents.ValueBool(),
 		true)
@@ -180,7 +158,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	md5, err := f.client.FileStationAPI().MD5(fileName)
+	md5, err := f.client.FileStationAPI().MD5(ctx, fileName)
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))

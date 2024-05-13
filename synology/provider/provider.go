@@ -125,7 +125,7 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
 
-	if _, err := client.Login(user, password); err != nil {
+	if _, err := client.Login(ctx, user, password); err != nil {
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
 	}
 
