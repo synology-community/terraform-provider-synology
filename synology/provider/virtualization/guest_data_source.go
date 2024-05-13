@@ -286,7 +286,9 @@ func (d *GuestDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	name := data.Name.ValueString()
 
-	clientResponse, err := d.client.VirtualizationAPI().GetGuest(ctx, name)
+	clientResponse, err := d.client.VirtualizationAPI().GuestGet(ctx, virtualization.Guest{
+		Name: name,
+	})
 
 	if err != nil {
 		resp.Diagnostics.AddError("API request failed", fmt.Sprintf("Unable to read data source, got error: %s", err))
