@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/synology-community/synology-api/package"
+	client "github.com/synology-community/synology-api/pkg"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

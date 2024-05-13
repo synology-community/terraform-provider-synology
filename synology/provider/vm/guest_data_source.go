@@ -9,8 +9,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	client "github.com/synology-community/synology-api/package"
-	"github.com/synology-community/synology-api/package/api/virtualization"
+	client "github.com/synology-community/synology-api/pkg"
+	"github.com/synology-community/synology-api/pkg/api/virtualization"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

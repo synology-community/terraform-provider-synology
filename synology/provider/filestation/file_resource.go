@@ -10,8 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/synology-community/synology-api/package"
-	"github.com/synology-community/synology-api/package/util/form"
+	client "github.com/synology-community/synology-api/pkg"
+	"github.com/synology-community/synology-api/pkg/util/form"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
