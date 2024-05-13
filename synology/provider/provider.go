@@ -135,6 +135,7 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 	return []func() resource.Resource{
 		filestation.NewFileResource,
 		virtualization.NewImageResource,
+		virtualization.NewGuestResource,
 	}
 }
 

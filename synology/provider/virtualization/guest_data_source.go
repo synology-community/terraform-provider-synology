@@ -100,7 +100,7 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	m.Status = types.StringValue(v.Status)
 	m.StorageID = types.StringValue(v.StorageID)
 	m.StorageName = types.StringValue(v.StorageName)
-	m.Autorun = types.Int64Value(int64(v.Autorun))
+	m.Autorun = types.Int64Value(int64(v.AutoRun))
 	m.VcpuNum = types.Int64Value(int64(v.VcpuNum))
 	m.VramSize = types.Int64Value(int64(v.VramSize))
 
