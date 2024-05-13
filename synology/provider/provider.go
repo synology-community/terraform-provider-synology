@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
-	"github.com/appkins/terraform-provider-synology/synology/provider/vm"
+	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -134,14 +134,15 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		filestation.NewFileResource,
+		virtualization.NewImageResource,
 	}
 }
 
 func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		filestation.NewInfoDataSource,
-		vm.NewGuestDataSource,
-		vm.NewGuestsDataSource,
+		virtualization.NewGuestDataSource,
+		virtualization.NewGuestsDataSource,
 	}
 }
 

@@ -1,4 +1,4 @@
-package vm_test
+package virtualization_test
 
 import (
 	"testing"
