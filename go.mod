@@ -1,6 +1,6 @@
 module github.com/appkins/terraform-provider-synology
 
-replace github.com/synology-community/synology-api => /Users/atkini01/src/synology-community/synology-api
+// replace github.com/synology-community/synology-api => /Users/atkini01/src/synology-community/synology-api
 
 go 1.22.3
 
