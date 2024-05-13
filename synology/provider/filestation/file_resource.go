@@ -62,7 +62,7 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// If the checksums match, return
 
 	// Upload the file
-	_, err := f.client.FileStationAPI().Upload(ctx, path, &form.File{
+	_, err := f.client.FileStationAPI().Upload(ctx, path, form.File{
 		Name:    fileName,
 		Content: fileContent,
 	}, createParents, overwrite)
@@ -150,7 +150,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	_, err := f.client.FileStationAPI().Upload(
 		ctx,
 		data.Path.ValueString(),
-		&file, data.CreateParents.ValueBool(),
+		file, data.CreateParents.ValueBool(),
 		true)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
