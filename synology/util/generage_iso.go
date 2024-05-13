@@ -2,12 +2,13 @@ package util
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/kdomanski/iso9660"
 )
@@ -24,30 +25,30 @@ type CloudInit struct {
 	NetworkConfig string `yaml:"network_config"`
 }
 
-func IsoFromCloudInit(ci CloudInit) ([]byte, error) {
+func IsoFromCloudInit(ctx context.Context, ci CloudInit) ([]byte, error) {
 	writer, err := iso9660.NewWriter()
 
 	if err != nil {
-		log.Errorf("failed to create writer: %s", err)
+		tflog.Error(ctx, fmt.Sprintf("failed to create writer: %v", err))
 	}
 
 	if len(ci.MetaData) > 0 {
 		if err = writer.AddFile(strings.NewReader(ci.MetaData), metaDataFileName); err != nil {
-			log.Fatalf("failed to add metadata file: %s", err)
+			tflog.Error(ctx, fmt.Sprintf("failed to add metadata file: %v", err))
 			return nil, err
 		}
 	}
 
 	if len(ci.UserData) > 0 {
 		if err = writer.AddFile(strings.NewReader(ci.UserData), userDataFileName); err != nil {
-			log.Fatalf("failed to add metadata file: %s", err)
+			tflog.Error(ctx, fmt.Sprintf("failed to add metadata file: %s", err))
 			return nil, err
 		}
 	}
 
 	if len(ci.NetworkConfig) > 0 {
 		if err = writer.AddFile(strings.NewReader(ci.NetworkConfig), networkConfigFileName); err != nil {
-			log.Fatalf("failed to add network config file: %s", err)
+			tflog.Error(ctx, fmt.Sprintf("failed to add network config file: %s", err))
 			return nil, err
 		}
 	}
@@ -55,7 +56,7 @@ func IsoFromCloudInit(ci CloudInit) ([]byte, error) {
 	var b bytes.Buffer
 	err = writer.WriteTo(&b, fmt.Sprintf("vol%s", ci.Name))
 	if err != nil {
-		log.Fatalf("failed to write ISO image: %s", err)
+		tflog.Error(ctx, fmt.Sprintf("failed to write ISO image: %s", err))
 		return nil, err
 	}
 
@@ -66,23 +67,23 @@ func IsoFromCloudInit(ci CloudInit) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func removeTmpIsoDirectory(iso string) {
+func removeTmpIsoDirectory(ctx context.Context, iso string) {
 
 	err := os.RemoveAll(filepath.Dir(iso))
 	if err != nil {
-		log.Printf("error while removing tmp directory holding the ISO file: %s", err)
+		tflog.Error(ctx, fmt.Sprintf("error while removing tmp directory holding the ISO file: %s", err))
 	}
 }
 
-// log.Print("Creating ISO tmp directory")
+// tflog.Print("Creating ISO tmp directory")
 // 	tmpDir, err := os.MkdirTemp("", "cloudinit")
 // 	if err != nil {
-// 		log.Fatalf("failed to create tmp directory: %s", err)
+// 		tflog.Fatalf("failed to create tmp directory: %s", err)
 // 		return nil, err
 // 	}
 
 // 	outputFile, err := os.OpenFile(filepath.Join(tmpDir, fmt.Sprintf("%s.iso", ci.Name)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 // 	if err != nil {
-// 		log.Fatalf("failed to create file: %s", err)
+// 		tflog.Fatalf("failed to create file: %s", err)
 // 		return nil, err
 // 	}

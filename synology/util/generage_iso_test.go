@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"testing"
@@ -20,7 +21,7 @@ func Test_IsoFromCloudInit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := IsoFromCloudInit(tt.args.ci)
+			got, err := IsoFromCloudInit(context.Background(), tt.args.ci)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("isoFromCloudInit() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -44,7 +45,7 @@ func Test_removeTmpIsoDirectory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			removeTmpIsoDirectory(tt.args.iso)
+			removeTmpIsoDirectory(context.Background(), tt.args.iso)
 		})
 	}
 }

@@ -7,7 +7,7 @@ package util
 // 	"errors"
 // 	"fmt"
 // 	"io"
-// 	log "github.com/sirupsen/logrus"
+// 	"github.com/hashicorp/terraform-plugin-log/tflog"
 // 	"os"
 // 	"os/exec"
 // 	"path/filepath"

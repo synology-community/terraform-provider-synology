@@ -16,9 +16,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -44,9 +43,8 @@ type SynologyProviderModel struct {
 
 func (p *SynologyProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "synology"
-	log.SetFormatter(&log.JSONFormatter{})
 
-	log.Info("Starting")
+	tflog.Info(ctx, "Starting")
 }
 
 func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {

@@ -5,19 +5,41 @@ replace github.com/synology-community/synology-api => /Users/atkini01/src/synolo
 go 1.22.3
 
 require (
+	github.com/hashicorp/terraform-plugin-docs v0.19.2
 	github.com/hashicorp/terraform-plugin-framework v1.8.0
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-testing v1.7.0
-	github.com/iancoleman/strcase v0.3.0
 	github.com/kdomanski/iso9660 v0.4.0
-	github.com/sirupsen/logrus v1.9.3
 	github.com/synology-community/synology-api v0.0.0-20240509203437-c30ab952872a
 )
 
 require (
+	github.com/BurntSushi/toml v1.2.1 // indirect
+	github.com/Kunde21/markdownfmt/v3 v3.1.0 // indirect
+	github.com/Masterminds/goutils v1.1.1 // indirect
+	github.com/Masterminds/semver/v3 v3.2.0 // indirect
+	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
+	github.com/armon/go-radix v1.0.0 // indirect
+	github.com/bgentry/speakeasy v0.1.0 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/hashicorp/cli v1.1.6 // indirect
+	github.com/huandu/xstrings v1.3.3 // indirect
+	github.com/imdario/mergo v0.3.15 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/posener/complete v1.2.3 // indirect
+	github.com/shopspring/decimal v1.3.1 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/spf13/cast v1.5.0 // indirect
+	github.com/yuin/goldmark v1.7.1 // indirect
+	github.com/yuin/goldmark-meta v1.1.0 // indirect
+	go.abhg.dev/goldmark/frontmatter v0.2.0 // indirect
+	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de // indirect
+	gopkg.in/yaml.v2 v2.3.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
@@ -43,7 +65,7 @@ require (
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/terraform-exec v0.20.0 // indirect
 	github.com/hashicorp/terraform-json v0.21.0 // indirect
-	github.com/hashicorp/terraform-plugin-log v0.9.0 // indirect
+	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.33.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.2.3 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
@@ -57,7 +79,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
