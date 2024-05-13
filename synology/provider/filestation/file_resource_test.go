@@ -19,7 +19,7 @@ func TestAccFileResource_basic(t *testing.T) {
 			"file name is set",
 			`
 			resource "synology_filestation_file" "foo" {
-				path = "/path/to/file"
+				path = "/data/foo/bar"
 				create_parents = true
 				overwrite = true
 				name = "file.txt"

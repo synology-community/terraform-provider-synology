@@ -10,14 +10,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
 	"github.com/synology-community/synology-api/pkg/util/form"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var (
-	_ resource.Resource = &FileResource{}
-)
+var _ resource.Resource = &FileResource{}
 
 func NewFileResource() resource.Resource {
 	return &FileResource{}
@@ -34,7 +33,6 @@ type FileResourceModel struct {
 	Overwrite     types.Bool   `tfsdk:"overwrite"`
 	Name          types.String `tfsdk:"name"`
 	Content       types.String `tfsdk:"content"`
-	Id            types.String `tfsdk:"id"`
 	MD5           types.String `tfsdk:"md5"`
 }
 
@@ -42,13 +40,19 @@ type FileResourceModel struct {
 func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data FileResourceModel
 
-	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
-	file := form.File{
-		Name:    data.Name.ValueString(),
-		Content: data.Content.ValueString(),
+	if resp.Diagnostics.HasError() {
+		return
 	}
+
+	fileName := data.Name.ValueString()
+	fileContent := data.Content.ValueString()
+
+	createParents := data.CreateParents.ValueBool()
+	overwrite := data.Overwrite.ValueBool()
+	path := data.Path.ValueString()
 
 	// Check if the file exists
 
@@ -56,18 +60,32 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	// If the checksums match, return
 
+	api := f.client.FileStationAPI()
+
 	// Upload the file
-	_, err := f.client.FileStationAPI().Upload(data.Path.ValueString(), &file, data.CreateParents.ValueBool(), data.Overwrite.ValueBool())
+	_, err := api.Upload(path, &form.File{
+		Name:    fileName,
+		Content: fileContent,
+	}, createParents, overwrite)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
 		return
 	}
 
 	// Get the file's MD5 checksum
-	// md5, err := f.client.FileStationAPI().GetMD5(data.Path.ValueString(), data.Name.ValueString())
+	md5, err := f.client.FileStationAPI().MD5(fileName)
+
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
+		resp.Diagnostics.AddError("Failed to get file MD5", fmt.Sprintf("Unable to get file MD5, got error: %s", err))
+		return
+	}
 
 	// Store the MD5 checksum in the state
+	data.MD5 = types.StringValue(md5.MD5)
 
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Delete implements resource.Resource.
@@ -119,39 +137,15 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
 
-	// Start Delete the file
-	rdel, err := f.client.FileStationAPI().MD5Start(fileName)
+	md5, err := f.client.FileStationAPI().MD5(fileName)
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
+		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
+		resp.Diagnostics.AddError("Failed to get file MD5", fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		return
 	}
 
-	retry := 0
-	completed := false
-	for !completed {
-		// Check the status of the delete operation
-		hstat, err := f.client.FileStationAPI().MD5Status(rdel.TaskID)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to get file hash", fmt.Sprintf("Unable to get file hash, got error: %s", err))
-			return
-		}
-
-		if hstat.Finished {
-			if hstat.MD5 != "" {
-				data.MD5 = types.StringValue(hstat.MD5)
-			}
-
-			completed = true
-		}
-
-		if retry > 2 {
-			completed = true
-			continue
-		}
-		retry++
-		time.Sleep(2 * time.Second)
-	}
+	data.MD5 = types.StringValue(md5.MD5)
 
 	resp.State.Set(ctx, &data)
 }
@@ -163,6 +157,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
+	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
 	file := form.File{
 		Name:    data.Name.ValueString(),
 		Content: data.Content.ValueString(),
@@ -185,9 +180,19 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	// md5, err := f.client.FileStationAPI().GetMD5(data.Path.ValueString(), data.Name.ValueString())
+	md5, err := f.client.FileStationAPI().MD5(fileName)
+
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
+		resp.Diagnostics.AddError("Failed to get file MD5", fmt.Sprintf("Unable to get file MD5, got error: %s", err))
+		return
+	}
 
 	// Store the MD5 checksum in the state
+	data.MD5 = types.StringValue(md5.MD5)
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Metadata implements resource.Resource.
@@ -232,4 +237,24 @@ func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 		},
 	}
+}
+
+func (f *FileResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(client.SynologyClient)
+
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+
+		return
+	}
+
+	f.client = client
 }
