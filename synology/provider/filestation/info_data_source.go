@@ -35,7 +35,8 @@ func (d *infoDataSource) Metadata(ctx context.Context, req datasource.MetadataRe
 
 func (d *infoDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Info data source",
+		Description:         "FileStation --- FileStation Info Data Source",
+		MarkdownDescription: "FileStation --- Info data source",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

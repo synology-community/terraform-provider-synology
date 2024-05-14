@@ -32,7 +32,8 @@ func (d *GuestsDataSource) Metadata(ctx context.Context, req datasource.Metadata
 
 func (d *GuestsDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Guests data source",
+		Description:         "Virtualization --- Guests data source",
+		MarkdownDescription: "Virtualization --- Guests data source",
 
 		Attributes: map[string]schema.Attribute{
 			"guest": schema.ListAttribute{
