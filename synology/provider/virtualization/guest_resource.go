@@ -9,13 +9,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
 	"github.com/synology-community/synology-api/pkg/api/virtualization"
 )
@@ -42,17 +41,17 @@ func (d GuestResource) ConfigValidators(ctx context.Context) []resource.ConfigVa
 
 // GuestResourceModel describes the resource data model.
 type GuestResourceModel struct {
-	ID          types.String `tfsdk:"id"`
-	Name        types.String `tfsdk:"name"`
-	Description types.String `tfsdk:"description"`
-	Status      types.String `tfsdk:"status"`
+	ID   types.String `tfsdk:"id"`
+	Name types.String `tfsdk:"name"`
+	// Description types.String `tfsdk:"description"`
+	// Status      types.String `tfsdk:"status"`
 	StorageID   types.String `tfsdk:"storage_id"`
 	StorageName types.String `tfsdk:"storage_name"`
-	AutoRun     types.Int64  `tfsdk:"autorun"`
-	VcpuNum     types.Int64  `tfsdk:"vcpu_num"`
-	VramSize    types.Int64  `tfsdk:"vram_size"`
-	Disks       types.Set    `tfsdk:"disk"`
-	Networks    types.Set    `tfsdk:"network"`
+	// AutoRun     types.Int64  `tfsdk:"autorun"`
+	VcpuNum  types.Int64 `tfsdk:"vcpu_num"`
+	VramSize types.Int64 `tfsdk:"vram_size"`
+	Disks    types.Set   `tfsdk:"disk"`
+	Networks types.Set   `tfsdk:"network"`
 }
 
 // Schema implements resource.Resource.
@@ -72,24 +71,22 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "Name of the guest to upload to the Synology DSM.",
 				Required:            true,
 			},
-			"description": schema.StringAttribute{
-				MarkdownDescription: "Description of the guest.",
-				Computed:            true,
-				Optional:            true,
-				Default:             stringdefault.StaticString(""),
-			},
-			"autorun": schema.Int64Attribute{
-				MarkdownDescription: "Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.",
-				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
-			},
+			// "description": schema.StringAttribute{
+			// 	MarkdownDescription: "Description of the guest.",
+			// 	Computed:            true,
+			// 	Optional:            true,
+			// 	Default:             stringdefault.StaticString(""),
+			// },
+			// "autorun": schema.Int64Attribute{
+			// 	MarkdownDescription: "Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.",
+			// 	Computed:            true,
+			// 	PlanModifiers: []planmodifier.Int64{
+			// 		int64planmodifier.UseStateForUnknown(),
+			// 	},
+			// },
 			"storage_id": schema.StringAttribute{
 				MarkdownDescription: "ID of the storage device.",
 				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString(""),
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
@@ -99,74 +96,70 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"vcpu_num": schema.Int64Attribute{
 				MarkdownDescription: "Number of virtual CPUs.",
-				Computed:            true,
 				Optional:            true,
 				Default:             int64default.StaticInt64(4),
+				Computed:            true,
 			},
 			"vram_size": schema.Int64Attribute{
 				MarkdownDescription: "Size of virtual RAM.",
-				Computed:            true,
 				Optional:            true,
 				Default:             int64default.StaticInt64(4096),
-			},
-			"status": schema.StringAttribute{
-				MarkdownDescription: "Status of the guest.",
 				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
+			// "status": schema.StringAttribute{
+			// 	MarkdownDescription: "Status of the guest.",
+			// 	Computed:            true,
+			// 	PlanModifiers: []planmodifier.String{
+			// 		stringplanmodifier.UseStateForUnknown(),
+			// 	},
+			// },
 		},
-
 		Blocks: map[string]schema.Block{
 			"disk": schema.SetNestedBlock{
 				MarkdownDescription: "Disks of the guest.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
-							MarkdownDescription: "ID of the network.",
-							Computed:            true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-						},
+						// "id": schema.StringAttribute{
+						// 	MarkdownDescription: "ID of the network.",
+						// 	Computed:            true,
+						// 	PlanModifiers: []planmodifier.String{
+						// 		stringplanmodifier.UseStateForUnknown(),
+						// 	},
+						// },
 						"create_type": schema.Int64Attribute{
 							MarkdownDescription: "Type of the disk.",
-							Computed:            true,
 							Optional:            true,
+							Default:             int64default.StaticInt64(0),
+							Computed:            true,
 						},
 						"size": schema.Int64Attribute{
 							MarkdownDescription: "Size of the disk in MB.",
-							Computed:            true,
 							Default:             int64default.StaticInt64(20 * 1000),
 							Optional:            true,
+							Computed:            true,
 						},
 						"image_id": schema.StringAttribute{
 							MarkdownDescription: "ID of the image.",
-							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
 						"image_name": schema.StringAttribute{
 							MarkdownDescription: "Name of the image.",
-							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
-						"unmap": schema.BoolAttribute{
-							MarkdownDescription: "Unmap the disk.",
-							Computed:            true,
-							PlanModifiers: []planmodifier.Bool{
-								boolplanmodifier.UseStateForUnknown(),
-							},
-						},
-						"controller": schema.Int64Attribute{
-							MarkdownDescription: "Controller of the disk.",
-							Computed:            true,
-							PlanModifiers: []planmodifier.Int64{
-								int64planmodifier.UseStateForUnknown(),
-							},
-						},
+						// "unmap": schema.BoolAttribute{
+						// 	MarkdownDescription: "Unmap the disk.",
+						// 	Computed:            true,
+						// 	PlanModifiers: []planmodifier.Bool{
+						// 		boolplanmodifier.UseStateForUnknown(),
+						// 	},
+						// },
+						// "controller": schema.Int64Attribute{
+						// 	MarkdownDescription: "Controller of the disk.",
+						// 	Computed:            true,
+						// 	PlanModifiers: []planmodifier.Int64{
+						// 		int64planmodifier.UseStateForUnknown(),
+						// 	},
+						// },
 					},
 				},
 			},
@@ -176,39 +169,32 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
 							MarkdownDescription: "ID of the network.",
-							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
 						"name": schema.StringAttribute{
 							MarkdownDescription: "Name of the network.",
-							Computed:            true,
 							Optional:            true,
 							Default:             stringdefault.StaticString("default"),
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
+							Computed:            true,
 						},
 						"mac": schema.StringAttribute{
 							MarkdownDescription: "MAC address.",
 							Optional:            true,
-							Computed:            true,
-							Default:             stringdefault.StaticString(""),
 						},
-						"model": schema.Int64Attribute{
-							MarkdownDescription: "Model of the network.",
-							Computed:            true,
-							PlanModifiers: []planmodifier.Int64{
-								int64planmodifier.UseStateForUnknown(),
-							},
-						},
-						"vnic_id": schema.StringAttribute{
-							MarkdownDescription: "Virtual NIC ID.",
-							Computed:            true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-						},
+						// "model": schema.Int64Attribute{
+						// 	MarkdownDescription: "Model of the network.",
+						// 	Computed:            true,
+						// 	PlanModifiers: []planmodifier.Int64{
+						// 		int64planmodifier.UseStateForUnknown(),
+						// 	},
+						// },
+						// "vnic_id": schema.StringAttribute{
+						// 	MarkdownDescription: "Virtual NIC ID.",
+						// 	Computed:            true,
+						// 	PlanModifiers: []planmodifier.String{
+						// 		stringplanmodifier.UseStateForUnknown(),
+						// 	},
+						// },
 					},
 				},
 			},
@@ -303,76 +289,79 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	guestrefresh, err := f.client.GuestGet(ctx, virtualization.Guest{Name: data.Name.ValueString()})
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
-		return
-	}
+	// guestrefresh, err := f.client.GuestGet(ctx, virtualization.Guest{Name: data.Name.ValueString()})
+	// if err != nil {
+	// 	resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
+	// 	return
+	// }
 
-	data.Status = types.StringValue(guestrefresh.Status)
-	data.AutoRun = types.Int64Value(guestrefresh.AutoRun)
-	data.Description = types.StringValue(guestrefresh.Description)
+	// data.Status = types.StringValue(guestrefresh.Status)
+	// data.AutoRun = types.Int64Value(guestrefresh.AutoRun)
+	// data.Description = types.StringValue(guestrefresh.Description)
 
-	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
+	// if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
 
-		var elements []VNicModel
-		diags := data.Networks.ElementsAs(ctx, &elements, true)
+	// 	var elements []VNicModel
+	// 	diags := data.Networks.ElementsAs(ctx, &elements, true)
 
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-			return
-		}
+	// 	if diags.HasError() {
+	// 		resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+	// 		return
+	// 	}
 
-		if len(elements) <= len(guestrefresh.Networks) {
-			for i, v := range elements {
-				newDisk := guestrefresh.Networks[i]
-				v.ID = types.StringValue(newDisk.ID)
-				v.Mac = types.StringValue(newDisk.Mac)
-				v.Model = types.Int64Value(newDisk.Model)
-				v.VNicID = types.StringValue(newDisk.VnicID)
+	// 	if len(elements) <= len(guestrefresh.Networks) {
+	// 		for i, v := range elements {
+	// 			newDisk := guestrefresh.Networks[i]
+	// 			v.ID = types.StringValue(newDisk.ID)
+	// 			v.Mac = types.StringValue(newDisk.Mac)
+	// 			v.Model = types.Int64Value(newDisk.Model)
+	// 			v.VNicID = types.StringValue(newDisk.VnicID)
+	// 			elements[i] = v
+	// 		}
+	// 	}
 
-			}
-		}
+	// 	setValue, diags := types.SetValueFrom(ctx, VNicModel{}.ModelType(), elements)
+	// 	if diags.HasError() {
+	// 		resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
+	// 		return
+	// 	}
+	// 	data.Networks = setValue
+	// }
 
-		setValue, diags := types.SetValueFrom(ctx, VNicModel{}.ModelType(), elements)
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
-			return
-		}
-		data.Networks = setValue
-	}
+	// if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
 
-	if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
+	// 	var elements []VDiskModel
+	// 	diags := data.Disks.ElementsAs(ctx, &elements, true)
 
-		var elements []VDiskModel
-		diags := data.Disks.ElementsAs(ctx, &elements, true)
+	// 	if diags.HasError() {
+	// 		resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+	// 		return
+	// 	}
 
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-			return
-		}
+	// 	if len(elements) <= len(guestrefresh.Disks) {
+	// 		for i, v := range elements {
+	// 			newDisk := guestrefresh.Disks[i]
+	// 			v.ID = types.StringValue(newDisk.ID)
+	// 			v.Unmap = types.BoolValue(newDisk.Unmap)
+	// 			v.Controller = types.Int64Value(newDisk.Controller)
+	// 			v.ImageID = types.StringValue(newDisk.ImageID)
+	// 			v.ImageName = types.StringValue(newDisk.ImageName)
+	// 			elements[i] = v
+	// 		}
+	// 	}
 
-		if len(elements) <= len(guestrefresh.Disks) {
-			for i, v := range elements {
-				newDisk := guestrefresh.Disks[i]
-				v.ID = types.StringValue(newDisk.ID)
-				v.Unmap = types.BoolValue(newDisk.Unmap)
-				v.Controller = types.Int64Value(newDisk.Controller)
-				v.ImageID = types.StringValue(newDisk.ImageID)
-				v.ImageName = types.StringValue(newDisk.ImageName)
-			}
-		}
-
-		setValue, diags := types.SetValueFrom(ctx, VDiskModel{}.ModelType(), elements)
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
-			return
-		}
-		data.Disks = setValue
-	}
+	// 	setValue, diags := types.SetValueFrom(ctx, VDiskModel{}.ModelType(), elements)
+	// 	if diags.HasError() {
+	// 		resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
+	// 		return
+	// 	}
+	// 	data.Disks = setValue
+	// }
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	tflog.Trace(ctx, "Guest created")
 }
 
 // Delete implements resource.Resource.
@@ -404,75 +393,16 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
+	if guest.ID == "" {
+		resp.Diagnostics.AddError("Failed to list guests", "Unable to list guests, got empty ID")
+		return
+	}
+
 	// data.ID = types.StringValue(guest.ID)
 
-	if guest.ID != "" {
-		data.ID = types.StringValue(guest.ID)
-	}
-	if guest.Status != "" {
-		data.Status = types.StringValue(guest.Status)
-	}
-
-	data.AutoRun = types.Int64Value(guest.AutoRun)
-	data.Description = types.StringValue(guest.Description)
-
-	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
-
-		var elements []VNicModel
-		diags := data.Networks.ElementsAs(ctx, &elements, true)
-
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-			return
-		}
-
-		if len(elements) <= len(guest.Networks) {
-			for i, v := range elements {
-				newDisk := guest.Networks[i]
-				v.ID = types.StringValue(newDisk.ID)
-				v.Mac = types.StringValue(newDisk.Mac)
-				v.Model = types.Int64Value(newDisk.Model)
-				v.VNicID = types.StringValue(newDisk.VnicID)
-
-			}
-		}
-
-		setValue, diags := types.SetValueFrom(ctx, VNicModel{}.ModelType(), elements)
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
-			return
-		}
-		data.Networks = setValue
-	}
-
-	if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
-
-		var elements []VDiskModel
-		diags := data.Disks.ElementsAs(ctx, &elements, true)
-
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-			return
-		}
-
-		if len(elements) <= len(guest.Disks) {
-			for i, v := range elements {
-				newDisk := guest.Disks[i]
-				v.ID = types.StringValue(newDisk.ID)
-				v.Unmap = types.BoolValue(newDisk.Unmap)
-				v.Controller = types.Int64Value(newDisk.Controller)
-				v.ImageID = types.StringValue(newDisk.ImageID)
-				v.ImageName = types.StringValue(newDisk.ImageName)
-			}
-		}
-
-		setValue, diags := types.SetValueFrom(ctx, VDiskModel{}.ModelType(), elements)
-		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
-			return
-		}
-		data.Disks = setValue
-	}
+	// if guest.ID != "" {
+	// 	data.ID = types.StringValue(guest.ID)
+	// }
 
 	resp.State.Set(ctx, &data)
 }

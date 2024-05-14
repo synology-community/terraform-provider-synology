@@ -118,10 +118,12 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	disks := []attr.Value{}
 	for _, d := range v.Disks {
 		disk := VDiskModel{
-			ID:         types.StringValue(d.ID),
-			Size:       types.Int64Value(d.Size),
-			Controller: types.Int64Value(d.Controller),
-			Unmap:      types.BoolValue(d.Unmap),
+			// ID:         types.StringValue(d.ID),
+			Size: types.Int64Value(d.Size),
+			// Controller: types.Int64Value(d.Controller),
+			// Unmap:      types.BoolValue(d.Unmap),
+			ImageID:   types.StringValue(d.ImageID),
+			ImageName: types.StringValue(d.ImageName),
 		}.Value()
 
 		disks = append(disks, disk)
@@ -133,10 +135,10 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	nets := []attr.Value{}
 	for _, n := range v.Networks {
 		m := VNicModel{
-			ID:    types.StringValue(n.ID),
-			Mac:   types.StringValue(n.Mac),
-			Name:  types.StringValue(n.Name),
-			Model: types.Int64Value(n.Model),
+			ID:   types.StringValue(n.ID),
+			Mac:  types.StringValue(n.Mac),
+			Name: types.StringValue(n.Name),
+			// Model: types.Int64Value(n.Model),
 		}.Value()
 		nets = append(nets, m)
 	}
