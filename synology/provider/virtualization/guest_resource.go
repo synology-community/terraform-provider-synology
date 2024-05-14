@@ -9,9 +9,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	client "github.com/synology-community/synology-api/pkg"
 	"github.com/synology-community/synology-api/pkg/api/virtualization"
@@ -61,6 +64,9 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"id": schema.StringAttribute{
 				MarkdownDescription: "The ID of the guest.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Name of the guest to upload to the Synology DSM.",
@@ -70,11 +76,14 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "Description of the guest.",
 				Computed:            true,
 				Optional:            true,
+				Default:             stringdefault.StaticString(""),
 			},
 			"autorun": schema.Int64Attribute{
 				MarkdownDescription: "Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.",
-				Optional:            true,
 				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"storage_id": schema.StringAttribute{
 				MarkdownDescription: "ID of the storage device.",
@@ -103,6 +112,9 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"status": schema.StringAttribute{
 				MarkdownDescription: "Status of the guest.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 
@@ -114,7 +126,9 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 						"id": schema.StringAttribute{
 							MarkdownDescription: "ID of the network.",
 							Computed:            true,
-							Default:             stringdefault.StaticString(""),
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"create_type": schema.Int64Attribute{
 							MarkdownDescription: "Type of the disk.",
@@ -142,12 +156,16 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 						"unmap": schema.BoolAttribute{
 							MarkdownDescription: "Unmap the disk.",
 							Computed:            true,
-							Default:             booldefault.StaticBool(false),
+							PlanModifiers: []planmodifier.Bool{
+								boolplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"controller": schema.Int64Attribute{
 							MarkdownDescription: "Controller of the disk.",
 							Computed:            true,
-							Default:             int64default.StaticInt64(0),
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
 						},
 					},
 				},
@@ -166,7 +184,10 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							MarkdownDescription: "Name of the network.",
 							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
+							Default:             stringdefault.StaticString("default"),
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"mac": schema.StringAttribute{
 							MarkdownDescription: "MAC address.",
@@ -177,12 +198,16 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 						"model": schema.Int64Attribute{
 							MarkdownDescription: "Model of the network.",
 							Computed:            true,
-							Default:             int64default.StaticInt64(0),
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
 						},
 						"vnic_id": schema.StringAttribute{
 							MarkdownDescription: "Virtual NIC ID.",
 							Computed:            true,
-							Default:             stringdefault.StaticString(""),
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 					},
 				},
@@ -379,7 +404,75 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	data.ID = types.StringValue(guest.ID)
+	// data.ID = types.StringValue(guest.ID)
+
+	if guest.ID != "" {
+		data.ID = types.StringValue(guest.ID)
+	}
+	if guest.Status != "" {
+		data.Status = types.StringValue(guest.Status)
+	}
+
+	data.AutoRun = types.Int64Value(guest.AutoRun)
+	data.Description = types.StringValue(guest.Description)
+
+	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
+
+		var elements []VNicModel
+		diags := data.Networks.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+			return
+		}
+
+		if len(elements) <= len(guest.Networks) {
+			for i, v := range elements {
+				newDisk := guest.Networks[i]
+				v.ID = types.StringValue(newDisk.ID)
+				v.Mac = types.StringValue(newDisk.Mac)
+				v.Model = types.Int64Value(newDisk.Model)
+				v.VNicID = types.StringValue(newDisk.VnicID)
+
+			}
+		}
+
+		setValue, diags := types.SetValueFrom(ctx, VNicModel{}.ModelType(), elements)
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
+			return
+		}
+		data.Networks = setValue
+	}
+
+	if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
+
+		var elements []VDiskModel
+		diags := data.Disks.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+			return
+		}
+
+		if len(elements) <= len(guest.Disks) {
+			for i, v := range elements {
+				newDisk := guest.Disks[i]
+				v.ID = types.StringValue(newDisk.ID)
+				v.Unmap = types.BoolValue(newDisk.Unmap)
+				v.Controller = types.Int64Value(newDisk.Controller)
+				v.ImageID = types.StringValue(newDisk.ImageID)
+				v.ImageName = types.StringValue(newDisk.ImageName)
+			}
+		}
+
+		setValue, diags := types.SetValueFrom(ctx, VDiskModel{}.ModelType(), elements)
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
+			return
+		}
+		data.Disks = setValue
+	}
 
 	resp.State.Set(ctx, &data)
 }
