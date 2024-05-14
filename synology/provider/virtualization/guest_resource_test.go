@@ -45,8 +45,8 @@ func TestAccGuestResource_basic(t *testing.T) {
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
 							r.TestCheckResourceAttrWith("synology_virtualization_guest.foo", "name", func(attr string) error {
-								if attr != "testiso" {
-									return fmt.Errorf("expected guest name to be 'testiso', got %s", attr)
+								if attr != "testvm" {
+									return fmt.Errorf("expected guest name to be 'testvm', got %s", attr)
 								}
 								return nil
 							}),

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
@@ -23,6 +25,15 @@ func NewGuestResource() resource.Resource {
 
 type GuestResource struct {
 	client virtualization.VirtualizationAPI
+}
+
+func (d GuestResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		resourcevalidator.AtLeastOneOf(
+			path.MatchRoot("storage_id"),
+			path.MatchRoot("storage_name"),
+		),
+	}
 }
 
 // GuestResourceModel describes the resource data model.
@@ -59,22 +70,15 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed:            true,
 				Optional:            true,
 			},
-			"status": schema.StringAttribute{
-				MarkdownDescription: "Status of the guest.",
-				Computed:            true,
-				Default:             stringdefault.StaticString(""),
-			},
 			"autorun": schema.Int64Attribute{
 				MarkdownDescription: "Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.",
 				Optional:            true,
 				Computed:            true,
-				Default:             int64default.StaticInt64(0),
 			},
 			"storage_id": schema.StringAttribute{
 				MarkdownDescription: "ID of the storage device.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
@@ -94,88 +98,15 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:            true,
 				Default:             int64default.StaticInt64(4096),
 			},
-			// "disks": schema.SetNestedAttribute{
-			// 	MarkdownDescription: "List of virtual disks.",
-			// 	Computed:            true,
-			// 	Optional:            true,
-			// 	NestedObject: schema.NestedAttributeObject{
-			// 		Attributes: map[string]schema.Attribute{
-			// 			"id": schema.StringAttribute{
-			// 				MarkdownDescription: "ID of the network.",
-			// 				Computed:            true,
-			// 			},
-			// 			"create_type": schema.Int64Attribute{
-			// 				MarkdownDescription: "Type of the disk.",
-			// 				Computed:            true,
-			// 				Default:             int64default.StaticInt64(0),
-			// 				Optional:            true,
-			// 			},
-			// 			"size": schema.Int64Attribute{
-			// 				MarkdownDescription: "Size of the disk in MB.",
-			// 				Computed:            true,
-			// 				Default:             int64default.StaticInt64(10 * 1000),
-			// 				Optional:            true,
-			// 			},
-			// 			"image_id": schema.StringAttribute{
-			// 				MarkdownDescription: "ID of the image.",
-			// 				Computed:            true,
-			// 				Optional:            true,
-			// 				Default:             stringdefault.StaticString(""),
-			// 			},
-			// 			"image_name": schema.StringAttribute{
-			// 				MarkdownDescription: "Name of the image.",
-			// 				Computed:            true,
-			// 				Optional:            true,
-			// 				Default:             stringdefault.StaticString(""),
-			// 			},
-			// 		},
-			// 	},
-			// },
-			// "networks": schema.SetNestedAttribute{
-			// 	MarkdownDescription: "List of networks.",
-			// 	Computed:            true,
-			// 	Optional:            true,
-			// 	// Default: setdefault.StaticValue(
-			// 	// 	types.SetValueFrom(
-			// 	// 		types.ObjectType{}.WithAttributeTypes(VNicModel{}.AttrType()),
-			// 	// 		[]attr.Value{
-			// 	// 			VNicModel{}.Value(),
-			// 	// 		},
-			// 	// 	),
-			// 	// ),
-			// 	NestedObject: schema.NestedAttributeObject{
-			// 		Attributes: map[string]schema.Attribute{
-			// 			"id": schema.StringAttribute{
-			// 				MarkdownDescription: "ID of the network.",
-			// 				Computed:            true,
-			// 				Optional:            true,
-			// 				Default:             stringdefault.StaticString(""),
-			// 			},
-			// 			"name": schema.StringAttribute{
-			// 				MarkdownDescription: "Name of the network.",
-			// 				Computed:            true,
-			// 				Optional:            true,
-			// 				Default:             stringdefault.StaticString(""),
-			// 			},
-			// 			"mac": schema.StringAttribute{
-			// 				MarkdownDescription: "MAC address.",
-			// 				Optional:            true,
-			// 				Default:             stringdefault.StaticString(""),
-			// 				Computed:            true,
-			// 			},
-			// 			"model": schema.StringAttribute{
-			// 				MarkdownDescription: "Model of the network.",
-			// 				Optional:            true,
-			// 				Default:             stringdefault.StaticString("virtio"),
-			// 				Computed:            true,
-			// 			},
-			// 		},
-			// 	},
-			// },
+			"status": schema.StringAttribute{
+				MarkdownDescription: "Status of the guest.",
+				Computed:            true,
+			},
 		},
 
 		Blocks: map[string]schema.Block{
 			"disk": schema.SetNestedBlock{
+				MarkdownDescription: "Disks of the guest.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
@@ -185,26 +116,23 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 						"create_type": schema.Int64Attribute{
 							MarkdownDescription: "Type of the disk.",
 							Computed:            true,
-							Default:             int64default.StaticInt64(2),
 							Optional:            true,
 						},
 						"size": schema.Int64Attribute{
 							MarkdownDescription: "Size of the disk in MB.",
 							Computed:            true,
-							Default:             int64default.StaticInt64(10 * 1000),
+							Default:             int64default.StaticInt64(20 * 1000),
 							Optional:            true,
 						},
 						"image_id": schema.StringAttribute{
 							MarkdownDescription: "ID of the image.",
 							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
 						"image_name": schema.StringAttribute{
 							MarkdownDescription: "Name of the image.",
 							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
 						"unmap": schema.BoolAttribute{
 							MarkdownDescription: "Unmap the disk.",
@@ -218,34 +146,30 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"network": schema.SetNestedBlock{
+				MarkdownDescription: "Networks of the guest.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
 							MarkdownDescription: "ID of the network.",
 							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
 						"name": schema.StringAttribute{
 							MarkdownDescription: "Name of the network.",
 							Computed:            true,
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 						},
 						"mac": schema.StringAttribute{
 							MarkdownDescription: "MAC address.",
 							Optional:            true,
-							Default:             stringdefault.StaticString(""),
 							Computed:            true,
 						},
 						"model": schema.Int64Attribute{
 							MarkdownDescription: "Model of the network.",
-							Default:             int64default.StaticInt64(3),
 							Computed:            true,
 						},
 						"vnic_id": schema.StringAttribute{
 							MarkdownDescription: "Virtual NIC ID.",
-							Default:             stringdefault.StaticString(""),
 							Computed:            true,
 						},
 					},
@@ -283,22 +207,10 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 
 		for _, v := range elements {
-
-			// var v VNicModel
-			// diags = n.As(ctx, &v, basetypes.ObjectAsOptions{
-			// 	UnhandledNullAsEmpty: true,
-			// })
-			// if diags.HasError() {
-			// 	resp.Diagnostics = append(resp.Diagnostics, diags...)
-			// 	resp.Diagnostics.AddError("Failed to read network", "Unable to read network")
-			// 	return
-			// }
-
 			network := virtualization.VNIC{
 				ID:   v.ID.ValueString(),
 				Name: v.Name.ValueString(),
 				Mac:  v.Mac.ValueString(),
-				// Model: v.Model.ValueInt64(),
 			}
 
 			guest.Networks = append(guest.Networks, network)
@@ -317,16 +229,6 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 		for _, v := range elements {
 
-			// var v VDiskModel
-			// diags = n.As(ctx, &v, basetypes.ObjectAsOptions{
-			// 	UnhandledNullAsEmpty: true,
-			// })
-			// if diags.HasError() {
-			// 	resp.Diagnostics = append(resp.Diagnostics, diags...)
-			// 	resp.Diagnostics.AddError("Failed to read network", "Unable to read network")
-			// 	return
-			// }
-
 			disk := virtualization.VDisk{
 				// ID:         v.ID.ValueString(),
 				CreateType: v.CreateType.ValueInt64(),
@@ -338,14 +240,6 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 			guest.Disks = append(guest.Disks, disk)
 		}
 	}
-
-	// if !data.Description.IsUnknown() && !data.Description.IsNull() {
-	// 	guest.Description = data.Description.ValueString()
-	// }
-
-	// if !data.Status.IsUnknown() && !data.Status.IsNull() {
-	// 	guest.Status = data.Status.ValueString()
-	// }
 
 	if !data.StorageID.IsUnknown() && !data.StorageID.IsNull() {
 		guest.StorageID = data.StorageID.ValueString()
@@ -370,6 +264,74 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 	} else {
 		resp.Diagnostics.AddError("Failed to upload guest", "Unable to get guest ID")
 		return
+	}
+
+	guestrefresh, err := f.client.GuestGet(ctx, virtualization.Guest{Name: data.Name.ValueString()})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
+		return
+	}
+
+	data.Status = types.StringValue(guestrefresh.Status)
+	data.AutoRun = types.Int64Value(guestrefresh.AutoRun)
+	data.Description = types.StringValue(guestrefresh.Description)
+
+	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
+
+		var elements []VNicModel
+		diags := data.Networks.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+			return
+		}
+
+		if len(elements) <= len(guestrefresh.Networks) {
+			for i, v := range elements {
+				newDisk := guestrefresh.Networks[i]
+				v.ID = types.StringValue(newDisk.ID)
+				v.Mac = types.StringValue(newDisk.Mac)
+				v.Model = types.Int64Value(newDisk.Model)
+				v.VNicID = types.StringValue(newDisk.VnicID)
+
+			}
+		}
+
+		setValue, diags := types.SetValueFrom(ctx, VNicModel{}.ModelType(), elements)
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
+			return
+		}
+		data.Networks = setValue
+	}
+
+	if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
+
+		var elements []VDiskModel
+		diags := data.Disks.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+			return
+		}
+
+		if len(elements) <= len(guestrefresh.Disks) {
+			for i, v := range elements {
+				newDisk := guestrefresh.Disks[i]
+				v.ID = types.StringValue(newDisk.ID)
+				v.Unmap = types.BoolValue(newDisk.Unmap)
+				v.Controller = types.Int64Value(newDisk.Controller)
+				v.ImageID = types.StringValue(newDisk.ImageID)
+				v.ImageName = types.StringValue(newDisk.ImageName)
+			}
+		}
+
+		setValue, diags := types.SetValueFrom(ctx, VDiskModel{}.ModelType(), elements)
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
+			return
+		}
+		data.Disks = setValue
 	}
 
 	// Save data into Terraform state

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	client "github.com/synology-community/synology-api/pkg"
@@ -22,6 +24,15 @@ func NewGuestDataSource() datasource.DataSource {
 
 type GuestDataSource struct {
 	client client.SynologyClient
+}
+
+func (d GuestDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("attribute_one"),
+			path.MatchRoot("attribute_two"),
+		),
+	}
 }
 
 type GuestDataSourceModel struct {
