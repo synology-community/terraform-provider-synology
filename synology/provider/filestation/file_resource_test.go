@@ -34,9 +34,9 @@ func TestAccFileResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_filestation_file.foo", "name", func(attr string) error {
-								if attr != "file.txt" {
-									return fmt.Errorf("expected file name to be 'file.txt', got %s", attr)
+							r.TestCheckResourceAttrWith("synology_filestation_file.foo", "path", func(attr string) error {
+								if attr != "/data/foo/bar/file.txt" {
+									return fmt.Errorf("expected file path to be '/data/foo/bar/file.txt', got %s", attr)
 								}
 								return nil
 							}),

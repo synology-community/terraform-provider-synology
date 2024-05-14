@@ -1,13 +1,13 @@
 ---
-page_title: "synology_guests Data Source - synology"
+page_title: "synology_guestList Data Source - synology"
 subcategory: "Virtualization"
 description: |-
-  Guests data source
+  GuestList data source
 ---
 
-# synology_guests (Data Source)
+# synology_guestList (Data Source)
 
-Guests data source
+GuestList data source
 
 
 
@@ -17,7 +17,7 @@ Guests data source
 
 ### Read-Only
 
-- `guest` (List of Object) List of guests. (see [below for nested schema](#nestedatt--guest))
+- `guest` (List of Object) List of guestList. (see [below for nested schema](#nestedatt--guest))
 
 <a id="nestedatt--guest"></a>
 ### Nested Schema for `guest`

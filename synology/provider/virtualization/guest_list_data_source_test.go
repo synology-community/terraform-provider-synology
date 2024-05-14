@@ -7,16 +7,16 @@ import (
 	r "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-type GuestsDataSource struct{}
+type GuestListDataSource struct{}
 
-func TestAccGuestsDataSource_basic(t *testing.T) {
+func TestAccGuestListDataSource_basic(t *testing.T) {
 	testCases := []struct {
 		Name            string
 		DataSourceBlock string
 	}{
 		{
 			"contains a guest",
-			`data "synology_guests" "foo" {}`,
+			`data "synology_virtualization_guest_list" "all" {}`,
 		},
 	}
 	for _, tt := range testCases {
@@ -27,7 +27,7 @@ func TestAccGuestsDataSource_basic(t *testing.T) {
 					{
 						Config: tt.DataSourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrSet("data.synology_guests.foo", "guest.0.%"),
+							r.TestCheckResourceAttrSet("data.synology_virtualization_guest_list.all", "guest.0.%"),
 						),
 					},
 				},

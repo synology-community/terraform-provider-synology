@@ -23,7 +23,6 @@ A file on the Synology NAS Filestation.
 ### Optional
 
 - `create_parents` (Boolean) Create parent folder(s) if none exist.
-- `name` (String) Name of the file to upload to the Synology DSM.
 - `overwrite` (Boolean) Overwrite the destination file if one exists.
 
 ### Read-Only
