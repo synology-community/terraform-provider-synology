@@ -42,8 +42,8 @@ resource "synology_virtualization_guest" "foo" {
 
 - `autorun` (Number) Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.
 - `description` (String) Description of the guest.
-- `disk` (Block Set) (see [below for nested schema](#nestedblock--disk))
-- `network` (Block Set) (see [below for nested schema](#nestedblock--network))
+- `disk` (Block Set) Disks of the guest. (see [below for nested schema](#nestedblock--disk))
+- `network` (Block Set) Networks of the guest. (see [below for nested schema](#nestedblock--network))
 - `storage_id` (String) ID of the storage device.
 - `storage_name` (String) Name of the storage device.
 - `vcpu_num` (Number) Number of virtual CPUs.
@@ -59,15 +59,15 @@ resource "synology_virtualization_guest" "foo" {
 
 Optional:
 
+- `create_type` (Number) Type of the disk.
 - `image_id` (String) ID of the image.
 - `image_name` (String) Name of the image.
+- `size` (Number) Size of the disk in MB.
 
 Read-Only:
 
 - `controller` (Number) Controller of the disk.
-- `create_type` (Number) Type of the disk.
 - `id` (String) ID of the network.
-- `size` (Number) Size of the disk in MB.
 - `unmap` (Boolean) Unmap the disk.
 
 
