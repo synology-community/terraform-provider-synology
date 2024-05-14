@@ -1,56 +1,22 @@
-name: main
+name: Terraform Provider Lint
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  tests:
-    name: test
-    strategy:
-      matrix:
-        go-version: ['1.19']
-    runs-on: ubuntu-22.04
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
     env:
-      CGO_ENABLED: '0'
+      CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup Go v${{ matrix.go-version }}
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
-          go-version: ${{ matrix.go-version }}
-
-      name: main
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  tests:
-    name: test
-    strategy:
-      matrix:
-        go-version: ['1.19']
-    runs-on: ubuntu-22.04
-    env:
-      CGO_ENABLED: '0'
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup Go v${{ matrix.go-version }}
-        uses: actions/setup-go@v2
-        with:
-          go-version: ${{ matrix.go-version }}
-
-      - name: Cache dependencies
-        uses: actions/cache@v2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          go-version-file: "go.mod"
+          cache: true
 
       - name: TF Provider Lint
         uses: bflad/tfproviderlint-github-action@master
