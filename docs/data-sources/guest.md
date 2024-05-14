@@ -37,13 +37,10 @@ Guest data source
 
 Read-Only:
 
-- `controller` (Number)
 - `create_type` (Number)
-- `id` (String)
 - `image_id` (String)
 - `image_name` (String)
 - `size` (Number)
-- `unmap` (Boolean)
 
 
 <a id="nestedatt--networks"></a>
@@ -53,6 +50,4 @@ Read-Only:
 
 - `id` (String)
 - `mac` (String)
-- `model` (Number)
 - `name` (String)
-- `vnic_id` (String)

@@ -40,8 +40,6 @@ resource "synology_virtualization_guest" "foo" {
 
 ### Optional
 
-- `autorun` (Number) Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.
-- `description` (String) Description of the guest.
 - `disk` (Block Set) Disks of the guest. (see [below for nested schema](#nestedblock--disk))
 - `network` (Block Set) Networks of the guest. (see [below for nested schema](#nestedblock--network))
 - `storage_id` (String) ID of the storage device.
@@ -52,7 +50,6 @@ resource "synology_virtualization_guest" "foo" {
 ### Read-Only
 
 - `id` (String) The ID of the guest.
-- `status` (String) Status of the guest.
 
 <a id="nestedblock--disk"></a>
 ### Nested Schema for `disk`
@@ -64,12 +61,6 @@ Optional:
 - `image_name` (String) Name of the image.
 - `size` (Number) Size of the disk in MB.
 
-Read-Only:
-
-- `controller` (Number) Controller of the disk.
-- `id` (String) ID of the network.
-- `unmap` (Boolean) Unmap the disk.
-
 
 <a id="nestedblock--network"></a>
 ### Nested Schema for `network`
@@ -79,8 +70,3 @@ Optional:
 - `id` (String) ID of the network.
 - `mac` (String) MAC address.
 - `name` (String) Name of the network.
-
-Read-Only:
-
-- `model` (Number) Model of the network.
-- `vnic_id` (String) Virtual NIC ID.
