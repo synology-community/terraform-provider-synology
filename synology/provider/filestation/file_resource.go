@@ -2,6 +2,7 @@ package filestation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -31,7 +32,6 @@ type FileResourceModel struct {
 	Path          types.String `tfsdk:"path"`
 	CreateParents types.Bool   `tfsdk:"create_parents"`
 	Overwrite     types.Bool   `tfsdk:"overwrite"`
-	Name          types.String `tfsdk:"name"`
 	Content       types.String `tfsdk:"content"`
 	MD5           types.String `tfsdk:"md5"`
 }
@@ -47,14 +47,12 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	fileName := data.Name.ValueString()
-	fileContent := data.Content.ValueString()
-
 	createParents := data.CreateParents.ValueBool()
 	overwrite := data.Overwrite.ValueBool()
 	path := data.Path.ValueString()
-
-	filePath := filepath.Join(path, fileName)
+	fileContent := data.Content.ValueString()
+	fileName := filepath.Base(data.Path.ValueString())
+	fileDir := filepath.Dir(data.Path.ValueString())
 
 	// Check if the file exists
 
@@ -63,7 +61,7 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// If the checksums match, return
 
 	// Upload the file
-	_, err := f.client.Upload(ctx, path, form.File{
+	_, err := f.client.Upload(ctx, fileDir, form.File{
 		Name:    fileName,
 		Content: fileContent,
 	}, createParents, overwrite)
@@ -73,35 +71,45 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	md5, err := f.client.MD5(ctx, filePath)
-
+	md5, err := f.client.MD5(ctx, path)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		resp.Diagnostics.AddError("Failed to get file MD5", fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		return
 	}
-
 	// Store the MD5 checksum in the state
 	data.MD5 = types.StringValue(md5.MD5)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	// files, err := f.client.List(ctx, path)
+	// if err != nil {
+	// 	resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+	// 	return
+	// }
+	// for _, file := range files.Files {
+	// 	if file.Name == fileName {
+
+	// 	}
+	// }
 }
 
 // Delete implements resource.Resource.
 func (f *FileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data FileResourceModel
-
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
-
+	path := data.Path.ValueString()
 	// Start Delete the file
-	_, err := f.client.Delete(ctx, []string{fileName}, true)
+	_, err := f.client.Delete(ctx, []string{path}, true)
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
+		if e := errors.Unwrap(err); e != nil {
+			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", e))
+		} else {
+			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
+		}
 		return
 	}
 }
@@ -113,25 +121,20 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	var fileName string
+	path := data.Path.ValueString()
 
-	if data.Name.IsNull() || data.Name.IsUnknown() {
-		fileName = data.Path.ValueString()
-	} else {
-		fileName = filepath.Join(data.Path.ValueString(), data.Name.ValueString())
-	}
-
-	md5, err := f.client.MD5(ctx, fileName)
-
+	md5, err := f.client.MD5(ctx, path)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		resp.Diagnostics.AddError("Failed to get file MD5", fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		return
 	}
 
-	data.MD5 = types.StringValue(md5.MD5)
+	if md5.MD5 != data.MD5.ValueString() {
+		data.MD5 = types.StringValue(md5.MD5)
 
-	resp.State.Set(ctx, &data)
+		resp.State.Set(ctx, &data)
+	}
 }
 
 // Update implements resource.Resource.
@@ -141,9 +144,13 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
+	path := data.Path.ValueString()
+	fileName := filepath.Base(data.Path.ValueString())
+	fileDir := filepath.Dir(data.Path.ValueString())
+
+	// fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
 	file := form.File{
-		Name:    data.Name.ValueString(),
+		Name:    fileName,
 		Content: data.Content.ValueString(),
 	}
 
@@ -156,7 +163,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	// Upload the file
 	_, err := f.client.Upload(
 		ctx,
-		data.Path.ValueString(),
+		fileDir,
 		file, data.CreateParents.ValueBool(),
 		true)
 	if err != nil {
@@ -165,14 +172,12 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	md5, err := f.client.MD5(ctx, fileName)
-
+	md5, err := f.client.MD5(ctx, path)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		resp.Diagnostics.AddError("Failed to get file MD5", fmt.Sprintf("Unable to get file MD5, got error: %s", err))
 		return
 	}
-
 	// Store the MD5 checksum in the state
 	data.MD5 = types.StringValue(md5.MD5)
 
@@ -210,11 +215,6 @@ func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
-			},
-			"name": schema.StringAttribute{
-				MarkdownDescription: "Name of the file to upload to the Synology DSM.",
-				Optional:            true,
-				Computed:            true,
 			},
 			"md5": schema.StringAttribute{
 				MarkdownDescription: "The MD5 checksum of the file.",
