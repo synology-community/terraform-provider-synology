@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -79,6 +80,7 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "ID of the storage device.",
 				Optional:            true,
 				Computed:            true,
+				Default:             stringdefault.StaticString(""),
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
@@ -112,6 +114,7 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 						"id": schema.StringAttribute{
 							MarkdownDescription: "ID of the network.",
 							Computed:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 						"create_type": schema.Int64Attribute{
 							MarkdownDescription: "Type of the disk.",
@@ -128,19 +131,23 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							MarkdownDescription: "ID of the image.",
 							Computed:            true,
 							Optional:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 						"image_name": schema.StringAttribute{
 							MarkdownDescription: "Name of the image.",
 							Computed:            true,
 							Optional:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 						"unmap": schema.BoolAttribute{
 							MarkdownDescription: "Unmap the disk.",
 							Computed:            true,
+							Default:             booldefault.StaticBool(false),
 						},
 						"controller": schema.Int64Attribute{
 							MarkdownDescription: "Controller of the disk.",
 							Computed:            true,
+							Default:             int64default.StaticInt64(0),
 						},
 					},
 				},
@@ -153,24 +160,29 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							MarkdownDescription: "ID of the network.",
 							Computed:            true,
 							Optional:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 						"name": schema.StringAttribute{
 							MarkdownDescription: "Name of the network.",
 							Computed:            true,
 							Optional:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 						"mac": schema.StringAttribute{
 							MarkdownDescription: "MAC address.",
 							Optional:            true,
 							Computed:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 						"model": schema.Int64Attribute{
 							MarkdownDescription: "Model of the network.",
 							Computed:            true,
+							Default:             int64default.StaticInt64(0),
 						},
 						"vnic_id": schema.StringAttribute{
 							MarkdownDescription: "Virtual NIC ID.",
 							Computed:            true,
+							Default:             stringdefault.StaticString(""),
 						},
 					},
 				},
