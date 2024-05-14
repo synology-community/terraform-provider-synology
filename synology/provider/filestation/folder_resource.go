@@ -2,6 +2,7 @@ package filestation
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -59,7 +60,7 @@ func (f *FolderResource) Metadata(_ context.Context, req resource.MetadataReques
 // Schema implements resource.Resource.
 func (f *FolderResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Filestation folder.",
+		MarkdownDescription: "FileStation --- Manages a folder in the Synology FileStation.",
 
 		Attributes: map[string]schema.Attribute{
 			"iterations": schema.Int64Attribute{
@@ -102,4 +103,24 @@ func (f *FolderResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 		},
 	}
+}
+
+func (f *FolderResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(client.SynologyClient)
+
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+
+		return
+	}
+
+	f.client = client
 }

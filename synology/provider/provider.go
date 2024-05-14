@@ -132,19 +132,23 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 }
 
 func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		filestation.NewFileResource,
-		virtualization.NewImageResource,
-		virtualization.NewGuestResource,
-	}
+
+	var resp []func() resource.Resource
+
+	resp = append(resp, filestation.Resources()...)
+	resp = append(resp, virtualization.Resources()...)
+
+	return resp
 }
 
 func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
-		filestation.NewInfoDataSource,
-		virtualization.NewGuestDataSource,
-		virtualization.NewGuestsDataSource,
-	}
+
+	var resp []func() datasource.DataSource
+
+	resp = append(resp, filestation.DataSources()...)
+	resp = append(resp, virtualization.DataSources()...)
+
+	return resp
 }
 
 func (p *SynologyProvider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {

@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-testing v1.7.0
 	github.com/kdomanski/iso9660 v0.4.0
-	github.com/synology-community/synology-api v0.0.2
+	github.com/synology-community/synology-api v0.0.3-0.20240514165603-5091203f8ea3
 )
 
 require (

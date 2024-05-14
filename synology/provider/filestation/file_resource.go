@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
+	"github.com/synology-community/synology-api/pkg/api/filestation"
 	"github.com/synology-community/synology-api/pkg/util/form"
 )
 
@@ -22,7 +23,7 @@ func NewFileResource() resource.Resource {
 }
 
 type FileResource struct {
-	client client.SynologyClient
+	client filestation.FileStationApi
 }
 
 // FileResourceModel describes the resource data model.
@@ -62,7 +63,7 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// If the checksums match, return
 
 	// Upload the file
-	_, err := f.client.FileStationAPI().Upload(ctx, path, form.File{
+	_, err := f.client.Upload(ctx, path, form.File{
 		Name:    fileName,
 		Content: fileContent,
 	}, createParents, overwrite)
@@ -72,7 +73,7 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	md5, err := f.client.FileStationAPI().MD5(ctx, filePath)
+	md5, err := f.client.MD5(ctx, filePath)
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
@@ -97,7 +98,7 @@ func (f *FileResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
 
 	// Start Delete the file
-	_, err := f.client.FileStationAPI().Delete(ctx, []string{fileName}, true)
+	_, err := f.client.Delete(ctx, []string{fileName}, true)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
@@ -112,9 +113,15 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	fileName := filepath.Join(data.Path.ValueString(), data.Name.ValueString())
+	var fileName string
 
-	md5, err := f.client.FileStationAPI().MD5(ctx, fileName)
+	if data.Name.IsNull() || data.Name.IsUnknown() {
+		fileName = data.Path.ValueString()
+	} else {
+		fileName = filepath.Join(data.Path.ValueString(), data.Name.ValueString())
+	}
+
+	md5, err := f.client.MD5(ctx, fileName)
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
@@ -147,7 +154,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	// If the checksums match, return
 
 	// Upload the file
-	_, err := f.client.FileStationAPI().Upload(
+	_, err := f.client.Upload(
 		ctx,
 		data.Path.ValueString(),
 		file, data.CreateParents.ValueBool(),
@@ -158,7 +165,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Get the file's MD5 checksum
-	md5, err := f.client.FileStationAPI().MD5(ctx, fileName)
+	md5, err := f.client.MD5(ctx, fileName)
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Unable to get file MD5, got error: %s", err))
@@ -181,7 +188,7 @@ func (f *FileResource) Metadata(_ context.Context, req resource.MetadataRequest,
 // Schema implements resource.Resource.
 func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A file on the Synology NAS Filestation.",
+		MarkdownDescription: "FileStation --- A file on the Synology NAS Filestation.",
 
 		Attributes: map[string]schema.Attribute{
 			"path": schema.StringAttribute{
@@ -234,5 +241,5 @@ func (f *FileResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		return
 	}
 
-	f.client = client
+	f.client = client.FileStationAPI()
 }
