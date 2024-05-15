@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-testing v1.7.0
 	github.com/kdomanski/iso9660 v0.4.0
-	github.com/synology-community/synology-api v0.0.3-0.20240514165603-5091203f8ea3
+	github.com/synology-community/synology-api v0.0.4
 )
 
 require (
@@ -26,6 +26,7 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/cli v1.1.6 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.6 // indirect
 	github.com/huandu/xstrings v1.3.3 // indirect
 	github.com/imdario/mergo v0.3.15 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
