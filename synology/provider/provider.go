@@ -118,7 +118,10 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 			"password information is not provided"))
 	}
 	// Example client configuration for data sources and resources
-	client, err := client.New(host, skipCertificateCheck)
+	client, err := client.New(client.Options{
+		Host:       host,
+		VerifyCert: !skipCertificateCheck,
+	})
 	if err != nil {
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
