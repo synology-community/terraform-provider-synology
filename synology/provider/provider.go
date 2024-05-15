@@ -119,7 +119,7 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 			"password information is not provided"))
 	}
 	// Example client configuration for data sources and resources
-	client, err := client.New(client.Options{
+	c, err := client.New(client.Options{
 		Host:       host,
 		VerifyCert: !skipCertificateCheck,
 		//Logger: 	 tflog.(ctx),
@@ -128,12 +128,12 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
 
-	if _, err := client.Login(ctx, user, password); err != nil {
+	if _, err := c.Login(ctx, user, password); err != nil {
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
 	}
 
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	resp.DataSourceData = c
+	resp.ResourceData = c
 }
 
 func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Resource {
