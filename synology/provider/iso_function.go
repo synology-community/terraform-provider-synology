@@ -43,20 +43,12 @@ func (r ISOFunction) Definition(_ context.Context, _ function.DefinitionRequest,
 }
 
 func (r ISOFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
-	var data string
-
-	resp.Error = function.ConcatFuncErrors(req.Arguments.Get(ctx, &data))
-
-	if resp.Error != nil {
-		return
-	}
-
 	var volumeName string
 	var files map[string]string
 
-	ferr := req.Arguments.Get(ctx, &volumeName, &files)
-	if ferr != nil {
-		resp.Error = function.NewFuncError(fmt.Sprintf("failed to get meta data: %v", ferr))
+	resp.Error = function.ConcatFuncErrors(req.Arguments.Get(ctx, &volumeName, &files))
+
+	if resp.Error != nil {
 		return
 	}
 
@@ -65,8 +57,5 @@ func (r ISOFunction) Run(ctx context.Context, req function.RunRequest, resp *fun
 		resp.Error = function.NewFuncError(fmt.Sprintf("failed to create ISO: %v", err))
 		return
 	}
-
-	resp.Result.Set(ctx, iso)
-
-	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, data))
+	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, iso))
 }
