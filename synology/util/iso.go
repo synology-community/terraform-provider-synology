@@ -25,36 +25,26 @@ type CloudInit struct {
 	NetworkConfig string `yaml:"network_config"`
 }
 
-func IsoFromCloudInit(ctx context.Context, ci CloudInit) ([]byte, error) {
+func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) ([]byte, error) {
 	writer, err := iso9660.NewWriter()
 
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("failed to create writer: %v", err))
 	}
 
-	if len(ci.MetaData) > 0 {
-		if err = writer.AddFile(strings.NewReader(ci.MetaData), metaDataFileName); err != nil {
-			tflog.Error(ctx, fmt.Sprintf("failed to add metadata file: %v", err))
-			return nil, err
-		}
-	}
+	for path, content := range files {
+		tflog.Info(ctx, fmt.Sprintf("writing iso file for %s", path))
 
-	if len(ci.UserData) > 0 {
-		if err = writer.AddFile(strings.NewReader(ci.UserData), userDataFileName); err != nil {
-			tflog.Error(ctx, fmt.Sprintf("failed to add metadata file: %s", err))
-			return nil, err
-		}
-	}
-
-	if len(ci.NetworkConfig) > 0 {
-		if err = writer.AddFile(strings.NewReader(ci.NetworkConfig), networkConfigFileName); err != nil {
-			tflog.Error(ctx, fmt.Sprintf("failed to add network config file: %s", err))
-			return nil, err
+		if len(path) > 0 {
+			if err = writer.AddFile(strings.NewReader(path), content); err != nil {
+				tflog.Error(ctx, fmt.Sprintf("failed to add metadata file: %v", err))
+				return nil, err
+			}
 		}
 	}
 
 	var b bytes.Buffer
-	err = writer.WriteTo(&b, fmt.Sprintf("vol%s", ci.Name))
+	err = writer.WriteTo(&b, fmt.Sprintf("vol%s", isoName))
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("failed to write ISO image: %s", err))
 		return nil, err
@@ -65,6 +55,14 @@ func IsoFromCloudInit(ctx context.Context, ci CloudInit) ([]byte, error) {
 	}()
 
 	return b.Bytes(), nil
+}
+
+func IsoFromCloudInit(ctx context.Context, ci CloudInit) ([]byte, error) {
+	return IsoFromFiles(ctx, ci.Name, map[string]string{
+		metaDataFileName:      ci.MetaData,
+		userDataFileName:      ci.UserData,
+		networkConfigFileName: ci.NetworkConfig,
+	})
 }
 
 func removeTmpIsoDirectory(ctx context.Context, iso string) {

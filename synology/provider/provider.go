@@ -11,6 +11,7 @@ import (
 	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -121,6 +122,7 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 	client, err := client.New(client.Options{
 		Host:       host,
 		VerifyCert: !skipCertificateCheck,
+		//Logger: 	 tflog.(ctx),
 	})
 	if err != nil {
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
@@ -152,6 +154,12 @@ func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.
 	resp = append(resp, virtualization.DataSources()...)
 
 	return resp
+}
+
+func (p *SynologyProvider) Functions(ctx context.Context) []func() function.Function {
+	return []func() function.Function{
+		NewISOFunction,
+	}
 }
 
 func (p *SynologyProvider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {

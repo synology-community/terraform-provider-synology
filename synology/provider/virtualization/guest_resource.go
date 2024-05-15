@@ -71,19 +71,6 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "Name of the guest to upload to the Synology DSM.",
 				Required:            true,
 			},
-			// "description": schema.StringAttribute{
-			// 	MarkdownDescription: "Description of the guest.",
-			// 	Computed:            true,
-			// 	Optional:            true,
-			// 	Default:             stringdefault.StaticString(""),
-			// },
-			// "autorun": schema.Int64Attribute{
-			// 	MarkdownDescription: "Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.",
-			// 	Computed:            true,
-			// 	PlanModifiers: []planmodifier.Int64{
-			// 		int64planmodifier.UseStateForUnknown(),
-			// 	},
-			// },
 			"storage_id": schema.StringAttribute{
 				MarkdownDescription: "ID of the storage device.",
 				Optional:            true,
@@ -106,26 +93,12 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Default:             int64default.StaticInt64(4096),
 				Computed:            true,
 			},
-			// "status": schema.StringAttribute{
-			// 	MarkdownDescription: "Status of the guest.",
-			// 	Computed:            true,
-			// 	PlanModifiers: []planmodifier.String{
-			// 		stringplanmodifier.UseStateForUnknown(),
-			// 	},
-			// },
 		},
 		Blocks: map[string]schema.Block{
 			"disk": schema.SetNestedBlock{
 				MarkdownDescription: "Disks of the guest.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
-						// "id": schema.StringAttribute{
-						// 	MarkdownDescription: "ID of the network.",
-						// 	Computed:            true,
-						// 	PlanModifiers: []planmodifier.String{
-						// 		stringplanmodifier.UseStateForUnknown(),
-						// 	},
-						// },
 						"create_type": schema.Int64Attribute{
 							MarkdownDescription: "Type of the disk.",
 							Optional:            true,
@@ -146,20 +119,6 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							MarkdownDescription: "Name of the image.",
 							Optional:            true,
 						},
-						// "unmap": schema.BoolAttribute{
-						// 	MarkdownDescription: "Unmap the disk.",
-						// 	Computed:            true,
-						// 	PlanModifiers: []planmodifier.Bool{
-						// 		boolplanmodifier.UseStateForUnknown(),
-						// 	},
-						// },
-						// "controller": schema.Int64Attribute{
-						// 	MarkdownDescription: "Controller of the disk.",
-						// 	Computed:            true,
-						// 	PlanModifiers: []planmodifier.Int64{
-						// 		int64planmodifier.UseStateForUnknown(),
-						// 	},
-						// },
 					},
 				},
 			},
@@ -181,20 +140,6 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							MarkdownDescription: "MAC address.",
 							Optional:            true,
 						},
-						// "model": schema.Int64Attribute{
-						// 	MarkdownDescription: "Model of the network.",
-						// 	Computed:            true,
-						// 	PlanModifiers: []planmodifier.Int64{
-						// 		int64planmodifier.UseStateForUnknown(),
-						// 	},
-						// },
-						// "vnic_id": schema.StringAttribute{
-						// 	MarkdownDescription: "Virtual NIC ID.",
-						// 	Computed:            true,
-						// 	PlanModifiers: []planmodifier.String{
-						// 		stringplanmodifier.UseStateForUnknown(),
-						// 	},
-						// },
 					},
 				},
 			},
@@ -289,75 +234,6 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// guestrefresh, err := f.client.GuestGet(ctx, virtualization.Guest{Name: data.Name.ValueString()})
-	// if err != nil {
-	// 	resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
-	// 	return
-	// }
-
-	// data.Status = types.StringValue(guestrefresh.Status)
-	// data.AutoRun = types.Int64Value(guestrefresh.AutoRun)
-	// data.Description = types.StringValue(guestrefresh.Description)
-
-	// if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
-
-	// 	var elements []VNicModel
-	// 	diags := data.Networks.ElementsAs(ctx, &elements, true)
-
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-	// 		return
-	// 	}
-
-	// 	if len(elements) <= len(guestrefresh.Networks) {
-	// 		for i, v := range elements {
-	// 			newDisk := guestrefresh.Networks[i]
-	// 			v.ID = types.StringValue(newDisk.ID)
-	// 			v.Mac = types.StringValue(newDisk.Mac)
-	// 			v.Model = types.Int64Value(newDisk.Model)
-	// 			v.VNicID = types.StringValue(newDisk.VnicID)
-	// 			elements[i] = v
-	// 		}
-	// 	}
-
-	// 	setValue, diags := types.SetValueFrom(ctx, VNicModel{}.ModelType(), elements)
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
-	// 		return
-	// 	}
-	// 	data.Networks = setValue
-	// }
-
-	// if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
-
-	// 	var elements []VDiskModel
-	// 	diags := data.Disks.ElementsAs(ctx, &elements, true)
-
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-	// 		return
-	// 	}
-
-	// 	if len(elements) <= len(guestrefresh.Disks) {
-	// 		for i, v := range elements {
-	// 			newDisk := guestrefresh.Disks[i]
-	// 			v.ID = types.StringValue(newDisk.ID)
-	// 			v.Unmap = types.BoolValue(newDisk.Unmap)
-	// 			v.Controller = types.Int64Value(newDisk.Controller)
-	// 			v.ImageID = types.StringValue(newDisk.ImageID)
-	// 			v.ImageName = types.StringValue(newDisk.ImageName)
-	// 			elements[i] = v
-	// 		}
-	// 	}
-
-	// 	setValue, diags := types.SetValueFrom(ctx, VDiskModel{}.ModelType(), elements)
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.AddError("Failed to set disks", "Unable to set disks")
-	// 		return
-	// 	}
-	// 	data.Disks = setValue
-	// }
-
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
@@ -441,4 +317,27 @@ func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureReq
 	}
 
 	f.client = client.VirtualizationAPI()
+}
+
+func (f *GuestResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	guestName := req.ID
+
+	guest, err := f.client.GuestGet(ctx, virtualization.Guest{Name: guestName})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
+		return
+	}
+
+	id := guest.ID
+	storageID := guest.StorageID
+	storageName := guest.StorageName
+
+	if id == "" {
+		resp.Diagnostics.AddError("Failed to list guests", "Unable to list guests, got empty ID")
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), guest.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("storage_id"), storageID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("storage_name"), storageName)...)
 }
