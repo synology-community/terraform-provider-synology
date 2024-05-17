@@ -58,11 +58,18 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 }
 
 func IsoFromCloudInit(ctx context.Context, ci CloudInit) (string, error) {
-	return IsoFromFiles(ctx, ci.Name, map[string]string{
-		metaDataFileName:      ci.MetaData,
-		userDataFileName:      ci.UserData,
-		networkConfigFileName: ci.NetworkConfig,
-	})
+	fileMap := map[string]string{}
+	if ci.MetaData != "" {
+		fileMap[metaDataFileName] = ci.MetaData
+	}
+	if ci.UserData != "" {
+		fileMap[userDataFileName] = ci.UserData
+	}
+	if ci.NetworkConfig != "" {
+		fileMap[networkConfigFileName] = ci.NetworkConfig
+	}
+
+	return IsoFromFiles(ctx, ci.Name, fileMap)
 }
 
 func removeTmpIsoDirectory(ctx context.Context, iso string) {
