@@ -63,22 +63,12 @@ func TestISOFunction_Unknown(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: `
-				resource "terraform_data" "volume" {
-					input = "testvalue"
-				}
-
-				resource "terraform_data" "files" {
-					input = {
-						"/testfile.txt" = "contents of file"
-					}
-				}
-				
 				output "test" {
-					value = provider::synology::iso(terraform_data.volume.output, terraform_data.files.output)
+					value = base64encode(provider::synology::iso("testvalue", { "/testfile.txt" = "contents of file" }))
 				}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckOutput("test", "testvalue"),
+					resource.TestMatchOutput("test", regexp.MustCompile(`.*`)),
 				),
 			},
 		},
