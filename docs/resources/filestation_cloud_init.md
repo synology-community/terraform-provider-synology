@@ -26,14 +26,14 @@ resource "synology_filestation_cloud_init" "foo" {
 
 ### Required
 
-- `meta_data` (String) Meta data content.
-- `network_config` (String) Network config content.
 - `path` (String) A destination folder path starting with a shared folder to which files can be uploaded.
 - `user_data` (String) User data content.
 
 ### Optional
 
 - `create_parents` (Boolean) Create parent folder(s) if none exist.
+- `meta_data` (String) Meta data content.
+- `network_config` (String) Network config content.
 - `overwrite` (Boolean) Overwrite the destination file if one exists.
 
 ### Read-Only

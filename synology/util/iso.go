@@ -19,7 +19,6 @@ const networkConfigFileName string = "network-config"
 
 type CloudInit struct {
 	Name          string
-	PoolName      string
 	MetaData      string `yaml:"meta_data"`
 	UserData      string `yaml:"user_data"`
 	NetworkConfig string `yaml:"network_config"`
@@ -36,7 +35,7 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 		tflog.Info(ctx, fmt.Sprintf("writing iso file for %s", path))
 
 		if len(path) > 0 {
-			if err = writer.AddFile(strings.NewReader(path), content); err != nil {
+			if err = writer.AddFile(strings.NewReader(content), path); err != nil {
 				tflog.Error(ctx, fmt.Sprintf("failed to add metadata file: %v", err))
 				return "", err
 			}
@@ -44,7 +43,7 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 	}
 
 	var b bytes.Buffer
-	err = writer.WriteTo(&b, fmt.Sprintf("vol%s", isoName))
+	err = writer.WriteTo(&b, isoName)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("failed to write ISO image: %s", err))
 		return "", err
@@ -58,6 +57,10 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 }
 
 func IsoFromCloudInit(ctx context.Context, ci CloudInit) (string, error) {
+	if ci.Name == "" {
+		ci.Name = "cloudinit"
+	}
+
 	fileMap := map[string]string{}
 	if ci.MetaData != "" {
 		fileMap[metaDataFileName] = ci.MetaData

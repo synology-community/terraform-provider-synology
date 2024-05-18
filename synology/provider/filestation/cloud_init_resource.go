@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/appkins/terraform-provider-synology/synology/util"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
@@ -159,7 +161,10 @@ func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateReque
 	userData := data.UserData.ValueString()
 	networkConfig := data.NetworkConfig.ValueString()
 
+	isoName := strings.Split(fileName, ".")[0]
+
 	iso, err := util.IsoFromCloudInit(ctx, util.CloudInit{
+		Name:          isoName,
 		UserData:      userData,
 		MetaData:      metaData,
 		NetworkConfig: networkConfig,
@@ -224,7 +229,9 @@ func (f *CloudInitResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			},
 			"meta_data": schema.StringAttribute{
 				MarkdownDescription: "Meta data content.",
-				Required:            true,
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
 			},
 			"user_data": schema.StringAttribute{
 				MarkdownDescription: "User data content.",
@@ -232,7 +239,9 @@ func (f *CloudInitResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			},
 			"network_config": schema.StringAttribute{
 				MarkdownDescription: "Network config content.",
-				Required:            true,
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
 			},
 			"create_parents": schema.BoolAttribute{
 				MarkdownDescription: "Create parent folder(s) if none exist.",
