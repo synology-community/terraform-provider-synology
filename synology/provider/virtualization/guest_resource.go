@@ -168,10 +168,6 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	if data.Run.IsNull() || data.Run.IsUnknown() {
-		data.Run = types.BoolValue(false)
-	}
-
 	guest := virtualization.Guest{
 		Name:     data.Name.ValueString(),
 		VcpuNum:  data.VcpuNum.ValueInt64(),
