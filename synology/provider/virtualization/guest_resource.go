@@ -29,8 +29,8 @@ type GuestResource struct {
 	client virtualization.VirtualizationAPI
 }
 
-type IsoImageModel struct {
-	ID types.String `tfsdk:"id"`
+type GuestIsoModel struct {
+	ID types.String `tfsdk:"image_id"`
 }
 
 // GuestResourceModel describes the resource data model.
@@ -46,7 +46,7 @@ type GuestResourceModel struct {
 	VramSize  types.Int64 `tfsdk:"vram_size"`
 	Disks     types.Set   `tfsdk:"disk"`
 	Networks  types.Set   `tfsdk:"network"`
-	IsoImages types.Set   `tfsdk:"iso_image"`
+	IsoImages types.Set   `tfsdk:"iso"`
 }
 
 // Schema implements resource.Resource.
@@ -132,11 +132,11 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					},
 				},
 			},
-			"iso_image": schema.SetNestedBlock{
+			"iso": schema.SetNestedBlock{
 				MarkdownDescription: "Mounted ISO files for guest.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
+						"image_id": schema.StringAttribute{
 							MarkdownDescription: "Image ID for the iso.",
 							Required:            true,
 						},
@@ -168,7 +168,7 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
 		isoImages = []string{"unmounted", "unmounted"}
-		var elements []IsoImageModel
+		var elements []GuestIsoModel
 		diags := data.IsoImages.ElementsAs(ctx, &elements, true)
 
 		if diags.HasError() {
@@ -374,8 +374,8 @@ func (f *GuestResource) ValidateConfig(ctx context.Context, req resource.Validat
 	}
 
 	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
-		if len(data.IsoImages.Elements()) != 2 {
-			resp.Diagnostics.AddError("iso_images length must be 2", "iso_images length must be 2")
+		if len(data.IsoImages.Elements()) > 2 {
+			resp.Diagnostics.AddError("iso length", "iso length must not be greater than 2")
 		}
 	}
 

@@ -41,7 +41,7 @@ resource "synology_virtualization_guest" "foo" {
 ### Optional
 
 - `disk` (Block Set) Disks of the guest. (see [below for nested schema](#nestedblock--disk))
-- `iso_image` (Block Set) Mounted ISO files for guest. (see [below for nested schema](#nestedblock--iso_image))
+- `iso` (Block Set) Mounted ISO files for guest. (see [below for nested schema](#nestedblock--iso))
 - `network` (Block Set) Networks of the guest. (see [below for nested schema](#nestedblock--network))
 - `storage_id` (String) ID of the storage device.
 - `storage_name` (String) Name of the storage device.
@@ -62,12 +62,12 @@ Optional:
 - `size` (Number) Size of the disk in MB.
 
 
-<a id="nestedblock--iso_image"></a>
-### Nested Schema for `iso_image`
+<a id="nestedblock--iso"></a>
+### Nested Schema for `iso`
 
 Required:
 
-- `id` (String) Image ID for the iso.
+- `image_id` (String) Image ID for the iso.
 
 
 <a id="nestedblock--network"></a>
