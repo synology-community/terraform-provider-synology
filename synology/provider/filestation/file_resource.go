@@ -4,11 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
+	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
@@ -30,9 +38,10 @@ type FileResource struct {
 // FileResourceModel describes the resource data model.
 type FileResourceModel struct {
 	Path          types.String `tfsdk:"path"`
+	Content       types.String `tfsdk:"content"`
+	Url           types.String `tfsdk:"url"`
 	CreateParents types.Bool   `tfsdk:"create_parents"`
 	Overwrite     types.Bool   `tfsdk:"overwrite"`
-	Content       types.String `tfsdk:"content"`
 	AccessTime    types.Int64  `tfsdk:"access_time"`
 	ModifiedTime  types.Int64  `tfsdk:"modified_time"`
 	ChangeTime    types.Int64  `tfsdk:"change_time"`
@@ -57,8 +66,29 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	fileName := filepath.Base(data.Path.ValueString())
 	fileDir := filepath.Dir(data.Path.ValueString())
 
+	if (!data.Url.IsNull() && !data.Url.IsUnknown()) && (data.Content.IsNull() || data.Content.IsUnknown()) {
+
+		dresp, err := retryablehttp.NewClient().Get(data.Url.ValueString())
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to download file", fmt.Sprintf("Unable to download file, got error: %s", err))
+			return
+		}
+
+		dbody, err := io.ReadAll(dresp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to read file", fmt.Sprintf("Unable to read file, got error: %s", err))
+			return
+		}
+		dresp.Body.Close()
+		fileContent = string(dbody)
+	}
+
+	dctx, cancel := context.WithTimeout(ctx, 120*time.Minute)
+	defer cancel()
+
 	// Upload the file
-	_, err := f.client.Upload(ctx, fileDir, form.File{
+	_, err := f.client.Upload(dctx, fileDir, form.File{
 		Name:    fileName,
 		Content: fileContent,
 	}, createParents, overwrite)
@@ -199,8 +229,28 @@ func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Required:            true,
 			},
 			"content": schema.StringAttribute{
-				MarkdownDescription: "A destination folder path starting with a shared folder to which files can be uploaded.",
-				Required:            true,
+				MarkdownDescription: "The raw file contents to add to the Synology NAS.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(
+						path.MatchRoot("url"),
+						path.MatchRoot("content")),
+				},
+			},
+			"url": schema.StringAttribute{
+				MarkdownDescription: "A file url to download and add to the Synology NAS.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(
+						path.MatchRoot("url"),
+						path.MatchRoot("content")),
+				},
 			},
 			"create_parents": schema.BoolAttribute{
 				MarkdownDescription: "Create parent folder(s) if none exist.",

@@ -47,3 +47,39 @@ func TestAccFileResource_basic(t *testing.T) {
 		})
 	}
 }
+
+func TestAccFileResource_url(t *testing.T) {
+	testCases := []struct {
+		Name          string
+		ResourceBlock string
+	}{
+		{
+			"file url is set",
+			`
+			resource "synology_filestation_file" "noble" {
+				path = "/data/cluster_storage/noble-server-cloudimg-amd64.img"
+				url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+			}`,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.Name, func(t *testing.T) {
+			r.UnitTest(t, r.TestCase{
+				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
+				Steps: []r.TestStep{
+					{
+						Config: tt.ResourceBlock,
+						Check: r.ComposeTestCheckFunc(
+							r.TestCheckResourceAttrWith("synology_filestation_file.noble", "url", func(attr string) error {
+								if attr != "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" {
+									return fmt.Errorf("expected file url to be 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img', got %s", attr)
+								}
+								return nil
+							}),
+						),
+					},
+				},
+			})
+		})
+	}
+}

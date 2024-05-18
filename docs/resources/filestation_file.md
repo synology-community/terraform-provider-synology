@@ -17,13 +17,14 @@ A file on the Synology NAS Filestation.
 
 ### Required
 
-- `content` (String) A destination folder path starting with a shared folder to which files can be uploaded.
 - `path` (String) A destination folder path starting with a shared folder to which files can be uploaded.
 
 ### Optional
 
+- `content` (String) The raw file contents to add to the Synology NAS.
 - `create_parents` (Boolean) Create parent folder(s) if none exist.
 - `overwrite` (Boolean) Overwrite the destination file if one exists.
+- `url` (String) A file url to download and add to the Synology NAS.
 
 ### Read-Only
 
