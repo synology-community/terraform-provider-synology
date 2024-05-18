@@ -17,10 +17,10 @@ func TestAccGuestDataSource_basic(t *testing.T) {
 		{
 			"id exists for known guest",
 			`
-			data "synology_guests" "foo" {}
+			data "synology_virtualization_guest_list" "all" {}
 
-			data "synology_guest" "foo" {
-				name = data.synology_guests.foo.guest.0.name
+			data "synology_virtualization_guest" "foo" {
+				name = data.synology_virtualization_guest_list.all.guest[0].name
 			}`,
 		},
 	}
@@ -32,7 +32,7 @@ func TestAccGuestDataSource_basic(t *testing.T) {
 					{
 						Config: tt.DataSourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrSet("data.synology_guest.foo", "id"),
+							r.TestCheckResourceAttrSet("data.synology_virtualization_guest.foo", "id"),
 						),
 					},
 				},

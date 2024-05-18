@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/appkins/terraform-provider-synology/synology/util"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -58,12 +57,17 @@ func (f *CloudInitResource) Create(ctx context.Context, req resource.CreateReque
 	createParents := data.CreateParents.ValueBool()
 	overwrite := data.Overwrite.ValueBool()
 	path := data.Path.ValueString()
-	userData := data.UserData.ValueString()
 	fileName := filepath.Base(data.Path.ValueString())
 	fileDir := filepath.Dir(data.Path.ValueString())
 
+	metaData := data.MetaData.ValueString()
+	userData := data.UserData.ValueString()
+	networkConfig := data.NetworkConfig.ValueString()
+
 	iso, err := util.IsoFromCloudInit(ctx, util.CloudInit{
-		UserData: userData,
+		UserData:      userData,
+		MetaData:      metaData,
+		NetworkConfig: networkConfig,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create ISO", fmt.Sprintf("Unable to create ISO, got error: %s", err))
@@ -152,7 +156,7 @@ func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateReque
 	var data CloudInitResourceModel
 
 	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	path := data.Path.ValueString()
 	fileName := filepath.Base(data.Path.ValueString())
@@ -161,10 +165,7 @@ func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateReque
 	userData := data.UserData.ValueString()
 	networkConfig := data.NetworkConfig.ValueString()
 
-	isoName := strings.Split(fileName, ".")[0]
-
 	iso, err := util.IsoFromCloudInit(ctx, util.CloudInit{
-		Name:          isoName,
 		UserData:      userData,
 		MetaData:      metaData,
 		NetworkConfig: networkConfig,

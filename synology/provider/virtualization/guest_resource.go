@@ -3,6 +3,7 @@ package virtualization
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -52,7 +53,7 @@ type GuestResourceModel struct {
 // Schema implements resource.Resource.
 func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A guest on the Synology NAS Gueststation.",
+		MarkdownDescription: "Virtualization --- A guest on the Synology NAS Gueststation.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -243,8 +244,16 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	res, err := f.client.GuestCreate(c, guest)
 	if err != nil {
-		resp.Diagnostics.AddError("failed to create guest guest", fmt.Sprintf("unable to create guest guest, got error: %s", err))
-		return
+		if strings.Contains(err.Error(), "403") {
+			res, err = f.client.GuestGet(c, virtualization.Guest{Name: data.Name.ValueString()})
+			if err != nil {
+				resp.Diagnostics.AddError("failed to get guest", fmt.Sprintf("unable to get guest, got error: %s", err))
+				return
+			}
+		} else {
+			resp.Diagnostics.AddError("failed to create guest guest", fmt.Sprintf("unable to create guest guest, got error: %s", err))
+			return
+		}
 	}
 
 	if res.ID != "" {
@@ -280,6 +289,10 @@ func (f *GuestResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
+	_ = f.client.GuestPowerOff(ctx, virtualization.Guest{
+		Name: data.Name.ValueString(),
+	})
+
 	// Start Delete the guest
 	if err := f.client.GuestDelete(ctx, virtualization.Guest{
 		Name: data.Name.ValueString(),
@@ -298,8 +311,14 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	guest, err := f.client.GuestGet(ctx, virtualization.Guest{Name: data.Name.ValueString()})
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
-		return
+
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
+			resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
+			return
+		}
 	}
 
 	if guest.ID == "" {
@@ -313,20 +332,36 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// 	data.ID = types.StringValue(guest.ID)
 	// }
 
-	resp.State.Set(ctx, &data)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Update implements resource.Resource.
 func (f *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data GuestResourceModel
 
-	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	var isoImages []string
+
+	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
+		isoImages = []string{"unmounted", "unmounted"}
+		var elements []GuestIsoModel
+		diags := data.IsoImages.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read iso_images", "Unable to read iso_images")
+			return
+		}
+
+		for i, v := range elements {
+			isoImages[i] = v.ID.ValueString()
+		}
+	}
 
 	err := f.client.GuestUpdate(ctx, virtualization.GuestUpdate{
 		ID:        data.ID.ValueString(),
 		Name:      data.Name.ValueString(),
-		IsoImages: []string{"unmounted", "unmounted"},
+		IsoImages: isoImages,
 	})
 
 	if err != nil {

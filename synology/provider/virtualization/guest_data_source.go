@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	client "github.com/synology-community/synology-api/pkg"
@@ -26,13 +24,65 @@ type GuestDataSource struct {
 	client client.SynologyClient
 }
 
-func (d GuestDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
-	return []datasource.ConfigValidator{
-		datasourcevalidator.Conflicting(
-			path.MatchRoot("attribute_one"),
-			path.MatchRoot("attribute_two"),
-		),
+type VDiskDataModel struct {
+	ID         types.String `tfsdk:"id"`
+	Size       types.Int64  `tfsdk:"size"`
+	Controller types.Int64  `tfsdk:"controller"`
+	Unmap      types.Bool   `tfsdk:"unmap"`
+}
+
+func (m VDiskDataModel) ModelType() attr.Type {
+	return types.ObjectType{AttrTypes: m.AttrType()}
+}
+
+func (m VDiskDataModel) AttrType() map[string]attr.Type {
+	return map[string]attr.Type{
+		"id":         types.StringType,
+		"size":       types.Int64Type,
+		"controller": types.Int64Type,
+		"unmap":      types.BoolType,
 	}
+}
+
+func (m VDiskDataModel) Value() attr.Value {
+	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
+		"id":         types.StringValue(m.ID.ValueString()),
+		"size":       types.Int64Value(m.Size.ValueInt64()),
+		"controller": types.Int64Value(m.Controller.ValueInt64()),
+		"unmap":      types.BoolValue(m.Unmap.ValueBool()),
+	})
+}
+
+type VNicDataModel struct {
+	ID     types.String `tfsdk:"id"`
+	Mac    types.String `tfsdk:"mac"`
+	Model  types.Int64  `tfsdk:"model"`
+	Name   types.String `tfsdk:"name"`
+	VNicID types.String `tfsdk:"vnic_id"`
+}
+
+func (m VNicDataModel) ModelType() attr.Type {
+	return types.ObjectType{AttrTypes: m.AttrType()}
+}
+
+func (m VNicDataModel) AttrType() map[string]attr.Type {
+	return map[string]attr.Type{
+		"id":      types.StringType,
+		"name":    types.StringType,
+		"mac":     types.StringType,
+		"model":   types.Int64Type,
+		"vnic_id": types.StringType,
+	}
+}
+
+func (m VNicDataModel) Value() attr.Value {
+	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
+		"id":      types.StringValue(m.ID.ValueString()),
+		"name":    types.StringValue(m.Name.ValueString()),
+		"mac":     types.StringValue(m.Mac.ValueString()),
+		"model":   types.Int64Value(m.Model.ValueInt64()),
+		"vnic_id": types.StringValue(m.VNicID.ValueString()),
+	})
 }
 
 type GuestDataSourceModel struct {
@@ -64,8 +114,8 @@ func (m GuestDataSourceModel) AttrType() map[string]attr.Type {
 		"autorun":      types.Int64Type,
 		"vcpu_num":     types.Int64Type,
 		"vram_size":    types.Int64Type,
-		"disks":        types.SetType{ElemType: VDiskModel{}.ModelType()},
-		"networks":     types.SetType{ElemType: VNicModel{}.ModelType()},
+		"disks":        types.SetType{ElemType: VDiskDataModel{}.ModelType()},
+		"networks":     types.SetType{ElemType: VNicDataModel{}.ModelType()},
 	}
 }
 
@@ -73,16 +123,16 @@ func (m GuestDataSourceModel) Value() attr.Value {
 
 	var networks attr.Value
 	if m.Networks.IsNull() {
-		networks = basetypes.NewSetNull(VNicModel{}.ModelType())
+		networks = basetypes.NewSetNull(VNicDataModel{}.ModelType())
 	} else {
-		networks = basetypes.NewSetValueMust(VNicModel{}.ModelType(), m.Networks.Elements())
+		networks = basetypes.NewSetValueMust(VNicDataModel{}.ModelType(), m.Networks.Elements())
 	}
 
 	var disks attr.Value
 	if m.Networks.IsNull() {
-		disks = basetypes.NewSetNull(VDiskModel{}.ModelType())
+		disks = basetypes.NewSetNull(VDiskDataModel{}.ModelType())
 	} else {
-		disks = basetypes.NewSetValueMust(VDiskModel{}.ModelType(), m.Disks.Elements())
+		disks = basetypes.NewSetValueMust(VDiskDataModel{}.ModelType(), m.Disks.Elements())
 	}
 
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
@@ -117,33 +167,31 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 
 	disks := []attr.Value{}
 	for _, d := range v.Disks {
-		disk := VDiskModel{
-			// ID:         types.StringValue(d.ID),
-			Size: types.Int64Value(d.Size),
-			// Controller: types.Int64Value(d.Controller),
-			// Unmap:      types.BoolValue(d.Unmap),
-			ImageID:   types.StringValue(d.ImageID),
-			ImageName: types.StringValue(d.ImageName),
+		disk := VDiskDataModel{
+			ID:         types.StringValue(d.ID),
+			Size:       types.Int64Value(d.Size),
+			Controller: types.Int64Value(d.Controller),
+			Unmap:      types.BoolValue(d.Unmap),
 		}.Value()
 
 		disks = append(disks, disk)
 	}
-	if diskst, err := types.SetValue(VNicModel{}.ModelType(), disks); err == nil {
+	if diskst, err := types.SetValue(VNicDataModel{}.ModelType(), disks); err == nil {
 		m.Disks = diskst
 	}
 
 	nets := []attr.Value{}
 	for _, n := range v.Networks {
-		m := VNicModel{
-			ID:   types.StringValue(n.ID),
-			Mac:  types.StringValue(n.Mac),
-			Name: types.StringValue(n.Name),
-			// Model: types.Int64Value(n.Model),
+		m := VNicDataModel{
+			ID:    types.StringValue(n.ID),
+			Mac:   types.StringValue(n.Mac),
+			Name:  types.StringValue(n.Name),
+			Model: types.Int64Value(n.Model),
 		}.Value()
 		nets = append(nets, m)
 	}
 
-	if netst, err := types.SetValue(VNicModel{}.ModelType(), nets); err == nil {
+	if netst, err := types.SetValue(VNicDataModel{}.ModelType(), nets); err == nil {
 		m.Networks = netst
 	}
 
@@ -151,7 +199,7 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 }
 
 func (d *GuestDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_guest"
+	resp.TypeName = buildName(req.ProviderTypeName, "guest")
 }
 
 func (d *GuestDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -199,12 +247,12 @@ func (d *GuestDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 			"disks": schema.SetAttribute{
 				MarkdownDescription: "List of virtual disks.",
 				Computed:            true,
-				ElementType:         VDiskModel{}.ModelType(),
+				ElementType:         VDiskDataModel{}.ModelType(),
 			},
 			"networks": schema.SetAttribute{
 				MarkdownDescription: "List of networks.",
 				Computed:            true,
-				ElementType:         VNicModel{}.ModelType(),
+				ElementType:         VNicDataModel{}.ModelType(),
 			},
 		},
 	}

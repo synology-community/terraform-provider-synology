@@ -1,11 +1,11 @@
 ---
-page_title: "synology_guest Data Source - synology"
+page_title: "synology_virtualization_guest Data Source - synology"
 subcategory: "Virtualization"
 description: |-
   Guest data source
 ---
 
-# synology_guest (Data Source)
+# synology_virtualization_guest (Data Source)
 
 Guest data source
 
@@ -37,10 +37,10 @@ Guest data source
 
 Read-Only:
 
-- `create_type` (Number)
-- `image_id` (String)
-- `image_name` (String)
+- `controller` (Number)
+- `id` (String)
 - `size` (Number)
+- `unmap` (Boolean)
 
 
 <a id="nestedatt--networks"></a>
@@ -50,4 +50,6 @@ Read-Only:
 
 - `id` (String)
 - `mac` (String)
+- `model` (Number)
 - `name` (String)
+- `vnic_id` (String)

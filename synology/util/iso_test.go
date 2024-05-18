@@ -2,8 +2,6 @@ package util
 
 import (
 	"context"
-	"os"
-	"reflect"
 	"testing"
 )
 
@@ -14,20 +12,25 @@ func Test_IsoFromCloudInit(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *os.File
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Test case 1",
+			args: args{
+				ci: CloudInit{
+					MetaData:      "meta-data",
+					UserData:      "user-data",
+					NetworkConfig: "network-config",
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := IsoFromCloudInit(context.Background(), tt.args.ci)
+			_, err := IsoFromCloudInit(context.Background(), tt.args.ci)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("isoFromCloudInit() error = %v, wantErr %v", err, tt.wantErr)
 				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("isoFromCloudInit() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -13,27 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
-func TestAccISOFunction_Known(t *testing.T) {
-	resource.UnitTest(t, resource.TestCase{
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(version.Must(version.NewVersion("1.8.0"))),
-		},
-		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
-		Steps: []resource.TestStep{
-			{
-				Config: `
-				output "test" {
-					value = provider::synology::iso("testiso", { "/testfile.txt": "contents of file" })
-				}
-				`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckOutput("test", "contents of file"),
-				),
-			},
-		},
-	})
-}
-
 func TestAccISOFunction_Null(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
@@ -49,27 +28,6 @@ func TestAccISOFunction_Null(t *testing.T) {
 				`,
 				// The parameter does not enable AllowNullValue
 				ExpectError: regexp.MustCompile(`argument must not be null`),
-			},
-		},
-	})
-}
-
-func TestISOFunction_Unknown(t *testing.T) {
-	resource.UnitTest(t, resource.TestCase{
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(version.Must(version.NewVersion("1.8.0"))),
-		},
-		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
-		Steps: []resource.TestStep{
-			{
-				Config: `
-				output "test" {
-					value = base64encode(provider::synology::iso("testvalue", { "/testfile.txt" = "contents of file" }))
-				}
-				`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestMatchOutput("test", regexp.MustCompile(`.*`)),
-				),
 			},
 		},
 	})

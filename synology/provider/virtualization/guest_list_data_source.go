@@ -28,7 +28,7 @@ type GuestListDataSourceModel struct {
 }
 
 func (d *GuestListDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_guestList"
+	resp.TypeName = buildName(req.ProviderTypeName, "guest_list")
 }
 
 func (d *GuestListDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {

@@ -18,7 +18,6 @@ const metaDataFileName string = "meta-data"
 const networkConfigFileName string = "network-config"
 
 type CloudInit struct {
-	Name          string
 	MetaData      string `yaml:"meta_data"`
 	UserData      string `yaml:"user_data"`
 	NetworkConfig string `yaml:"network_config"`
@@ -57,13 +56,11 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 }
 
 func IsoFromCloudInit(ctx context.Context, ci CloudInit) (string, error) {
-	if ci.Name == "" {
-		ci.Name = "cloudinit"
-	}
-
 	fileMap := map[string]string{}
 	if ci.MetaData != "" {
 		fileMap[metaDataFileName] = ci.MetaData
+	} else {
+		fileMap[metaDataFileName] = ""
 	}
 	if ci.UserData != "" {
 		fileMap[userDataFileName] = ci.UserData
@@ -72,7 +69,7 @@ func IsoFromCloudInit(ctx context.Context, ci CloudInit) (string, error) {
 		fileMap[networkConfigFileName] = ci.NetworkConfig
 	}
 
-	return IsoFromFiles(ctx, ci.Name, fileMap)
+	return IsoFromFiles(ctx, "cidata", fileMap)
 }
 
 func removeTmpIsoDirectory(ctx context.Context, iso string) {

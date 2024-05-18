@@ -139,7 +139,7 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	var data FileResourceModel
 
 	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	path := data.Path.ValueString()
 	fileName := filepath.Base(data.Path.ValueString())

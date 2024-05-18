@@ -39,7 +39,7 @@ type ImageResourceModel struct {
 // Schema implements resource.Resource.
 func (f *ImageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A image on the Synology NAS Imagestation.",
+		MarkdownDescription: "Virtualization --- A image on the Synology NAS Imagestation.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
