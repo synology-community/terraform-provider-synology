@@ -5,13 +5,14 @@ module github.com/appkins/terraform-provider-synology
 go 1.22.3
 
 require (
+	github.com/hashicorp/go-retryablehttp v0.7.6
 	github.com/hashicorp/terraform-plugin-docs v0.19.2
 	github.com/hashicorp/terraform-plugin-framework v1.8.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-testing v1.8.0
 	github.com/kdomanski/iso9660 v0.4.0
-	github.com/synology-community/synology-api v0.0.7
+	github.com/synology-community/synology-api v0.0.8
 )
 
 require (
@@ -26,7 +27,6 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/cli v1.1.6 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.6 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/imdario/mergo v0.3.15 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
