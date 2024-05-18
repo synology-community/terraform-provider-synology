@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
-func TestISOFunction_Known(t *testing.T) {
+func TestAccISOFunction_Known(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
 			tfversion.SkipBelow(version.Must(version.NewVersion("1.8.0"))),
@@ -34,7 +34,7 @@ func TestISOFunction_Known(t *testing.T) {
 	})
 }
 
-func TestISOFunction_Null(t *testing.T) {
+func TestAccISOFunction_Null(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
 			tfversion.SkipBelow(version.Must(version.NewVersion("1.8.0"))),

@@ -7,8 +7,7 @@ import (
 
 type VDiskModel struct {
 	// ID         types.String `tfsdk:"id"`
-	Size       types.Int64 `tfsdk:"size"`
-	CreateType types.Int64 `tfsdk:"create_type"`
+	Size types.Int64 `tfsdk:"size"`
 	// Controller types.Int64  `tfsdk:"controller"`
 	// Unmap      types.Bool   `tfsdk:"unmap"`
 	ImageID   types.String `tfsdk:"image_id"`
@@ -37,9 +36,8 @@ func (m VDiskModel) Value() attr.Value {
 		"size": types.Int64Value(m.Size.ValueInt64()),
 		// "controller":  types.Int64Value(m.Controller.ValueInt64()),
 		// "unmap":       types.BoolValue(m.Unmap.ValueBool()),
-		"image_id":    types.StringValue(m.ImageID.ValueString()),
-		"image_name":  types.StringValue(m.ImageName.ValueString()),
-		"create_type": types.Int64Value(m.CreateType.ValueInt64()),
+		"image_id":   types.StringValue(m.ImageID.ValueString()),
+		"image_name": types.StringValue(m.ImageName.ValueString()),
 	})
 }
 

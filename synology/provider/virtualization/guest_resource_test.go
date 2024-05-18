@@ -30,9 +30,13 @@ func TestAccGuestResource_basic(t *testing.T) {
 				}
 
 				disk {
-					create_type = 0
-					size        = 20000
+					image_id = "65caaef4-6622-4643-9feb-1c3b5a915eb8"
 				}
+
+				# disk {
+				# 	create_type = 0
+				# 	size        = 20000
+				# }
 
 				iso_image {
 					id = "65caaef4-6622-4643-9feb-1c3b5a915eb8"

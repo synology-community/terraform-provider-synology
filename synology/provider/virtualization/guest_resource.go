@@ -94,12 +94,6 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "Disks of the guest.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
-						"create_type": schema.Int64Attribute{
-							MarkdownDescription: "Type of the disk.",
-							Optional:            true,
-							Default:             int64default.StaticInt64(0),
-							Computed:            true,
-						},
 						"size": schema.Int64Attribute{
 							MarkdownDescription: "Size of the disk in MB.",
 							Default:             int64default.StaticInt64(20 * 1000),
@@ -220,12 +214,15 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 		for _, v := range elements {
 
-			disk := virtualization.VDisk{
-				// ID:         v.ID.ValueString(),
-				CreateType: v.CreateType.ValueInt64(),
-				Size:       v.Size.ValueInt64(),
-				ImageID:    v.ImageID.ValueString(),
-				ImageName:  v.ImageName.ValueString(),
+			disk := virtualization.VDisk{}
+
+			if (v.ImageID.IsNull() || v.ImageID.IsUnknown()) && (v.ImageName.IsNull() || v.ImageName.IsUnknown()) {
+				disk.CreateType = 0
+				disk.Size = v.Size.ValueInt64()
+			} else {
+				disk.CreateType = 1
+				disk.ImageID = v.ImageID.ValueString()
+				disk.ImageName = v.ImageName.ValueString()
 			}
 
 			guest.Disks = append(guest.Disks, disk)
@@ -366,7 +363,7 @@ func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureReq
 	f.client = client.VirtualizationAPI()
 }
 
-// ValidateConfig
+// ValidateConfig.
 func (f *GuestResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data GuestResourceModel
 
