@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -30,13 +29,8 @@ type GuestResource struct {
 	client virtualization.VirtualizationAPI
 }
 
-func (d GuestResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
-	return []resource.ConfigValidator{
-		resourcevalidator.AtLeastOneOf(
-			path.MatchRoot("storage_id"),
-			path.MatchRoot("storage_name"),
-		),
-	}
+type IsoImageModel struct {
+	ID types.String `tfsdk:"id"`
 }
 
 // GuestResourceModel describes the resource data model.
@@ -48,10 +42,11 @@ type GuestResourceModel struct {
 	StorageID   types.String `tfsdk:"storage_id"`
 	StorageName types.String `tfsdk:"storage_name"`
 	// AutoRun     types.Int64  `tfsdk:"autorun"`
-	VcpuNum  types.Int64 `tfsdk:"vcpu_num"`
-	VramSize types.Int64 `tfsdk:"vram_size"`
-	Disks    types.Set   `tfsdk:"disk"`
-	Networks types.Set   `tfsdk:"network"`
+	VcpuNum   types.Int64 `tfsdk:"vcpu_num"`
+	VramSize  types.Int64 `tfsdk:"vram_size"`
+	Disks     types.Set   `tfsdk:"disk"`
+	Networks  types.Set   `tfsdk:"network"`
+	IsoImages types.Set   `tfsdk:"iso_image"`
 }
 
 // Schema implements resource.Resource.
@@ -143,6 +138,17 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					},
 				},
 			},
+			"iso_image": schema.SetNestedBlock{
+				MarkdownDescription: "Mounted ISO files for guest.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"id": schema.StringAttribute{
+							MarkdownDescription: "Image ID for the iso.",
+							Required:            true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -162,6 +168,23 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Name:     data.Name.ValueString(),
 		VcpuNum:  data.VcpuNum.ValueInt64(),
 		VramSize: data.VramSize.ValueInt64(),
+	}
+
+	isoImages := []string{}
+
+	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
+		isoImages = []string{"unmounted", "unmounted"}
+		var elements []IsoImageModel
+		diags := data.IsoImages.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read iso_images", "Unable to read iso_images")
+			return
+		}
+
+		for i, v := range elements {
+			isoImages[i] = v.ID.ValueString()
+		}
 	}
 
 	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
@@ -234,6 +257,19 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	if len(isoImages) == 2 {
+
+		err = f.client.GuestUpdate(c, virtualization.GuestUpdate{
+			ID:        data.ID.ValueString(),
+			IsoImages: isoImages,
+		})
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update guest", fmt.Sprintf("Unable to update guest, got error: %s", err))
+			return
+		}
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
@@ -285,13 +321,24 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 // Update implements resource.Resource.
 func (f *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// var data GuestResourceModel
+	var data GuestResourceModel
 
 	// Read Terraform configuration data into the model
-	// resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	err := f.client.GuestUpdate(ctx, virtualization.GuestUpdate{
+		ID:        data.ID.ValueString(),
+		Name:      data.Name.ValueString(),
+		IsoImages: []string{"unmounted", "unmounted"},
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update guest", fmt.Sprintf("Unable to update guest, got error: %s", err))
+		return
+	}
 
 	// Save data into Terraform state
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Metadata implements resource.Resource.
@@ -317,6 +364,28 @@ func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureReq
 	}
 
 	f.client = client.VirtualizationAPI()
+}
+
+// ValidateConfig
+func (f *GuestResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data GuestResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if (data.StorageID.IsNull() || data.StorageID.IsUnknown()) && (data.StorageName.IsNull() || data.StorageName.IsUnknown()) {
+		resp.Diagnostics.AddError("At least one of storage_id or storage_name must be set", "At least one of storage_id or storage_name must be set")
+	}
+
+	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
+		if len(data.IsoImages.Elements()) != 2 {
+			resp.Diagnostics.AddError("iso_images length must be 2", "iso_images length must be 2")
+		}
+	}
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 }
 
 func (f *GuestResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
