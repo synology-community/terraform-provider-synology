@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -63,6 +64,10 @@ func IsoFromCloudInit(ctx context.Context, ci CloudInit) (string, error) {
 		fileMap[metaDataFileName] = ""
 	}
 	if ci.UserData != "" {
+		if match, _ := regexp.MatchString(`^#cloud-config`, ci.UserData); !match {
+			ci.UserData = fmt.Sprintf("#cloud-config\n%s", ci.UserData)
+		}
+
 		fileMap[userDataFileName] = ci.UserData
 	}
 	if ci.NetworkConfig != "" {

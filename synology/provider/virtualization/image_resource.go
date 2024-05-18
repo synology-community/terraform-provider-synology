@@ -3,6 +3,7 @@ package virtualization
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -112,15 +113,27 @@ func (f *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	res, err := f.client.ImageCreate(c, image)
 	if err != nil {
-		resp.Diagnostics.AddError("failed to create guest image", fmt.Sprintf("unable to create guest image, got error: %s", err))
-		return
-	}
 
-	if res.TaskInfo.ImageID != "" {
-		data.ID = types.StringValue(res.TaskInfo.ImageID)
+		if strings.Contains(err.Error(), "403") {
+			img, err := f.getImage(ctx, data.Name.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to list images", fmt.Sprintf("Unable to list images, got error: %s", err))
+				return
+			}
+			if img.ID != "" {
+				data.ID = types.StringValue(img.ID)
+			}
+		} else {
+			resp.Diagnostics.AddError("failed to create guest image", fmt.Sprintf("unable to create guest image, got error: %s", err))
+			return
+		}
 	} else {
-		resp.Diagnostics.AddError("Failed to upload image", "Unable to get image ID")
-		return
+		if res.TaskInfo.ImageID != "" {
+			data.ID = types.StringValue(res.TaskInfo.ImageID)
+		} else {
+			resp.Diagnostics.AddError("Failed to upload image", "Unable to get image ID")
+			return
+		}
 	}
 
 	// Save data into Terraform state
@@ -150,24 +163,32 @@ func (f *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	images, err := f.client.ImageList(ctx)
+	image, err := f.getImage(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to list images", fmt.Sprintf("Unable to list images, got error: %s", err))
 		return
 	}
 
-	for _, image := range images.Images {
-		if image.Name == data.Name.ValueString() && image.Type == virtualization.ImageType(data.ImageType.ValueString()) {
-			data.ID = types.StringValue(image.ID)
-			// data.Name = types.StringValue(image.Name)
-			// data.Path = types.StringValue(image.FilePath)
-			// data.AutoClean = types.BoolValue(image.AutoClean)
-			// data.ImageType = types.StringValue(string(image.Type))
-			continue
-		}
+	if image.ID != "" {
+		data.ID = types.StringValue(image.ID)
 	}
 
 	resp.State.Set(ctx, &data)
+}
+
+func (f *ImageResource) getImage(ctx context.Context, name string) (*virtualization.Image, error) {
+	images, err := f.client.ImageList(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, image := range images.Images {
+		if image.Name == name {
+			return &image, nil
+		}
+	}
+
+	return nil, fmt.Errorf("image %s not found", name)
 }
 
 // Update implements resource.Resource.

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -48,6 +49,7 @@ type GuestResourceModel struct {
 	Disks     types.Set   `tfsdk:"disk"`
 	Networks  types.Set   `tfsdk:"network"`
 	IsoImages types.Set   `tfsdk:"iso"`
+	Run       types.Bool  `tfsdk:"run"`
 }
 
 // Schema implements resource.Resource.
@@ -89,6 +91,10 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Default:             int64default.StaticInt64(4096),
 				Computed:            true,
 			},
+			"run": schema.BoolAttribute{
+				MarkdownDescription: "Run the guest.",
+				Optional:            true,
+			},
 		},
 		Blocks: map[string]schema.Block{
 			"disk": schema.SetNestedBlock{
@@ -110,6 +116,9 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							Optional:            true,
 						},
 					},
+				},
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
 				},
 			},
 			"network": schema.SetNestedBlock{
@@ -157,6 +166,10 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if data.Run.IsNull() || data.Run.IsUnknown() {
+		data.Run = types.BoolValue(false)
 	}
 
 	guest := virtualization.Guest{
@@ -276,6 +289,10 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 	}
 
+	if data.Run.ValueBool() {
+		_ = f.client.GuestPowerOn(c, virtualization.Guest{Name: data.Name.ValueString()})
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
@@ -292,6 +309,8 @@ func (f *GuestResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	_ = f.client.GuestPowerOff(ctx, virtualization.Guest{
 		Name: data.Name.ValueString(),
 	})
+
+	time.Sleep(5 * time.Second)
 
 	// Start Delete the guest
 	if err := f.client.GuestDelete(ctx, virtualization.Guest{

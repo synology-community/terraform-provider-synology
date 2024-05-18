@@ -43,6 +43,7 @@ resource "synology_virtualization_guest" "foo" {
 - `disk` (Block Set) Disks of the guest. (see [below for nested schema](#nestedblock--disk))
 - `iso` (Block Set) Mounted ISO files for guest. (see [below for nested schema](#nestedblock--iso))
 - `network` (Block Set) Networks of the guest. (see [below for nested schema](#nestedblock--network))
+- `run` (Boolean) Run the guest.
 - `storage_id` (String) ID of the storage device.
 - `storage_name` (String) Name of the storage device.
 - `vcpu_num` (Number) Number of virtual CPUs.
