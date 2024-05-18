@@ -57,7 +57,6 @@ resource "synology_virtualization_guest" "foo" {
 
 Optional:
 
-- `create_type` (Number) Type of the disk.
 - `image_id` (String) ID of the image.
 - `image_name` (String) Name of the image.
 - `size` (Number) Size of the disk in MB.
