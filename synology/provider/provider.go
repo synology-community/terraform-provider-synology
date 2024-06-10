@@ -7,8 +7,10 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/appkins/terraform-provider-synology/synology/provider/container"
 	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
 	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -19,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/synology-api/pkg"
+	"github.com/synology-community/synology-api/pkg/api"
 )
 
 const (
@@ -119,7 +122,7 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 			"password information is not provided"))
 	}
 	// Example client configuration for data sources and resources
-	c, err := client.New(client.Options{
+	c, err := client.New(api.Options{
 		Host:       host,
 		VerifyCert: !skipCertificateCheck,
 		//Logger: 	 tflog.(ctx),
@@ -142,6 +145,7 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 
 	resp = append(resp, filestation.Resources()...)
 	resp = append(resp, virtualization.Resources()...)
+	resp = append(resp, container.Resources()...)
 
 	return resp
 }
@@ -152,6 +156,7 @@ func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.
 
 	resp = append(resp, filestation.DataSources()...)
 	resp = append(resp, virtualization.DataSources()...)
+	resp = append(resp, container.DataSources()...)
 
 	return resp
 }

@@ -23,7 +23,7 @@ func NewImageResource() resource.Resource {
 }
 
 type ImageResource struct {
-	client virtualization.VirtualizationAPI
+	client virtualization.Api
 }
 
 // ImageResourceModel describes the resource data model.

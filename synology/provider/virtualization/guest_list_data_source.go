@@ -20,7 +20,7 @@ func NewGuestListDataSource() datasource.DataSource {
 }
 
 type GuestListDataSource struct {
-	client virtualization.VirtualizationAPI
+	client virtualization.Api
 }
 
 type GuestListDataSourceModel struct {

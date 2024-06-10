@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization/models"
+
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -28,7 +30,7 @@ func NewGuestResource() resource.Resource {
 }
 
 type GuestResource struct {
-	client virtualization.VirtualizationAPI
+	client virtualization.Api
 }
 
 type GuestIsoModel struct {
@@ -193,7 +195,7 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
 
-		var elements []VNicModel
+		var elements []models.VNic
 		diags := data.Networks.ElementsAs(ctx, &elements, true)
 
 		if diags.HasError() {

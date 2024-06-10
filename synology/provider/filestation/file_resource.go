@@ -32,7 +32,7 @@ func NewFileResource() resource.Resource {
 }
 
 type FileResource struct {
-	client filestation.FileStationApi
+	client filestation.Api
 }
 
 // FileResourceModel describes the resource data model.

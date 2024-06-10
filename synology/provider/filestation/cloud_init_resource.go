@@ -26,7 +26,7 @@ func NewCloudInitResource() resource.Resource {
 }
 
 type CloudInitResource struct {
-	client filestation.FileStationApi
+	client filestation.Api
 }
 
 // CloudInitResourceModel describes the resource data model.
