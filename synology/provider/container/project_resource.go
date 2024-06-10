@@ -5,13 +5,16 @@ import (
 	"fmt"
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	client "github.com/synology-community/synology-api/pkg"
 	"github.com/synology-community/synology-api/pkg/api/docker"
+	urlmodels "github.com/synology-community/synology-api/pkg/models"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
@@ -83,8 +86,12 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
-		Name:    data.Name.ValueString(),
-		Content: string(projectYAML),
+		Name:                  urlmodels.JsonString(data.Name.ValueString()),
+		Content:               urlmodels.JsonString(string(projectYAML)),
+		SharePath:             urlmodels.JsonString(fmt.Sprintf("/projects/%s", data.Name.ValueString())),
+		ServicePortalName:     "",
+		ServicePortalPort:     0,
+		ServicePortalProtocol: "",
 	})
 
 	if err != nil {
@@ -173,13 +180,49 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The name of the service.",
 							Optional:            true,
 						},
-						"image": schema.StringAttribute{
-							MarkdownDescription: "The image of the service.",
-							Optional:            true,
-						},
 						"replicas": schema.Int64Attribute{
 							MarkdownDescription: "The number of replicas.",
 							Optional:            true,
+						},
+					},
+					Blocks: map[string]schema.Block{
+						"image": schema.SetNestedBlock{
+							MarkdownDescription: "The image of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the image.",
+										Required:            true,
+									},
+									"repository": schema.StringAttribute{
+										MarkdownDescription: "The repository of the image. Default is `docker.io`.",
+										Optional:            true,
+									},
+									"tag": schema.StringAttribute{
+										MarkdownDescription: "The tag of the image. Default is `latest`.",
+										Optional:            true,
+									},
+								},
+							},
+							Validators: []validator.Set{
+								setvalidator.SizeBetween(1, 1),
+							},
+						},
+						"logging": schema.SetNestedBlock{
+							MarkdownDescription: "Logging configuration for the docker service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"driver": schema.StringAttribute{
+										MarkdownDescription: "The driver of the logging.",
+										Optional:            true,
+									},
+									"options": schema.MapAttribute{
+										MarkdownDescription: "The options of the logging.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+								},
+							},
 						},
 					},
 				},

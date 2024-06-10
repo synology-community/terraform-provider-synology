@@ -23,8 +23,15 @@ func TestAccProjectResource_basic(t *testing.T) {
 				
 				service {
 					name     = "bar"
-					image    = "nginx"
 					replicas = 1
+					
+					image {
+						name = "nginx"
+					}
+
+					logging {
+						driver = "json-file"
+					}
 				}
 			}`,
 		},
