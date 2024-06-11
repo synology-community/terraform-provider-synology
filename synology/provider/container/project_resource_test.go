@@ -32,6 +32,16 @@ func TestAccProjectResource_basic(t *testing.T) {
 					logging {
 						driver = "json-file"
 					}
+
+					port {
+						target    = 80
+						published = "8557"
+						protocol  = "tcp"
+					}
+
+					network {
+						name = "default"
+					}
 				}
 			}`,
 		},

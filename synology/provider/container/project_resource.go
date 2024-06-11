@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
+	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -85,6 +86,8 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	shouldUpdate := false
+
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
 		Name:                  urlmodels.JsonString(data.Name.ValueString()),
 		Content:               urlmodels.JsonString(string(projectYAML)),
@@ -95,11 +98,69 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to create project", err.Error())
-		return
+		errs, ok := err.(*multierror.Error)
+		if !ok {
+			resp.Diagnostics.AddError("Failed to create project", err.Error())
+			return
+		}
+
+		if errs.Errors[0].Error() == "api response error code 2102: Project already exists" {
+			shouldUpdate = true
+		} else {
+			for _, e := range errs.Errors {
+				resp.Diagnostics.AddError("Failed to create project", e.Error())
+			}
+			return
+		}
 	}
 
-	data.ID = types.StringValue(res.ID)
+	if shouldUpdate {
+		status := ""
+
+		listResult, err := f.client.ProjectList(ctx, docker.ProjectListRequest{})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to list projects", err.Error())
+			return
+		}
+
+		for k, p := range *listResult {
+			if p.Name == data.Name.ValueString() {
+				status = p.Status
+				data.ID = types.StringValue(k)
+				break
+			}
+		}
+
+		if status == "RUNNING" {
+			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStopStreamRequest{
+				ID: urlmodels.JsonString(data.ID.ValueString()),
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to stop project", err.Error())
+				return
+			}
+			_, err = f.client.ProjectCleanStream(ctx, docker.ProjectCleanStreamRequest{
+				ID: urlmodels.JsonString(data.ID.ValueString()),
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to clean project", err.Error())
+				return
+			}
+		}
+
+		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+			ID:      urlmodels.JsonString(data.ID.ValueString()),
+			Content: urlmodels.JsonString(string(projectYAML)),
+		})
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update project", err.Error())
+			return
+		}
+
+	} else {
+		data.ID = types.StringValue(res.ID)
+	}
 
 	// project := compose.Project{
 	// 	Name: data.Name.ValueString(),
@@ -206,6 +267,83 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							},
 							Validators: []validator.Set{
 								setvalidator.SizeBetween(1, 1),
+							},
+						},
+						"port": schema.SetNestedBlock{
+							MarkdownDescription: "The ports of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the port.",
+										Optional:            true,
+									},
+									"target": schema.Int64Attribute{
+										MarkdownDescription: "The target of the port.",
+										Optional:            true,
+									},
+									"published": schema.StringAttribute{
+										MarkdownDescription: "The published of the port.",
+										Optional:            true,
+									},
+									"protocol": schema.StringAttribute{
+										MarkdownDescription: "The protocol of the port.",
+										Optional:            true,
+									},
+									"app_protocol": schema.StringAttribute{
+										MarkdownDescription: "The app protocol of the port.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the port.",
+										Optional:            true,
+									},
+									"host_ip": schema.StringAttribute{
+										MarkdownDescription: "The host IP of the port.",
+										Optional:            true,
+									},
+								},
+							},
+						},
+						"network": schema.SetNestedBlock{
+							MarkdownDescription: "The networks of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the network.",
+										Optional:            true,
+									},
+									"aliases": schema.SetAttribute{
+										MarkdownDescription: "The aliases of the network.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"ipv4_address": schema.StringAttribute{
+										MarkdownDescription: "The IPv4 address of the network.",
+										Optional:            true,
+									},
+									"ipv6_address": schema.StringAttribute{
+										MarkdownDescription: "The IPv6 address of the network.",
+										Optional:            true,
+									},
+									"link_local_ips": schema.SetAttribute{
+										MarkdownDescription: "The link local IPs of the network.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"mac_address": schema.StringAttribute{
+										MarkdownDescription: "The MAC address of the network.",
+										Optional:            true,
+									},
+									"driver_opts": schema.MapAttribute{
+										MarkdownDescription: "The driver options of the network.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"priority": schema.Int64Attribute{
+										MarkdownDescription: "The priority of the network.",
+										Optional:            true,
+									},
+								},
 							},
 						},
 						"logging": schema.SetNestedBlock{
