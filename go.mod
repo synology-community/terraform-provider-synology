@@ -5,11 +5,10 @@ module github.com/appkins/terraform-provider-synology
 go 1.22.3
 
 require (
+	github.com/compose-spec/compose-go/v2 v2.1.2
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	github.com/hashicorp/terraform-plugin-framework v1.9.0
-	github.com/compose-spec/compose-go/v2 v2.1.2
-	github.com/hashicorp/go-retryablehttp v0.7.6
 	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-testing v1.8.0
