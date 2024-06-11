@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/synology-community/synology-api/pkg"
+	client "github.com/synology-community/go-synology"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -18,7 +18,7 @@ func NewInfoDataSource() datasource.DataSource {
 }
 
 type infoDataSource struct {
-	client client.SynologyClient
+	client client.Api
 }
 
 type infoDataSourceModel struct {
@@ -69,7 +69,7 @@ func (d *infoDataSource) Configure(ctx context.Context, req datasource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

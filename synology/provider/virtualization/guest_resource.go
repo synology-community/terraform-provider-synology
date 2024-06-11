@@ -18,8 +18,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api/virtualization"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/virtualization"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -401,7 +401,7 @@ func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureReq
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

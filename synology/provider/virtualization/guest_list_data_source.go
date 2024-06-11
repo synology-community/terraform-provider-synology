@@ -8,8 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api/virtualization"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/virtualization"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -85,7 +85,7 @@ func (d *GuestListDataSource) Configure(ctx context.Context, req datasource.Conf
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

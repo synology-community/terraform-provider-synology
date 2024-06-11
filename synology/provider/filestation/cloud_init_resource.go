@@ -13,10 +13,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api/filestation"
-	"github.com/synology-community/synology-api/pkg/util/form"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/filestation"
+	"github.com/synology-community/go-synology/pkg/util/form"
 )
+
+type File struct {
+	Path    string
+	Content string
+}
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &CloudInitResource{}
@@ -282,7 +287,7 @@ func (f *CloudInitResource) Configure(ctx context.Context, req resource.Configur
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

@@ -9,8 +9,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api/virtualization"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/virtualization"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -21,7 +21,7 @@ func NewGuestDataSource() datasource.DataSource {
 }
 
 type GuestDataSource struct {
-	client client.SynologyClient
+	client client.Api
 }
 
 type VDiskDataModel struct {
@@ -264,7 +264,7 @@ func (d *GuestDataSource) Configure(ctx context.Context, req datasource.Configur
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

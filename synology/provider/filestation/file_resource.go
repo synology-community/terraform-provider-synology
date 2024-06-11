@@ -19,9 +19,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api/filestation"
-	"github.com/synology-community/synology-api/pkg/util/form"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/filestation"
+	"github.com/synology-community/go-synology/pkg/util/form"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -290,7 +290,7 @@ func (f *FileResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

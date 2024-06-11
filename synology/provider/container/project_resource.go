@@ -13,9 +13,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api/docker"
-	urlmodels "github.com/synology-community/synology-api/pkg/models"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/docker"
+	urlmodels "github.com/synology-community/go-synology/pkg/models"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
@@ -425,7 +425,7 @@ func (f *ProjectResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(

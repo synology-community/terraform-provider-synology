@@ -20,8 +20,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	client "github.com/synology-community/synology-api/pkg"
-	"github.com/synology-community/synology-api/pkg/api"
+	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api"
 )
 
 const (

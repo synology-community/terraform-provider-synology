@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client "github.com/synology-community/synology-api/pkg"
+	client "github.com/synology-community/go-synology"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -22,7 +22,7 @@ func NewFolderResource() resource.Resource {
 }
 
 type FolderResource struct {
-	client client.SynologyClient
+	client client.Api
 }
 
 // FolderResourceModel describes the resource data model.
@@ -111,7 +111,7 @@ func (f *FolderResource) Configure(ctx context.Context, req resource.ConfigureRe
 		return
 	}
 
-	client, ok := req.ProviderData.(client.SynologyClient)
+	client, ok := req.ProviderData.(client.Api)
 
 	if !ok {
 		resp.Diagnostics.AddError(
