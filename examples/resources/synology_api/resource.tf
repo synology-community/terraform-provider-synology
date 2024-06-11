@@ -6,3 +6,7 @@ resource "synology_api" "foo" {
     "query" = "all"
   }
 }
+
+output "result" {
+  value = synology_api.foo.result
+}

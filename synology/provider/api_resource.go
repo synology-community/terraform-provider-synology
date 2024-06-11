@@ -145,7 +145,6 @@ func (a *ApiResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			},
 			"result": schema.MapAttribute{
 				MarkdownDescription: "The result of the API call.",
-				Optional:            true,
 				Computed:            true,
 				ElementType:         basetypes.StringType{},
 			},
