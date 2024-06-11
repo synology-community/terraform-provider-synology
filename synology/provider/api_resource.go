@@ -37,25 +37,7 @@ type ApiResource struct {
 	client synology.Api
 }
 
-// Create implements resource.Resource.
-func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ApiResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	params := map[string]string{}
-
-	resp.Diagnostics.Append(data.Parameters.ElementsAs(ctx, &params, true)...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
+func getParams(params map[string]string) interface{} {
 	sf := []reflect.StructField{}
 	for k, v := range params {
 		sf = append(sf, reflect.StructField{
@@ -72,8 +54,34 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		val := svl.FieldByName(strings.ToTitle(k))
 		val.Set(reflect.ValueOf(v))
 	}
-
 	vt := svl.Interface()
+
+	return vt
+}
+
+// Create implements resource.Resource.
+func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data ApiResourceModel
+
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.When.ValueString() == "destroy" {
+		return
+	}
+
+	params := map[string]string{}
+	resp.Diagnostics.Append(data.Parameters.ElementsAs(ctx, &params, true)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	parameters := getParams(params)
 
 	method := api.Method{
 		API:          data.API.ValueString(),
@@ -82,14 +90,14 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		ErrorSummary: api.GlobalErrors,
 	}
 
-	result, err := api.GetQuery[map[string]any](a.client, ctx, vt, method)
+	result, err := api.GetQuery[map[string]any](a.client, ctx, parameters, method)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to invoke API", err.Error())
 		return
 	}
 
-	objValue, err := util.GetValue(result)
+	objValue, err := util.GetValue(*result)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get value", err.Error())
 		return
@@ -97,50 +105,55 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	data.Result = types.DynamicValue(objValue)
 
-	// attrValue, err := util.GetValue(&result)
-	// if err != nil {
-	// 	resp.Diagnostics.AddError("Failed to get value", err.Error())
-	// 	return
-	// }
-	// attrTypes, err := util.GetType(&result)
-	// if err != nil {
-	// 	resp.Diagnostics.AddError("Failed to get type", err.Error())
-	// 	return
-	// }
-
-	// objValue := types.ObjectValueMust(attrTypes, attrValue)
-
-	// data.Result = types.DynamicValue(objValue)
-
-	// resultValue := map[string]attr.Value{}
-
-	// for key, value := range *result {
-	// 	vT := reflect.TypeOf(value)
-	// 	switch vT.Kind() {
-	// 	case reflect.Map:
-	// 		resultValue[key] = types.MapValueMust(
-	// 			types.StringType,
-	// 			vT.
-	// 	}
-	// 	rv, err := json.Marshal(value)
-	// 	if err == nil {
-	// 		resultValue[key] = types.StringValue(string(rv))
-	// 	}
-	// }
-
-	// data.Result = types.MapValueMust(
-	// 	types.StringType,
-	// 	resultValue,
-	// )
-
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 }
 
 // Delete implements resource.Resource.
-func (a *ApiResource) Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse) {
+func (a *ApiResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data ApiResourceModel
+	// Read Terraform configuration data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.When.ValueString() == "destroy" {
+
+		params := map[string]string{}
+
+		resp.Diagnostics.Append(data.Parameters.ElementsAs(ctx, &params, true)...)
+
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		result, err := api.GetQuery[map[string]any](a.client, ctx, getParams(params), api.Method{
+			API:          data.API.ValueString(),
+			Method:       data.Method.ValueString(),
+			Version:      int(data.Version.ValueInt64()),
+			ErrorSummary: api.GlobalErrors,
+		})
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to invoke API", err.Error())
+			return
+		}
+
+		objValue, err := util.GetValue(*result)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get value", err.Error())
+			return
+		}
+
+		data.Result = types.DynamicValue(objValue)
+
+		// Save data into Terraform state
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	}
 }
 
 // Metadata implements resource.Resource.

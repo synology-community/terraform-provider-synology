@@ -9,6 +9,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// func ToDynamicValue(t attr.Value) (attr.Value, error) {
+
+// }
+
 func GetType(r interface{}) (attr.Type, error) {
 	var v reflect.Value
 
@@ -44,18 +48,35 @@ func GetType(r interface{}) (attr.Type, error) {
 
 func mapType(v reflect.Value) (attr.Type, error) {
 	attrTypes := map[string]attr.Type{}
+	if reflect.TypeOf(v).Kind() == reflect.Ptr || reflect.TypeOf(v).Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+
 	iter := v.MapRange()
 	for iter.Next() {
 		k := iter.Key()
-		v := iter.Value()
+		iv := iter.Value()
 
-		switch v.Type().Kind() {
+		vT := iv.Type()
+		vK := vT.Kind()
+
+		if (vK == reflect.Ptr) || (vK == reflect.Interface) {
+			iv = iv.Elem()
+			vT = iv.Type()
+			vK = vT.Kind()
+		}
+
+		switch vK {
 		case reflect.String:
 			attrTypes[k.String()] = types.StringType
-		case reflect.Int64:
+		case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrTypes[k.String()] = types.Int64Type
-		case reflect.Int:
+		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
 			attrTypes[k.String()] = types.Int64Type
+		case reflect.Float32, reflect.Float64:
+			attrTypes[k.String()] = types.Float64Type
+		case reflect.Bool:
+			attrTypes[k.String()] = types.BoolType
 		case reflect.Struct:
 			cv := reflect.New(v.Type()).Elem()
 			embAttrType, err := structType(cv)
@@ -63,7 +84,7 @@ func mapType(v reflect.Value) (attr.Type, error) {
 				return nil, err
 			}
 			attrTypes[k.String()] = embAttrType
-		case reflect.Slice:
+		case reflect.Slice, reflect.Array:
 			embAttrType, err := sliceType(v)
 			if err != nil {
 				return nil, err
@@ -81,10 +102,14 @@ func sliceType(v reflect.Value) (attr.Type, error) {
 	switch vT.Elem().Kind() {
 	case reflect.String:
 		return types.ListType{}.WithElementType(types.StringType), nil
-	case reflect.Int64:
+	case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
 		return types.ListType{}.WithElementType(types.Int64Type), nil
-	case reflect.Int:
+	case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
 		return types.ListType{}.WithElementType(types.Int64Type), nil
+	case reflect.Float32, reflect.Float64:
+		return types.ListType{}.WithElementType(types.Float64Type), nil
+	case reflect.Bool:
+		return types.ListType{}.WithElementType(types.BoolType), nil
 	case reflect.Struct:
 		cv := reflect.New(vT.Elem()).Elem()
 		embAttrType, err := structType(cv)
@@ -157,10 +182,12 @@ func sliceValue(v reflect.Value) (attr.Value, error) {
 		switch item.Kind() {
 		case reflect.String:
 			attrValues = append(attrValues, types.StringValue(item.String()))
-		case reflect.Int64:
+		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrValues = append(attrValues, types.Int64Value(item.Int()))
-		case reflect.Int:
-			attrValues = append(attrValues, types.Int64Value(item.Int()))
+		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+			attrValues = append(attrValues, types.Int64Value(int64(item.Uint())))
+		case reflect.Float32, reflect.Float64:
+			attrValues = append(attrValues, types.Float64Value(item.Float()))
 		case reflect.Struct:
 
 			embAttrValues, err := structValue(item)
@@ -182,21 +209,44 @@ func sliceValue(v reflect.Value) (attr.Value, error) {
 }
 
 func mapValue(v reflect.Value) (attr.Value, error) {
+	if reflect.TypeOf(v).Kind() == reflect.Ptr || reflect.TypeOf(v).Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+
 	attrValues := map[string]attr.Value{}
 	iter := v.MapRange()
 	for iter.Next() {
 		k := iter.Key()
-		v := iter.Value()
+		iv := iter.Value()
 
-		switch v.Type().Kind() {
+		vT := iv.Type()
+		vK := vT.Kind()
+
+		if vK == reflect.Ptr || vK == reflect.Interface {
+			iv = iv.Elem()
+			vT = iv.Type()
+			vK = vT.Kind()
+		}
+
+		switch vK {
 		case reflect.String:
-			attrValues[k.String()] = types.StringValue(v.String())
-		case reflect.Int64:
-			attrValues[k.String()] = types.Int64Value(v.Int())
-		case reflect.Int:
-			attrValues[k.String()] = types.Int64Value(v.Int())
+			attrValues[k.String()] = types.StringValue(iv.String())
+		case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
+			attrValues[k.String()] = types.Int64Value(iv.Int())
+		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+			attrValues[k.String()] = types.Int64Value(int64(iv.Uint()))
+		case reflect.Float32, reflect.Float64:
+			attrValues[k.String()] = types.Float64Value(iv.Float())
+		case reflect.Bool:
+			attrValues[k.String()] = types.BoolValue(iv.Bool())
 		case reflect.Struct:
-			embAttrValues, err := structValue(v)
+			embAttrValues, err := structValue(iv)
+			if err != nil {
+				return nil, err
+			}
+			attrValues[k.String()] = embAttrValues
+		case reflect.Array, reflect.Slice:
+			embAttrValues, err := sliceValue(iv)
 			if err != nil {
 				return nil, err
 			}
@@ -244,13 +294,15 @@ func structValue(v reflect.Value) (attr.Value, error) {
 		switch attrKind {
 		case reflect.String:
 			attrValues[attrFieldName] = types.StringValue(v.Field(i).String())
-		case reflect.Int64:
+		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrValues[attrFieldName] = types.Int64Value(v.Field(i).Int())
-		case reflect.Int:
-			attrValues[attrFieldName] = types.Int64Value(v.Field(i).Int())
+		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+			attrValues[attrFieldName] = types.Int64Value(int64(v.Field(i).Uint()))
+		case reflect.Float32, reflect.Float64:
+			attrValues[attrFieldName] = types.Float64Value(v.Field(i).Float())
 		case reflect.Bool:
 			attrValues[attrFieldName] = types.BoolValue(v.Field(i).Bool())
-		case reflect.Slice:
+		case reflect.Slice, reflect.Array:
 			attrValue, err := sliceValue(v.Field(i))
 			if err != nil {
 				return nil, err
@@ -283,6 +335,13 @@ func GetValue(r interface{}) (attr.Value, error) {
 		v = reflect.Indirect(reflect.ValueOf(r))
 	} else {
 		v = reflect.ValueOf(r)
+	}
+
+	if !v.IsValid() {
+		vt := reflect.TypeOf(v)
+		if vt.Kind() == reflect.Ptr {
+			v = reflect.Indirect(reflect.ValueOf(v))
+		}
 	}
 
 	vk := v.Kind()
