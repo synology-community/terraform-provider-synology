@@ -143,6 +143,7 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 
 	var resp []func() resource.Resource
 
+	resp = append(resp, NewApiResource)
 	resp = append(resp, filestation.Resources()...)
 	resp = append(resp, virtualization.Resources()...)
 	resp = append(resp, container.Resources()...)
