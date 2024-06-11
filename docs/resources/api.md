@@ -39,7 +39,8 @@ output "result" {
 
 - `parameters` (Map of String) Name of the storage device.
 - `version` (Number) The version of the API to invoke.
+- `when` (String)
 
 ### Read-Only
 
-- `result` (Map of String) The result of the API call.
+- `result` (Dynamic) The result of the API call.
