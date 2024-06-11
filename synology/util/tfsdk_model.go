@@ -9,8 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func GetType(r interface{}) (map[string]attr.Type, error) {
-	result := map[string]attr.Type{}
+func GetType(r interface{}) (attr.Type, error) {
 	var v reflect.Value
 
 	if reflect.TypeOf(r).Kind() == reflect.Ptr {
@@ -19,22 +18,93 @@ func GetType(r interface{}) (map[string]attr.Type, error) {
 		v = reflect.ValueOf(r)
 	}
 
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected type struct, got %T", v.Type().Name())
+	vk := v.Kind()
+	switch vk {
+	case reflect.Struct:
+		embAttrTypes, err := structType(v)
+		if err != nil {
+			return nil, err
+		}
+		return embAttrTypes, nil
+	case reflect.Slice:
+		embAttrType, err := sliceType(v.Index(0))
+		if err != nil {
+			return nil, err
+		}
+		return embAttrType, nil
+	case reflect.Map:
+		embAttrType, err := mapType(v)
+		if err != nil {
+			return nil, err
+		}
+		return embAttrType, nil
 	}
+	return nil, fmt.Errorf("unsupported type %s", vk)
+}
+
+func mapType(v reflect.Value) (attr.Type, error) {
+	attrTypes := map[string]attr.Type{}
+	iter := v.MapRange()
+	for iter.Next() {
+		k := iter.Key()
+		v := iter.Value()
+
+		switch v.Type().Kind() {
+		case reflect.String:
+			attrTypes[k.String()] = types.StringType
+		case reflect.Int64:
+			attrTypes[k.String()] = types.Int64Type
+		case reflect.Int:
+			attrTypes[k.String()] = types.Int64Type
+		case reflect.Struct:
+			cv := reflect.New(v.Type()).Elem()
+			embAttrType, err := structType(cv)
+			if err != nil {
+				return nil, err
+			}
+			attrTypes[k.String()] = embAttrType
+		case reflect.Slice:
+			embAttrType, err := sliceType(v)
+			if err != nil {
+				return nil, err
+			}
+			attrTypes[k.String()] = embAttrType
+		default:
+			attrTypes[k.String()] = types.DynamicType
+		}
+	}
+	return types.ObjectType{}.WithAttributeTypes(attrTypes), nil
+}
+
+func sliceType(v reflect.Value) (attr.Type, error) {
+	vT := v.Type()
+	switch vT.Elem().Kind() {
+	case reflect.String:
+		return types.ListType{}.WithElementType(types.StringType), nil
+	case reflect.Int64:
+		return types.ListType{}.WithElementType(types.Int64Type), nil
+	case reflect.Int:
+		return types.ListType{}.WithElementType(types.Int64Type), nil
+	case reflect.Struct:
+		cv := reflect.New(vT.Elem()).Elem()
+		embAttrType, err := structType(cv)
+		if err != nil {
+			return nil, err
+		}
+		return types.ListType{}.WithElementType(embAttrType), nil
+	default:
+		return types.ListType{}.WithElementType(types.DynamicType), nil
+	}
+}
+
+func structType(v reflect.Value) (attr.Type, error) {
+	attrTypes := map[string]attr.Type{}
 	n := v.NumField()
 	vT := v.Type()
 
 	for i := 0; i < n; i++ {
 		field := vT.Field(i)
 		fieldType := field.Type
-
-		// if fieldType.Kind() == reflect.Ptr {
-		// 	if v.Field(i).IsNil() {
-		// 		continue
-		// 	}
-		// 	fieldType = fieldType.Elem()
-		// }
 
 		attrFieldName := strings.ToLower(field.Name)
 		jsonTags := []string{}
@@ -56,42 +126,175 @@ func GetType(r interface{}) (map[string]attr.Type, error) {
 		// get field type
 		switch attrKind {
 		case reflect.String:
-			result[attrFieldName] = types.StringType
+			attrTypes[attrFieldName] = types.StringType
 		case reflect.Int64:
-			result[attrFieldName] = types.Int64Type
+			attrTypes[attrFieldName] = types.Int64Type
 		case reflect.Int:
-			result[attrFieldName] = types.NumberType
+			attrTypes[attrFieldName] = types.Int64Type
 		case reflect.Bool:
-			result[attrFieldName] = types.BoolType
+			attrTypes[attrFieldName] = types.BoolType
 		case reflect.Slice:
-			switch fieldType.Elem().Kind() {
-			case reflect.String:
-				result[attrFieldName] = types.ListType{}.WithElementType(types.StringType)
-			case reflect.Int64:
-				result[attrFieldName] = types.ListType{}.WithElementType(types.Int64Type)
-			case reflect.Int:
-				result[attrFieldName] = types.ListType{}.WithElementType(types.NumberType)
-			case reflect.Struct:
-				cv := reflect.New(fieldType.Elem()).Elem()
-				c := cv.Interface()
-				embAttrTypes, err := GetType(c)
-				if err != nil {
-					return nil, err
-				}
-				result[attrFieldName] = types.ListType{}.WithElementType(types.ObjectType{}.WithAttributeTypes(embAttrTypes))
-			}
-		case reflect.Struct:
-			embAttrTypes, err := GetType(v.Field(i).Interface())
-
+			embAttrType, err := sliceType(v.Field(i))
 			if err != nil {
 				return nil, err
 			}
+			attrTypes[attrFieldName] = embAttrType
+		case reflect.Struct:
+			embAttrType, err := structType(v.Field(i))
+			if err != nil {
+				return nil, err
+			}
+			attrTypes[attrFieldName] = embAttrType
+		}
+	}
+	return types.ObjectType{}.WithAttributeTypes(attrTypes), nil
+}
 
-			result[attrFieldName] = types.ObjectType{}.WithAttributeTypes(embAttrTypes)
+func sliceValue(v reflect.Value) (attr.Value, error) {
+	attrValues := []attr.Value{}
+	for i := 0; i < v.Len(); i++ {
+		item := v.Index(i)
+		switch item.Kind() {
+		case reflect.String:
+			attrValues = append(attrValues, types.StringValue(item.String()))
+		case reflect.Int64:
+			attrValues = append(attrValues, types.Int64Value(item.Int()))
+		case reflect.Int:
+			attrValues = append(attrValues, types.Int64Value(item.Int()))
+		case reflect.Struct:
+
+			embAttrValues, err := structValue(item)
+			if err != nil {
+				return nil, err
+			}
+			attrValues = append(attrValues, embAttrValues)
+		}
+	}
+	attrType, err := sliceType(v)
+	if err != nil {
+		return nil, err
+	}
+	if listType, ok := attrType.(types.ListType); ok {
+		return types.ListValueMust(listType.ElementType(), attrValues), nil
+	} else {
+		return nil, fmt.Errorf("unsupported type %T", attrType)
+	}
+}
+
+func mapValue(v reflect.Value) (attr.Value, error) {
+	attrValues := map[string]attr.Value{}
+	iter := v.MapRange()
+	for iter.Next() {
+		k := iter.Key()
+		v := iter.Value()
+
+		switch v.Type().Kind() {
+		case reflect.String:
+			attrValues[k.String()] = types.StringValue(v.String())
+		case reflect.Int64:
+			attrValues[k.String()] = types.Int64Value(v.Int())
+		case reflect.Int:
+			attrValues[k.String()] = types.Int64Value(v.Int())
+		case reflect.Struct:
+			embAttrValues, err := structValue(v)
+			if err != nil {
+				return nil, err
+			}
+			attrValues[k.String()] = embAttrValues
+		}
+	}
+	attrType, err := mapType(v)
+	if err != nil {
+		return nil, err
+	}
+	if objectType, ok := attrType.(types.ObjectType); ok {
+		return types.ObjectValueMust(objectType.AttributeTypes(), attrValues), nil
+	} else {
+		return nil, fmt.Errorf("unsupported type %T", attrType)
+	}
+}
+
+func structValue(v reflect.Value) (attr.Value, error) {
+	attrValues := map[string]attr.Value{}
+	n := v.NumField()
+	vT := v.Type()
+
+	for i := 0; i < n; i++ {
+		field := vT.Field(i)
+		fieldType := field.Type
+
+		attrFieldName := strings.ToLower(field.Name)
+		jsonTags := []string{}
+		if tags, ok := field.Tag.Lookup("json"); ok {
+			jsonTags = strings.Split(tags, ",")
+		}
+		if !(field.IsExported() || field.Anonymous || len(jsonTags) > 0) {
+			continue
+		}
+		if len(jsonTags) > 0 {
+			attrFieldName = jsonTags[0]
+			if attrFieldName == "-" {
+				continue
+			}
+		}
+
+		attrKind := fieldType.Kind()
+
+		// get field type
+		switch attrKind {
+		case reflect.String:
+			attrValues[attrFieldName] = types.StringValue(v.Field(i).String())
+		case reflect.Int64:
+			attrValues[attrFieldName] = types.Int64Value(v.Field(i).Int())
+		case reflect.Int:
+			attrValues[attrFieldName] = types.Int64Value(v.Field(i).Int())
+		case reflect.Bool:
+			attrValues[attrFieldName] = types.BoolValue(v.Field(i).Bool())
+		case reflect.Slice:
+			attrValue, err := sliceValue(v.Field(i))
+			if err != nil {
+				return nil, err
+			}
+			attrValues[attrFieldName] = attrValue
+		case reflect.Struct:
+			attrValue, err := structValue(v.Field(i))
+			if err != nil {
+				return nil, err
+			}
+			attrValues[attrFieldName] = attrValue
 		}
 	}
 
-	return result, nil
+	attrType, err := structType(v)
+	if err != nil {
+		return nil, err
+	}
+	objectType, ok := attrType.(types.ObjectType)
+	if !ok {
+		return nil, fmt.Errorf("unsupported type %T", attrType)
+	}
+	return types.ObjectValueMust(objectType.AttributeTypes(), attrValues), nil
+}
+
+func GetValue(r interface{}) (attr.Value, error) {
+	var v reflect.Value
+
+	if reflect.TypeOf(r).Kind() == reflect.Ptr {
+		v = reflect.Indirect(reflect.ValueOf(r))
+	} else {
+		v = reflect.ValueOf(r)
+	}
+
+	vk := v.Kind()
+	switch vk {
+	case reflect.Struct:
+		return structValue(v)
+	case reflect.Slice:
+		return sliceValue(v.Index(0))
+	case reflect.Map:
+		return mapValue(v)
+	}
+	return nil, fmt.Errorf("unsupported type %s", vk)
 }
 
 // func GetValue(r interface{}) (attr.Value, error) {

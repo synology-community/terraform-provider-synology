@@ -2,14 +2,16 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/appkins/terraform-provider-synology/synology/util"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/synology-community/go-synology"
@@ -17,11 +19,12 @@ import (
 )
 
 type ApiResourceModel struct {
-	API        types.String `tfsdk:"api"`
-	Method     types.String `tfsdk:"method"`
-	Version    types.Int64  `tfsdk:"version"`
-	Parameters types.Map    `tfsdk:"parameters"`
-	Result     types.Map    `tfsdk:"result"`
+	API        types.String  `tfsdk:"api"`
+	Method     types.String  `tfsdk:"method"`
+	Version    types.Int64   `tfsdk:"version"`
+	Parameters types.Map     `tfsdk:"parameters"`
+	When       types.String  `tfsdk:"when"`
+	Result     types.Dynamic `tfsdk:"result"`
 }
 
 var _ resource.Resource = &ApiResource{}
@@ -86,19 +89,49 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	resultValue := map[string]attr.Value{}
-
-	for key, value := range *result {
-		rv, err := json.Marshal(value)
-		if err == nil {
-			resultValue[key] = types.StringValue(string(rv))
-		}
+	objValue, err := util.GetValue(result)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get value", err.Error())
+		return
 	}
 
-	data.Result = types.MapValueMust(
-		types.StringType,
-		resultValue,
-	)
+	data.Result = types.DynamicValue(objValue)
+
+	// attrValue, err := util.GetValue(&result)
+	// if err != nil {
+	// 	resp.Diagnostics.AddError("Failed to get value", err.Error())
+	// 	return
+	// }
+	// attrTypes, err := util.GetType(&result)
+	// if err != nil {
+	// 	resp.Diagnostics.AddError("Failed to get type", err.Error())
+	// 	return
+	// }
+
+	// objValue := types.ObjectValueMust(attrTypes, attrValue)
+
+	// data.Result = types.DynamicValue(objValue)
+
+	// resultValue := map[string]attr.Value{}
+
+	// for key, value := range *result {
+	// 	vT := reflect.TypeOf(value)
+	// 	switch vT.Kind() {
+	// 	case reflect.Map:
+	// 		resultValue[key] = types.MapValueMust(
+	// 			types.StringType,
+	// 			vT.
+	// 	}
+	// 	rv, err := json.Marshal(value)
+	// 	if err == nil {
+	// 		resultValue[key] = types.StringValue(string(rv))
+	// 	}
+	// }
+
+	// data.Result = types.MapValueMust(
+	// 	types.StringType,
+	// 	resultValue,
+	// )
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -143,10 +176,17 @@ func (a *ApiResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Optional:            true,
 				ElementType:         basetypes.StringType{},
 			},
-			"result": schema.MapAttribute{
+			"when": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("apply"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("apply", "destroy"),
+				},
+			},
+			"result": schema.DynamicAttribute{
 				MarkdownDescription: "The result of the API call.",
 				Computed:            true,
-				ElementType:         basetypes.StringType{},
 			},
 		},
 	}
