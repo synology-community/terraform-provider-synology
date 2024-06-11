@@ -9,9 +9,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
-//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name synology
-
 //go:generate terraform fmt -recursive ./examples/
+
+//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name synology
 func main() {
 	var debug bool
 
