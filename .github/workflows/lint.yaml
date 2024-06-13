@@ -17,14 +17,12 @@ on:
       - ".github/workflows/**"
 
 jobs:
-  golangci-lint:
+  golangci:
     name: GolangCI Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-      - name: Setup Go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           go-version-file: "go.mod"
           cache: true
@@ -32,3 +30,13 @@ jobs:
         with:
           version: "v1.59"
           args: -v
+  tfprovider:
+    name: Terraform Provider Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: bflad/tfproviderlint-github-action@3d16e28385eb2783700821cdf1b70f9f318bed3d
