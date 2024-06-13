@@ -3,15 +3,13 @@ package core
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
-	"github.com/synology-community/go-synology/pkg/models"
 )
 
 type PackageResourceModel struct {
@@ -68,86 +66,11 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	dlRes, err := p.client.PackageInstall(ctx, core.PackageInstallRequest{
-		Name:       data.Name.ValueString(),
-		URL:        data.URL.ValueString(),
-		Type:       0,
-		BigInstall: false,
-		FileSize:   size,
-	})
+	err = p.client.PackageInstallCompound(ctx, data.Name.ValueString(), data.URL.ValueString(), size)
+
 	if err != nil {
 		resp.Diagnostics.AddError("Package install failed", err.Error())
 		return
-	}
-
-	if dlRes.TaskID == "" {
-		resp.Diagnostics.AddError("Task ID empty", "Task ID empty")
-		return
-	}
-
-	status := new(core.PackageInstallStatusResponse)
-
-	for retry := 0; !status.Finished; retry++ {
-		status, err = p.client.PackageInstallStatus(ctx, core.PackageInstallStatusRequest{
-			TaskID: dlRes.TaskID,
-		})
-
-		if err != nil {
-			resp.Diagnostics.AddError("Package install status failed", err.Error())
-			return
-		}
-
-		if status.Finished {
-			tflog.Info(ctx, fmt.Sprintf("Package installed: %s", status.Name))
-			break
-		}
-
-		if retry > 10 {
-			resp.Diagnostics.AddError("Maximum retries exceeded", "Maximum retries while waiting for package install status")
-			return
-		}
-
-		if !status.Finished {
-			time.Sleep(2 * time.Second)
-		}
-	}
-
-	path := fmt.Sprintf("%s/%s", status.TmpFolder, status.Taskid)
-
-	instRes, err := p.client.PackageInstall(ctx, core.PackageInstallRequest{
-		// Name:              status.Name,
-		Path:              models.JsonString(path),
-		InstallRunPackage: false,
-		Force:             true,
-		CheckCodesign:     false,
-		Type:              0,
-		ExtraValues:       "{}",
-		VolumePath:        "/volume1",
-	})
-
-	if err != nil {
-		resp.Diagnostics.AddError("Error installing package", err.Error())
-		return
-	}
-
-	if instRes.TaskID == "" {
-		resp.Diagnostics.AddError("Package install status empty after install", "Task ID empty after install")
-		return
-	}
-
-	status = new(core.PackageInstallStatusResponse)
-	for retry := 0; !status.Finished; retry++ {
-		status, err = p.client.PackageInstallStatus(ctx, core.PackageInstallStatusRequest{
-			TaskID: instRes.TaskID,
-		})
-
-		if err != nil {
-			resp.Diagnostics.AddError("Error in package install status", err.Error())
-			return
-		}
-		if !status.Finished {
-			time.Sleep(2 * time.Second)
-		}
 	}
 
 	// Save data into Terraform state
@@ -277,4 +200,27 @@ func (f *PackageResource) Configure(ctx context.Context, req resource.ConfigureR
 	}
 
 	f.client = client.CoreAPI()
+}
+
+// ImportState implements resource.ResourceWithImportState.
+func (p *PackageResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	pkg, err := p.client.PackageGet(ctx, req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to find package", err.Error())
+		return
+	}
+
+	pkgInfo, err := p.client.PackageFind(ctx, pkg.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to find package", err.Error())
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), pkg.ID)...)
+	if pkg.Version != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), pkg.Version)...)
+	}
+	if pkgInfo.Link != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), pkgInfo.Link)...)
+	}
 }

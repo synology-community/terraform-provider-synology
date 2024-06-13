@@ -1,7 +1,7 @@
 include .env
 
 build:
-	go build -o terraform-provider-synology
+	go install
 
 generate:
 	go generate ./...
