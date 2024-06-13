@@ -1,5 +1,9 @@
 ---
-page_title: "{{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }} {{ end }}{{ title $element }}{{ end }} {{.Type}} - {{.ProviderName}}"
+{{ if gt (len (split .Name "_")) 2 -}}
+page_title: "{{ index (split .Name "_") 1 | title }}: {{ .Name }}"
+{{- else -}}
+page_title: "{{ .Name }} {{.Type}} - {{.ProviderName}}"
+{{- end }}
 {{ if gt (len (split .Name "_")) 2 -}}
 subcategory: "{{ index (split .Name "_") 1 | title }}"
 {{- else -}} 
@@ -9,14 +13,14 @@ description: |-
 {{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
 ---
 
-# {{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }}{{ if ne $index 1 }} {{ end }}{{ title $element }}{{ end }}{{ end }} ({{.Type}})
+# {{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }}{{ if ne $index 1 }} {{ end }}{{ title $element }}{{ if eq $index 1 }}:{{ end }}{{ end }}{{ end }} ({{.Type}})
 
 {{ .Description | trimspace }}
 
 {{ if .HasExample -}}
 ## Example Usage
 
-{{ tffile (printf "%s%s%s" "examples/resources/" .Name "/resource.tf") }}
+{{tffile .ExampleFile }}
 {{- end }}
 
 {{ .SchemaMarkdown | trimspace }}
@@ -26,5 +30,5 @@ description: |-
 
 Import is supported using the following syntax:
 
-{{ codefile "shell" (printf "%s%s%s" "examples/resources/" .Name "/import.sh") }}
+{{codefile "shell" .ImportFile }}
 {{- end }}

@@ -1,11 +1,11 @@
 ---
-page_title: "Synology Core Package Resource - synology"
+page_title: "Core: synology_core_package"
 subcategory: "Core"
 description: |-
   A Generic API Resource for making calls to the Synology DSM API.
 ---
 
-# Core Package (Resource)
+# Core: Package (Resource)
 
 A Generic API Resource for making calls to the Synology DSM API.
 

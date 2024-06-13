@@ -1,11 +1,11 @@
 ---
-page_title: "Synology Virtualization Guest Data Source - synology"
+page_title: "Virtualization: synology_virtualization_guest"
 subcategory: "Virtualization"
 description: |-
   Guest data source
 ---
 
-# Virtualization Guest (Data Source)
+# Virtualization: Guest (Data Source)
 
 Guest data source
 
