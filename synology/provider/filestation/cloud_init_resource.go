@@ -226,7 +226,7 @@ func (f *CloudInitResource) Metadata(_ context.Context, req resource.MetadataReq
 // Schema implements resource.Resource.
 func (f *CloudInitResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "FileStation --- A file on the Synology NAS Filestation.",
+		MarkdownDescription: "A file on the Synology NAS Filestation.",
 
 		Attributes: map[string]schema.Attribute{
 			"path": schema.StringAttribute{

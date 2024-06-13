@@ -2,13 +2,12 @@
 page_title: "Synology Filestation Cloud Init Resource - synology"
 subcategory: "Filestation"
 description: |-
-  FileStation --- A file on the Synology NAS Filestation.
+  A file on the Synology NAS Filestation.
 ---
 
-# Synology Filestation Cloud Init (Resource)
+# Filestation Cloud Init (Resource)
 
 A file on the Synology NAS Filestation.
-
 
 ## Example Usage
 

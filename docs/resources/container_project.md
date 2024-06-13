@@ -2,13 +2,12 @@
 page_title: "Synology Container Project Resource - synology"
 subcategory: "Container"
 description: |-
-  Docker --- A Docker Compose project for the Container Manager Synology API.
+  A Docker Compose project for the Container Manager Synology API.
 ---
 
-# Synology Container Project (Resource)
+# Container Project (Resource)
 
 A Docker Compose project for the Container Manager Synology API.
-
 
 ## Example Usage
 

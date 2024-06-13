@@ -9,13 +9,9 @@ description: |-
 {{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
 ---
 
-# {{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }} {{ end }}{{ title $element }}{{ end }} ({{.Type}})
+# {{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }}{{ if ne $index 1 }} {{ end }}{{ title $element }}{{ end }}{{ end }} ({{.Type}})
 
-{{ if gt (len (split .Description " --- ")) 1 -}}
-{{ index (split .Description " --- ") 1 | trimspace }}
-{{ else }}
 {{ .Description | trimspace }}
-{{- end }}
 
 {{ if .HasExample -}}
 ## Example Usage

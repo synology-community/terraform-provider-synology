@@ -213,7 +213,7 @@ func (f *ProjectResource) Metadata(_ context.Context, req resource.MetadataReque
 // Schema implements resource.Resource.
 func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Docker --- A Docker Compose project for the Container Manager Synology API.",
+		MarkdownDescription: "A Docker Compose project for the Container Manager Synology API.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

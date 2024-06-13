@@ -57,7 +57,7 @@ type GuestResourceModel struct {
 // Schema implements resource.Resource.
 func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Virtualization --- A guest on the Synology NAS Gueststation.",
+		MarkdownDescription: "A guest on the Synology NAS Gueststation.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

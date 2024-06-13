@@ -221,7 +221,7 @@ func (f *FileResource) Metadata(_ context.Context, req resource.MetadataRequest,
 // Schema implements resource.Resource.
 func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "FileStation --- A file on the Synology NAS Filestation.",
+		MarkdownDescription: "A file on the Synology NAS Filestation.",
 
 		Attributes: map[string]schema.Attribute{
 			"path": schema.StringAttribute{

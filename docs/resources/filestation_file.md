@@ -2,13 +2,12 @@
 page_title: "Synology Filestation File Resource - synology"
 subcategory: "Filestation"
 description: |-
-  FileStation --- A file on the Synology NAS Filestation.
+  A file on the Synology NAS Filestation.
 ---
 
-# Synology Filestation File (Resource)
+# Filestation File (Resource)
 
 A file on the Synology NAS Filestation.
-
 
 
 

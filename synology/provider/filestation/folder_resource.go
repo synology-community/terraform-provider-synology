@@ -60,7 +60,7 @@ func (f *FolderResource) Metadata(_ context.Context, req resource.MetadataReques
 // Schema implements resource.Resource.
 func (f *FolderResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "FileStation --- Manages a folder in the Synology FileStation.",
+		MarkdownDescription: "Manages a folder in the Synology FileStation.",
 
 		Attributes: map[string]schema.Attribute{
 			"iterations": schema.Int64Attribute{

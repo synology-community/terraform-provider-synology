@@ -5,8 +5,7 @@ description: |-
   A Generic API Resource for making calls to the Synology DSM API.
 ---
 
-# Synology Core Package (Resource)
-
+# Core Package (Resource)
 
 A Generic API Resource for making calls to the Synology DSM API.
 

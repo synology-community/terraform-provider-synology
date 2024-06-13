@@ -2,13 +2,12 @@
 page_title: "Synology Filestation Info Data Source - synology"
 subcategory: "Filestation"
 description: |-
-  FileStation --- Info data source
+  Info data source
 ---
 
-# Synology Filestation Info (Data Source)
+# Filestation Info (Data Source)
 
 Info data source
-
 
 ## Example Usage
 
