@@ -1,11 +1,11 @@
 ---
-page_title: "synology_virtualization_guest Resource - synology"
+page_title: "Synology Virtualization Guest Resource - synology"
 subcategory: "Virtualization"
 description: |-
-  A guest on the Synology NAS Gueststation.
+  Virtualization --- A guest on the Synology NAS Gueststation.
 ---
 
-# synology_virtualization_guest (Resource)
+# Synology Virtualization Guest (Resource)
 
 A guest on the Synology NAS Gueststation.
 

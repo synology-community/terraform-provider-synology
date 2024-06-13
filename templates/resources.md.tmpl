@@ -1,19 +1,15 @@
 ---
-page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
-{{ if gt (len (split .Description " --- ")) 1 -}}
-subcategory: "{{ index (split .Description " --- ") 0 }}"
+page_title: "{{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }} {{ end }}{{ title $element }}{{ end }} {{.Type}} - {{.ProviderName}}"
+{{ if gt (len (split .Name "_")) 2 -}}
+subcategory: "{{ index (split .Name "_") 1 | title }}"
 {{- else -}} 
 subcategory: ""
 {{- end }}
 description: |-
-{{ if gt (len (split .Description " --- ")) 1 -}}
-{{ index (split .Description " --- ") 1 | plainmarkdown | trimspace | prefixlines "  " }}
-{{- else -}} 
 {{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
-{{- end }}
 ---
 
-# {{.Name}} ({{.Type}})
+# {{ range $index, $element := (split .Name "_") }}{{ if ne $index 0 }} {{ end }}{{ title $element }}{{ end }} ({{.Type}})
 
 {{ if gt (len (split .Description " --- ")) 1 -}}
 {{ index (split .Description " --- ") 1 | trimspace }}

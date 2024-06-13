@@ -1,11 +1,11 @@
 ---
-page_title: "synology_filestation_info Data Source - synology"
-subcategory: "FileStation"
+page_title: "Synology Filestation Info Data Source - synology"
+subcategory: "Filestation"
 description: |-
-  Info data source
+  FileStation --- Info data source
 ---
 
-# synology_filestation_info (Data Source)
+# Synology Filestation Info (Data Source)
 
 Info data source
 

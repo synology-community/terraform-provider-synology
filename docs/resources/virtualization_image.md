@@ -1,11 +1,11 @@
 ---
-page_title: "synology_virtualization_image Resource - synology"
+page_title: "Synology Virtualization Image Resource - synology"
 subcategory: "Virtualization"
 description: |-
-  A image on the Synology NAS Imagestation.
+  Virtualization --- A image on the Synology NAS Imagestation.
 ---
 
-# synology_virtualization_image (Resource)
+# Synology Virtualization Image (Resource)
 
 A image on the Synology NAS Imagestation.
 

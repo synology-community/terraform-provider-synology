@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container"
+	"github.com/appkins/terraform-provider-synology/synology/provider/core"
 	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
 	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization"
 
@@ -144,6 +145,7 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 	var resp []func() resource.Resource
 
 	resp = append(resp, NewApiResource)
+	resp = append(resp, core.Resources()...)
 	resp = append(resp, filestation.Resources()...)
 	resp = append(resp, virtualization.Resources()...)
 	resp = append(resp, container.Resources()...)
@@ -155,6 +157,7 @@ func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.
 
 	var resp []func() datasource.DataSource
 
+	resp = append(resp, core.DataSources()...)
 	resp = append(resp, filestation.DataSources()...)
 	resp = append(resp, virtualization.DataSources()...)
 	resp = append(resp, container.DataSources()...)

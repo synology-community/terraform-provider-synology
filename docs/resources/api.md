@@ -1,11 +1,11 @@
 ---
-page_title: "synology_api Resource - synology"
+page_title: "Synology Api Resource - synology"
 subcategory: ""
 description: |-
   A Generic API Resource for making calls to the Synology DSM API.
 ---
 
-# synology_api (Resource)
+# Synology Api (Resource)
 
 
 A Generic API Resource for making calls to the Synology DSM API.

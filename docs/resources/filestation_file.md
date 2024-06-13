@@ -1,11 +1,11 @@
 ---
-page_title: "synology_filestation_file Resource - synology"
-subcategory: "FileStation"
+page_title: "Synology Filestation File Resource - synology"
+subcategory: "Filestation"
 description: |-
-  A file on the Synology NAS Filestation.
+  FileStation --- A file on the Synology NAS Filestation.
 ---
 
-# synology_filestation_file (Resource)
+# Synology Filestation File (Resource)
 
 A file on the Synology NAS Filestation.
 
