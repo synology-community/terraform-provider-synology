@@ -194,6 +194,7 @@ func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"beta": schema.BoolAttribute{
 				MarkdownDescription: "Whether to install beta versions of the package.",
 				Optional:            true,
+				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
 		},

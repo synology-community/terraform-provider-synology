@@ -20,5 +20,7 @@ A Generic API Resource for making calls to the Synology DSM API.
 
 ### Optional
 
+- `beta` (Boolean) Whether to install beta versions of the package.
 - `url` (String) The URL to the package to install.
 - `version` (String) The package version.
+- `wizard` (Map of String) Wizard configuration values.
