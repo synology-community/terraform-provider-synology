@@ -44,6 +44,8 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("beta"), data.Beta.ValueBool())...)
+
 	pkg, err := p.client.PackageFind(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to find package", err.Error())
@@ -51,11 +53,17 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	if data.Version.IsUnknown() || data.Version.IsNull() {
-		data.Version = types.StringValue(pkg.Version)
+		if pkg.Version != "" {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), pkg.Version)...)
+			data.Version = types.StringValue(pkg.Version)
+		}
 	}
 
 	if data.URL.IsUnknown() || data.URL.IsNull() {
-		data.URL = types.StringValue(pkg.Link)
+		if pkg.Link != "" {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), pkg.Link)...)
+			data.URL = types.StringValue(pkg.Link)
+		}
 	}
 
 	size := int64(0)
@@ -87,10 +95,10 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// if resp.Diagnostics.HasError() {
+	// 	return
+	// }
 }
 
 // Delete implements resource.Resource.
@@ -147,6 +155,10 @@ func (p *PackageResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
+	if data.Beta.IsNull() || data.Beta.IsUnknown() {
+		resp.State.SetAttribute(ctx, path.Root("beta"), false)
+	}
+
 	if data.Version.IsNull() || data.Version.IsUnknown() {
 		var version string
 		if pkg != nil && pkg.Version != "" {
@@ -155,15 +167,17 @@ func (p *PackageResource) Read(ctx context.Context, req resource.ReadRequest, re
 			version = pkgInfo.Version
 		}
 		data.Version = types.StringValue(version)
+		resp.State.SetAttribute(ctx, path.Root("version"), version)
 	}
 
 	if data.URL.IsNull() || data.URL.IsUnknown() {
 		if pkgInfo.Link != "" {
 			data.URL = types.StringValue(pkgInfo.Link)
+			resp.State.SetAttribute(ctx, path.Root("url"), pkgInfo.Link)
 		}
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	//resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Schema implements resource.Resource.

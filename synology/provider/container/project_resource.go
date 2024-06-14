@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/docker"
-	urlmodels "github.com/synology-community/go-synology/pkg/models"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
@@ -89,9 +88,9 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	shouldUpdate := false
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
-		Name:                  urlmodels.JsonString(data.Name.ValueString()),
-		Content:               urlmodels.JsonString(string(projectYAML)),
-		SharePath:             urlmodels.JsonString(fmt.Sprintf("/projects/%s", data.Name.ValueString())),
+		Name:                  data.Name.ValueString(),
+		Content:               string(projectYAML),
+		SharePath:             fmt.Sprintf("/projects/%s", data.Name.ValueString()),
 		ServicePortalName:     "",
 		ServicePortalPort:     0,
 		ServicePortalProtocol: "",
@@ -133,14 +132,14 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 		if status == "RUNNING" {
 			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStopStreamRequest{
-				ID: urlmodels.JsonString(data.ID.ValueString()),
+				ID: data.ID.ValueString(),
 			})
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to stop project", err.Error())
 				return
 			}
 			_, err = f.client.ProjectCleanStream(ctx, docker.ProjectCleanStreamRequest{
-				ID: urlmodels.JsonString(data.ID.ValueString()),
+				ID: data.ID.ValueString(),
 			})
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to clean project", err.Error())
@@ -149,8 +148,8 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-			ID:      urlmodels.JsonString(data.ID.ValueString()),
-			Content: urlmodels.JsonString(string(projectYAML)),
+			ID:      data.ID.ValueString(),
+			Content: string(projectYAML),
 		})
 
 		if err != nil {
