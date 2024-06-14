@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
@@ -16,6 +17,8 @@ type PackageResourceModel struct {
 	Name    types.String `tfsdk:"name"`
 	Version types.String `tfsdk:"version"`
 	URL     types.String `tfsdk:"url"`
+	Wizard  types.Map    `tfsdk:"wizard"`
+	Beta    types.Bool   `tfsdk:"beta"`
 }
 
 var _ resource.Resource = &PackageResource{}
@@ -66,7 +69,17 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	err = p.client.PackageInstallCompound(ctx, data.Name.ValueString(), data.URL.ValueString(), size)
+	wizardConf := make(map[string]string)
+	if !data.Wizard.IsNull() && !data.Wizard.IsUnknown() {
+		data.Wizard.ElementsAs(ctx, &wizardConf, true)
+	}
+
+	err = p.client.PackageInstallCompound(ctx, core.PackageInstallCompoundRequest{
+		Name:        data.Name.ValueString(),
+		URL:         data.URL.ValueString(),
+		Size:        size,
+		ExtraValues: wizardConf,
+	})
 
 	if err != nil {
 		resp.Diagnostics.AddError("Package install failed", err.Error())
@@ -172,6 +185,16 @@ func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "The URL to the package to install.",
 				Optional:            true,
 				Computed:            true,
+			},
+			"wizard": schema.MapAttribute{
+				MarkdownDescription: "Wizard configuration values.",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
+			"beta": schema.BoolAttribute{
+				MarkdownDescription: "Whether to install beta versions of the package.",
+				Optional:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 		},
 	}
