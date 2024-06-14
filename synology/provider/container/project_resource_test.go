@@ -21,6 +21,11 @@ func TestAccProjectResource_basic(t *testing.T) {
 			resource "synology_container_project" "foo" {
 				name = "foo"
 				
+				network {
+					name   = "foo"
+					driver = "bridge"
+				}
+
 				service {
 					name     = "bar"
 					replicas = 1
@@ -40,7 +45,7 @@ func TestAccProjectResource_basic(t *testing.T) {
 					}
 
 					network {
-						name = "default"
+						name = "foo"
 					}
 				}
 			}`,

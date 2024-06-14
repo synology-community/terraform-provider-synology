@@ -6,7 +6,9 @@ import (
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -76,6 +78,32 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 			service := v.AsComposeServiceConfig()
 
 			project.Services[service.Name] = service
+		}
+	}
+
+	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
+
+		elements := []models.Network{}
+		diags := data.Networks.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
+			return
+		}
+
+		if project.Networks == nil {
+			project.Networks = make(map[string]composetypes.NetworkConfig)
+		}
+
+		for _, v := range elements {
+			n := composetypes.NetworkConfig{}
+
+			resp.Diagnostics.Append(v.AsComposeConfig(ctx, &n)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
+			project.Networks[n.Name] = n
 		}
 	}
 
@@ -244,6 +272,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The number of replicas.",
 							Optional:            true,
 						},
+						"network_mode": schema.StringAttribute{
+							MarkdownDescription: "The network mode.",
+							Optional:            true,
+						},
 					},
 					Blocks: map[string]schema.Block{
 						"image": schema.SetNestedBlock{
@@ -361,6 +393,42 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
+						"health_check": schema.SetNestedBlock{
+							MarkdownDescription: "Health check configuration.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"test": schema.ListAttribute{
+										MarkdownDescription: "Test command to run.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"interval": schema.StringAttribute{
+										MarkdownDescription: "Interval to run the test.",
+										Optional:            true,
+										CustomType:          timetypes.GoDurationType{},
+									},
+									"timeout": schema.StringAttribute{
+										MarkdownDescription: "Timeout to run the test.",
+										Optional:            true,
+										CustomType:          timetypes.GoDurationType{},
+									},
+									"retries": schema.Int64Attribute{
+										MarkdownDescription: "Number of retries.",
+										Optional:            true,
+									},
+									"start_period": schema.StringAttribute{
+										MarkdownDescription: "Start period.",
+										Optional:            true,
+										CustomType:          timetypes.GoDurationType{},
+									},
+									"start_interval": schema.StringAttribute{
+										MarkdownDescription: "Start interval.",
+										Optional:            true,
+										CustomType:          timetypes.GoDurationType{},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -369,6 +437,39 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the network.",
+							Optional:            true,
+						},
+						"driver": schema.StringAttribute{
+							MarkdownDescription: "The driver of the network.",
+							Optional:            true,
+							Validators: []validator.String{
+								stringvalidator.OneOf("bridge", "host", "overlay", "macvlan", "none", "ipvlan"),
+							},
+						},
+						"driver_opts": schema.MapAttribute{
+							MarkdownDescription: "The driver options of the network.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"external": schema.BoolAttribute{
+							MarkdownDescription: "Whether the network is external.",
+							Optional:            true,
+						},
+						"internal": schema.BoolAttribute{
+							MarkdownDescription: "Whether the network is internal.",
+							Optional:            true,
+						},
+						"attachable": schema.BoolAttribute{
+							MarkdownDescription: "Whether the network is attachable.",
+							Optional:            true,
+						},
+						"labels": schema.MapAttribute{
+							MarkdownDescription: "The labels of the network.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"enable_ipv6": schema.BoolAttribute{
+							MarkdownDescription: "Whether to enable IPv6.",
 							Optional:            true,
 						},
 					},

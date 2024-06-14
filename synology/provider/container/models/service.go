@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -43,13 +44,24 @@ type Port struct {
 	HostIP      types.String `tfsdk:"host_ip"`
 }
 
+type HealthCheck struct {
+	Test          types.List           `tfsdk:"test"`
+	Interval      timetypes.GoDuration `tfsdk:"interval"`
+	Timeout       timetypes.GoDuration `tfsdk:"timeout"`
+	StartInterval timetypes.GoDuration `tfsdk:"start_interval"`
+	StartPeriod   timetypes.GoDuration `tfsdk:"start_period"`
+	Retries       types.Number         `tfsdk:"retries"`
+}
+
 type Service struct {
-	Name     types.String `tfsdk:"name"`
-	Image    types.Set    `tfsdk:"image"`
-	Replicas types.Int64  `tfsdk:"replicas"`
-	Logging  types.Set    `tfsdk:"logging"`
-	Ports    types.Set    `tfsdk:"port"`
-	Networks types.Set    `tfsdk:"network"`
+	Name        types.String `tfsdk:"name"`
+	Image       types.Set    `tfsdk:"image"`
+	Replicas    types.Int64  `tfsdk:"replicas"`
+	Logging     types.Set    `tfsdk:"logging"`
+	Ports       types.Set    `tfsdk:"port"`
+	Networks    types.Set    `tfsdk:"network"`
+	NetworkMode types.String `tfsdk:"network_mode"`
+	HealthCheck types.Set    `tfsdk:"health_check"`
 }
 
 func (m Service) ModelType() attr.Type {
@@ -68,7 +80,8 @@ func (m Service) AttrType() map[string]attr.Type {
 				},
 			},
 		},
-		"replicas": types.Int64Type,
+		"network_mode": types.StringType,
+		"replicas":     types.Int64Type,
 		"port": types.SetType{
 			ElemType: types.ObjectType{
 				AttrTypes: map[string]attr.Type{
@@ -79,6 +92,17 @@ func (m Service) AttrType() map[string]attr.Type {
 					"app_protocol": types.StringType,
 					"mode":         types.StringType,
 					"host_ip":      types.StringType,
+				},
+			},
+		},
+		"health_check": types.SetType{
+			ElemType: types.ObjectType{
+				AttrTypes: map[string]attr.Type{
+					"test":     types.ListType{ElemType: types.StringType},
+					"interval": types.StringType,
+					"timeout":  types.StringType,
+					"retries":  types.Int64Type,
+					"start":    types.StringType,
 				},
 			},
 		},
@@ -115,6 +139,7 @@ func (m Service) Value() attr.Value {
 	var image basetypes.SetValue
 	var ports basetypes.SetValue
 	var networks basetypes.SetValue
+	var health_check basetypes.SetValue
 
 	if l, diag := m.Logging.ToSetValue(context.Background()); !diag.HasError() {
 		logging = l
@@ -132,13 +157,19 @@ func (m Service) Value() attr.Value {
 		networks = n
 	}
 
+	if hc, diag := m.HealthCheck.ToSetValue(context.Background()); !diag.HasError() {
+		health_check = hc
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"name":     types.StringValue(m.Name.ValueString()),
-		"image":    image,
-		"replicas": types.Int64Value(m.Replicas.ValueInt64()),
-		"port":     ports,
-		"network":  networks,
-		"logging":  logging,
+		"name":         types.StringValue(m.Name.ValueString()),
+		"image":        image,
+		"replicas":     types.Int64Value(m.Replicas.ValueInt64()),
+		"port":         ports,
+		"network":      networks,
+		"logging":      logging,
+		"network_mode": types.StringValue(m.NetworkMode.ValueString()),
+		"health_check": health_check,
 	})
 }
 
@@ -156,6 +187,52 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 			opts := map[string]string{}
 			if diag := logging[0].Options.ElementsAs(context.Background(), &opts, true); !diag.HasError() {
 				service.Logging.Options = opts
+			}
+		}
+	}
+
+	if !m.HealthCheck.IsNull() && !m.HealthCheck.IsUnknown() && len(m.HealthCheck.Elements()) == 1 {
+		service.HealthCheck = &composetypes.HealthCheckConfig{}
+		healthCheck := []HealthCheck{}
+		if diag := m.HealthCheck.ElementsAs(context.Background(), &healthCheck, true); !diag.HasError() {
+			hc := healthCheck[0]
+			if !hc.Test.IsNull() || !hc.Test.IsUnknown() {
+				test := []string{}
+				if diag := hc.Test.ElementsAs(context.Background(), &test, true); !diag.HasError() {
+					service.HealthCheck.Test = test
+				}
+			}
+			if !hc.Interval.IsNull() || !hc.Interval.IsUnknown() {
+				t, diag := hc.Interval.ValueGoDuration()
+				if !diag.HasError() {
+					ii := composetypes.Duration(t)
+					service.HealthCheck.Interval = &ii
+				}
+			}
+			if !hc.Timeout.IsNull() || !hc.Timeout.IsUnknown() {
+				t, diag := hc.Timeout.ValueGoDuration()
+				if !diag.HasError() {
+					ii := composetypes.Duration(t)
+					service.HealthCheck.Timeout = &ii
+				}
+			}
+			if !hc.StartInterval.IsNull() || !hc.StartInterval.IsUnknown() {
+				t, diag := hc.StartInterval.ValueGoDuration()
+				if !diag.HasError() {
+					ii := composetypes.Duration(t)
+					service.HealthCheck.StartInterval = &ii
+				}
+			}
+			if !hc.StartPeriod.IsNull() || !hc.StartPeriod.IsUnknown() {
+				t, diag := hc.StartPeriod.ValueGoDuration()
+				if !diag.HasError() {
+					ii := composetypes.Duration(t)
+					service.HealthCheck.StartPeriod = &ii
+				}
+			}
+			if !hc.Retries.IsNull() || !hc.Retries.IsUnknown() {
+				retries, _ := hc.Retries.ValueBigFloat().Uint64()
+				service.HealthCheck.Retries = &retries
 			}
 		}
 	}
@@ -197,6 +274,10 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				service.Ports = append(service.Ports, port)
 			}
 		}
+	}
+
+	if !m.NetworkMode.IsNull() && !m.NetworkMode.IsUnknown() {
+		service.NetworkMode = m.NetworkMode.ValueString()
 	}
 
 	if !m.Networks.IsNull() && !m.Networks.IsUnknown() {

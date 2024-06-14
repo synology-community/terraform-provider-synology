@@ -76,6 +76,13 @@ Optional:
 
 Optional:
 
+- `attachable` (Boolean) Whether the network is attachable.
+- `driver` (String) The driver of the network.
+- `driver_opts` (Map of String) The driver options of the network.
+- `enable_ipv6` (Boolean) Whether to enable IPv6.
+- `external` (Boolean) Whether the network is external.
+- `internal` (Boolean) Whether the network is internal.
+- `labels` (Map of String) The labels of the network.
 - `name` (String) The name of the network.
 
 
