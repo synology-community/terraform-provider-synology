@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
+	filepath "path/filepath"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -30,6 +31,7 @@ type FolderResourceModel struct {
 	Name          types.String `tfsdk:"name"`
 	Path          types.String `tfsdk:"path"`
 	CreateParents types.Bool   `tfsdk:"create_parents"`
+	RealPath      types.String `tfsdk:"real_path"`
 }
 
 // Create implements resource.Resource.
@@ -43,7 +45,14 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	createParents := data.CreateParents.ValueBool()
+	createParents := true
+
+	if !data.CreateParents.IsNull() || !data.CreateParents.IsUnknown() {
+		createParents = data.CreateParents.ValueBool()
+	}
+
+	data.CreateParents = types.BoolValue(createParents)
+
 	path := data.Path.ValueString()
 	name := data.Name.ValueString()
 
@@ -57,6 +66,17 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 	if flist == nil {
 		resp.Diagnostics.AddError("Failed to create folder", fmt.Sprintf("Failed to create folder, got error: %s", err))
 		return
+	}
+
+	files, err := f.client.List(ctx, path)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		return
+	}
+	for _, file := range files.Files {
+		if file.IsDir && file.Path == path {
+			data.RealPath = types.StringValue(file.Additional.RealPath)
+		}
 	}
 
 	// Save data into Terraform state
@@ -89,34 +109,45 @@ func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	path := data.Path.ValueString()
-	basedir := filepath.Dir(path)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	files, err := f.client.List(ctx, basedir)
+	name := data.Name.ValueString()
+	path := data.Path.ValueString()
+
+	files, err := f.client.List(ctx, path)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
 		return
 	}
 	found := false
 	for _, file := range files.Files {
-		if file.IsDir && file.Path == path {
+		if file.IsDir && file.Name == name {
 			found = true
+			data.RealPath = types.StringValue(file.Additional.RealPath)
 		}
 	}
-	if !found {
+	if found {
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	} else {
 		resp.State.RemoveResource(ctx)
 	}
 }
 
 // Update implements resource.Resource.
 func (f *FolderResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// var data FolderResourceModel
+	var data FolderResourceModel
 
-	// // Read Terraform configuration data into the model
-	// resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	// Read Terraform configuration data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	// // Save data into Terraform state
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	if data.CreateParents.IsNull() || data.CreateParents.IsUnknown() {
+		data.CreateParents = types.BoolValue(true)
+	}
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Metadata implements resource.Resource.
@@ -144,6 +175,10 @@ func (f *FolderResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
 			},
+			"real_path": schema.StringAttribute{
+				MarkdownDescription: "The real path of the folder.",
+				Computed:            true,
+			},
 		},
 	}
 }
@@ -166,4 +201,25 @@ func (f *FolderResource) Configure(ctx context.Context, req resource.ConfigureRe
 	}
 
 	f.client = client.FileStationAPI()
+}
+
+func (f *FolderResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	p := req.ID
+	basedir := filepath.Dir(p)
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("path"), basedir)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), filepath.Base(p))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("create_parents"), true)...)
+
+	files, err := f.client.List(ctx, basedir)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		return
+	}
+	for _, file := range files.Files {
+		if file.IsDir && file.Path == p {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("real_path"), file.Additional.RealPath)...)
+			continue
+		}
+	}
 }

@@ -3,7 +3,9 @@ package models
 import (
 	"context"
 	"fmt"
+	"log"
 
+	"github.com/docker/go-units"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -77,6 +79,7 @@ type Ulimit struct {
 type Service struct {
 	Name        types.String `tfsdk:"name"`
 	Image       types.Set    `tfsdk:"image"`
+	MemLimit    types.String `tfsdk:"mem_limit"`
 	Command     types.List   `tfsdk:"command"`
 	Replicas    types.Int64  `tfsdk:"replicas"`
 	Logging     types.Set    `tfsdk:"logging"`
@@ -271,6 +274,15 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 
 	sName := m.Name.ValueString()
 
+	if !m.MemLimit.IsNull() && !m.MemLimit.IsUnknown() {
+		b, err := units.RAMInBytes(m.MemLimit.ValueString())
+		if err != nil {
+			log.Printf("error parsing memory limit: %v", err)
+		} else {
+			service.MemLimit = composetypes.UnitBytes(b)
+		}
+	}
+
 	if !m.Logging.IsNull() && !m.Logging.IsUnknown() {
 		service.Logging = &composetypes.LoggingConfig{}
 		logging := []Logging{}
@@ -293,6 +305,7 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 					Source:   v.Source.ValueString(),
 					Target:   v.Target.ValueString(),
 					ReadOnly: v.ReadOnly.ValueBool(),
+					Type:     v.Type.ValueString(),
 				}
 				if !v.Bind.IsNull() && !v.Bind.IsUnknown() {
 					binds := []VolumeBind{}

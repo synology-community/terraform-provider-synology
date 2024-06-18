@@ -11,10 +11,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/docker"
 
@@ -32,16 +34,27 @@ type ProjectResource struct {
 	client docker.Api
 }
 
+type ServicePortalModel struct {
+	Enable   types.Bool   `tfsdk:"enable"`
+	Name     types.String `tfsdk:"name"`
+	Port     types.Int64  `tfsdk:"port"`
+	Protocol types.String `tfsdk:"protocol"`
+}
+
 // ProjectResourceModel describes the resource data model.
 type ProjectResourceModel struct {
-	ID         types.String `tfsdk:"id"`
-	Name       types.String `tfsdk:"name"`
-	Services   types.Set    `tfsdk:"service"`
-	Networks   types.Set    `tfsdk:"network"`
-	Volumes    types.Set    `tfsdk:"volume"`
-	Secrets    types.Set    `tfsdk:"secret"`
-	Configs    types.Set    `tfsdk:"config"`
-	Extensions types.Set    `tfsdk:"extension"`
+	ID            types.String `tfsdk:"id"`
+	Name          types.String `tfsdk:"name"`
+	SharePath     types.String `tfsdk:"share_path"`
+	Services      types.Set    `tfsdk:"service"`
+	Networks      types.Set    `tfsdk:"network"`
+	Volumes       types.Set    `tfsdk:"volume"`
+	Secrets       types.Set    `tfsdk:"secret"`
+	Configs       types.Set    `tfsdk:"config"`
+	Extensions    types.Set    `tfsdk:"extension"`
+	Build         types.Bool   `tfsdk:"build"`
+	State         types.String `tfsdk:"state"`
+	ServicePortal types.Set    `tfsdk:"service_portal"`
 	// ComposeFiles types.ListType `tfsdk:"compose_files"`
 	// Environment  types.MapType  `tfsdk:"environment"`
 }
@@ -162,15 +175,45 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	enableServicePortal := new(bool)
+	servicePortalName := ""
+	servicePortalPort := new(int64)
+	servicePortalProtocol := ""
+
+	if !data.ServicePortal.IsNull() && !data.ServicePortal.IsUnknown() {
+		elements := []ServicePortalModel{}
+		resp.Diagnostics.Append(data.ServicePortal.ElementsAs(ctx, &elements, true)...)
+
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		if len(elements) > 0 {
+			enableServicePortal = elements[0].Enable.ValueBoolPointer()
+			servicePortalName = elements[0].Name.ValueString()
+			servicePortalPort = elements[0].Port.ValueInt64Pointer()
+			servicePortalProtocol = elements[0].Protocol.ValueString()
+		}
+	}
+
+	var sharePath string
+
+	if !data.SharePath.IsNull() && !data.SharePath.IsUnknown() {
+		sharePath = data.SharePath.ValueString()
+	} else {
+		sharePath = fmt.Sprintf("/projects/%s", data.Name.ValueString())
+	}
+
 	shouldUpdate := false
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
 		Name:                  data.Name.ValueString(),
 		Content:               projectYAML,
-		SharePath:             fmt.Sprintf("/projects/%s", data.Name.ValueString()),
-		ServicePortalName:     "",
-		ServicePortalPort:     0,
-		ServicePortalProtocol: "",
+		SharePath:             sharePath,
+		EnableServicePortal:   enableServicePortal,
+		ServicePortalName:     servicePortalName,
+		ServicePortalPort:     servicePortalPort,
+		ServicePortalProtocol: servicePortalProtocol,
 	})
 
 	if err != nil {
@@ -225,8 +268,12 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-			ID:      data.ID.ValueString(),
-			Content: projectYAML,
+			ID:                    data.ID.ValueString(),
+			Content:               projectYAML,
+			EnableServicePortal:   enableServicePortal,
+			ServicePortalName:     servicePortalName,
+			ServicePortalPort:     servicePortalPort,
+			ServicePortalProtocol: servicePortalProtocol,
 		})
 
 		if err != nil {
@@ -238,16 +285,27 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		data.ID = types.StringValue(res.ID)
 	}
 
-	// project := compose.Project{
-	// 	Name: data.Name.ValueString(),
-	// }
+	if !data.Build.IsNull() && !data.Build.IsUnknown() && data.Build.ValueBool() {
+		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+			ID: data.ID.ValueString(),
+		})
 
-	// if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to build project", err.Error())
+			return
+		}
+	}
 
-	// 	var elements []compose.NetworkConfig
-	// 	diags := data.Networks.WithElementType()
+	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
+		ID: data.ID.ValueString(),
+	})
 
-	// }
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		return
+	}
+
+	data.State = types.StringValue(proj.Status)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -259,31 +317,7 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-}
-
-// Read implements resource.Resource.
-func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ProjectResourceModel
-
-	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-}
-
-// Update implements resource.Resource.
-func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ProjectResourceModel
-
-	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	projectYAML, err := getProjectYaml(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
 		return
 	}
 
@@ -309,20 +343,186 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
 		ID: data.ID.ValueString(),
 	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to clean project", err.Error())
+		return
+	}
+
+	_, err = f.client.ProjectDelete(ctx, docker.ProjectDeleteRequest{
+		ID: data.ID.ValueString(),
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to delete project", err.Error())
+		return
+	}
+
+	// Remove data from Terraform state
+	resp.State.RemoveResource(ctx)
+}
+
+// Read implements resource.Resource.
+func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data ProjectResourceModel
+
+	// Read Terraform configuration data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
+		ID: data.ID.ValueString(),
+	})
+
+	if err != nil {
+		emessage := err.Error()
+		projects, err := f.client.ProjectList(ctx, docker.ProjectListRequest{})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to list projects", err.Error())
+			return
+		}
+		found := false
+		for k, p := range *projects {
+			if p.Name == data.Name.ValueString() {
+				data.ID = types.StringValue(k)
+				found = true
+			}
+		}
+		if !found {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Failed to get project", emessage)
+		return
+	}
+
+	data.State = types.StringValue(proj.Status)
+
+	if proj.Status != "RUNNING" && data.Build.ValueBool() {
+		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+			ID: data.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to build project", err.Error())
+			return
+		}
+	}
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// Update implements resource.Resource.
+func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data ProjectResourceModel
+
+	// Read Terraform configuration data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	enableServicePortal := new(bool)
+	servicePortalName := ""
+	servicePortalPort := new(int64)
+	servicePortalProtocol := ""
+
+	if !data.ServicePortal.IsNull() && !data.ServicePortal.IsUnknown() {
+		elements := []ServicePortalModel{}
+		resp.Diagnostics.Append(data.ServicePortal.ElementsAs(ctx, &elements, true)...)
+
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		if len(elements) > 0 {
+			enableServicePortal = elements[0].Enable.ValueBoolPointer()
+			servicePortalName = elements[0].Name.ValueString()
+			servicePortalPort = elements[0].Port.ValueInt64Pointer()
+			servicePortalProtocol = elements[0].Protocol.ValueString()
+		}
+	}
+
+	projectYAML, err := getProjectYaml(ctx, data)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
+		return
+	}
+
+	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
+		ID: data.ID.ValueString(),
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		return
+	}
+
+	if proj.Content == projectYAML {
+		tflog.Info(ctx, "No changes detected in project, skipping update")
+		data.State = types.StringValue(proj.Status)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		return
+
+	}
+
+	if proj.Status == "RUNNING" {
+		_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+			ID: data.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to stop project", err.Error())
+			return
+		}
+	}
+
+	_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
+		ID: data.ID.ValueString(),
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to clean project", err.Error())
 		return
 	}
 
 	_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-		ID:      data.ID.ValueString(),
-		Content: projectYAML,
+		ID:                    data.ID.ValueString(),
+		Content:               projectYAML,
+		EnableServicePortal:   enableServicePortal,
+		ServicePortalName:     servicePortalName,
+		ServicePortalPort:     servicePortalPort,
+		ServicePortalProtocol: servicePortalProtocol,
 	})
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update project", err.Error())
 		return
 	}
+
+	if !data.Build.IsNull() && !data.Build.IsUnknown() && data.Build.ValueBool() {
+		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+			ID: data.ID.ValueString(),
+		})
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to build project", err.Error())
+			return
+		}
+	}
+
+	proj, err = f.client.ProjectGet(ctx, docker.ProjectGetRequest{
+		ID: data.ID.ValueString(),
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		return
+	}
+
+	data.State = types.StringValue(proj.Status)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -350,6 +550,20 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "The name of the project.",
 				Required:            true,
 			},
+			"share_path": schema.StringAttribute{
+				MarkdownDescription: "The share path of the project.",
+				Required:            true,
+			},
+			"build": schema.BoolAttribute{
+				MarkdownDescription: "Whether to build the project.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+			},
+			"state": schema.StringAttribute{
+				MarkdownDescription: "The state of the project.",
+				Computed:            true,
+			},
 			// "compose_files": schema.ListAttribute{
 			// 	MarkdownDescription: "The list of compose files.",
 			// 	ElementType:         types.StringType,
@@ -357,6 +571,31 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			// },
 		},
 		Blocks: map[string]schema.Block{
+			"service_portal": schema.SetNestedBlock{
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"enable": schema.BoolAttribute{
+							MarkdownDescription: "Whether to enable the service portal.",
+							Optional:            true,
+						},
+						"name": schema.StringAttribute{
+							MarkdownDescription: "The name of the service portal.",
+							Optional:            true,
+						},
+						"port": schema.Int64Attribute{
+							MarkdownDescription: "The port of the service portal.",
+							Optional:            true,
+						},
+						"protocol": schema.StringAttribute{
+							MarkdownDescription: "The protocol of the service portal.",
+							Optional:            true,
+							Validators: []validator.String{
+								stringvalidator.OneOf("http", "https"),
+							},
+						},
+					},
+				},
+			},
 			"service": schema.SetNestedBlock{
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
@@ -366,6 +605,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 						},
 						"replicas": schema.Int64Attribute{
 							MarkdownDescription: "The number of replicas.",
+							Optional:            true,
+						},
+						"mem_limit": schema.StringAttribute{
+							MarkdownDescription: "The memory limit.",
 							Optional:            true,
 						},
 						"command": schema.ListAttribute{

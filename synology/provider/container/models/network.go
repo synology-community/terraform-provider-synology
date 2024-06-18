@@ -56,8 +56,7 @@ func (m Network) AsComposeConfig(ctx context.Context, network *composetypes.Netw
 	}
 
 	if !m.EnableIPv6.IsNull() && !m.EnableIPv6.IsUnknown() {
-		enableIPv6 := m.EnableIPv6.ValueBool()
-		network.EnableIPv6 = &enableIPv6
+		network.EnableIPv6 = m.EnableIPv6.ValueBoolPointer()
 	}
 
 	return

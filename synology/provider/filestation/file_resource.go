@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -37,15 +38,16 @@ type FileResource struct {
 
 // FileResourceModel describes the resource data model.
 type FileResourceModel struct {
-	Path          types.String `tfsdk:"path"`
-	Content       types.String `tfsdk:"content"`
-	Url           types.String `tfsdk:"url"`
-	CreateParents types.Bool   `tfsdk:"create_parents"`
-	Overwrite     types.Bool   `tfsdk:"overwrite"`
-	AccessTime    types.Int64  `tfsdk:"access_time"`
-	ModifiedTime  types.Int64  `tfsdk:"modified_time"`
-	ChangeTime    types.Int64  `tfsdk:"change_time"`
-	CreateTime    types.Int64  `tfsdk:"create_time"`
+	Path          types.String      `tfsdk:"path"`
+	Content       types.String      `tfsdk:"content"`
+	Url           types.String      `tfsdk:"url"`
+	CreateParents types.Bool        `tfsdk:"create_parents"`
+	Overwrite     types.Bool        `tfsdk:"overwrite"`
+	AccessTime    timetypes.RFC3339 `tfsdk:"access_time"`
+	ModifiedTime  timetypes.RFC3339 `tfsdk:"modified_time"`
+	ChangeTime    timetypes.RFC3339 `tfsdk:"change_time"`
+	CreateTime    timetypes.RFC3339 `tfsdk:"create_time"`
+	RealPath      types.String      `tfsdk:"real_path"`
 }
 
 // Create implements resource.Resource.
@@ -97,22 +99,17 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	files, err := f.client.List(ctx, fileDir)
+	file, err := f.client.Get(ctx, path)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
 		return
 	}
-	for _, file := range files.Files {
-		if file.Path == path {
-			tflog.Info(ctx, fmt.Sprintf("File found: %s", file.Path))
 
-			data.ModifiedTime = types.Int64Value(file.Additional.Time.Mtime.Unix())
-			data.AccessTime = types.Int64Value(file.Additional.Time.Atime.Unix())
-			data.ChangeTime = types.Int64Value(file.Additional.Time.Ctime.Unix())
-			data.CreateTime = types.Int64Value(file.Additional.Time.Crtime.Unix())
-			continue
-		}
-	}
+	data.ModifiedTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Mtime.Time)
+	data.AccessTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Atime.Time)
+	data.ChangeTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Ctime.Time)
+	data.CreateTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Crtime.Time)
+	data.RealPath = types.StringValue(file.Additional.RealPath)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -145,23 +142,24 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
 	path := data.Path.ValueString()
-	basedir := filepath.Dir(path)
-	files, err := f.client.List(ctx, basedir)
+	file, err := f.client.Get(ctx, path)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
-		return
-	}
-	for _, file := range files.Files {
-		if file.Path == path {
-			tflog.Info(ctx, fmt.Sprintf("File found: %s", file.Path))
-
-			data.ModifiedTime = types.Int64Value(file.Additional.Time.Mtime.Unix())
-			data.AccessTime = types.Int64Value(file.Additional.Time.Atime.Unix())
-			data.ChangeTime = types.Int64Value(file.Additional.Time.Ctime.Unix())
-			data.CreateTime = types.Int64Value(file.Additional.Time.Crtime.Unix())
-			continue
+		switch err.Error() {
+		case "Result is empty":
+			resp.State.RemoveResource(ctx)
+			return
+		default:
+			resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
 		}
 	}
+	tflog.Info(ctx, fmt.Sprintf("File found: %s", file.Path))
+
+	data.ModifiedTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Mtime.Time)
+	data.AccessTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Atime.Time)
+	data.ChangeTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Ctime.Time)
+	data.CreateTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Crtime.Time)
+	data.RealPath = types.StringValue(file.Additional.RealPath)
 }
 
 // Update implements resource.Resource.
@@ -174,40 +172,54 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	path := data.Path.ValueString()
 	fileName := filepath.Base(data.Path.ValueString())
 	fileDir := filepath.Dir(data.Path.ValueString())
+	var fileContent string
 
-	file := form.File{
-		Name:    fileName,
-		Content: data.Content.ValueString(),
+	if !data.Content.IsNull() && !data.Content.IsUnknown() {
+		fileContent = data.Content.ValueString()
+	}
+
+	if (!data.Url.IsNull() && !data.Url.IsUnknown()) && (data.Content.IsNull() || data.Content.IsUnknown()) {
+
+		dresp, err := retryablehttp.NewClient().Get(data.Url.ValueString())
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to download file", fmt.Sprintf("Unable to download file, got error: %s", err))
+			return
+		}
+
+		dbody, err := io.ReadAll(dresp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to read file", fmt.Sprintf("Unable to read file, got error: %s", err))
+			return
+		}
+		dresp.Body.Close()
+		fileContent = string(dbody)
 	}
 
 	// Upload the file
 	_, err := f.client.Upload(
 		ctx,
 		fileDir,
-		file, data.CreateParents.ValueBool(),
+		form.File{
+			Name:    fileName,
+			Content: fileContent,
+		}, data.CreateParents.ValueBool(),
 		true)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
 		return
 	}
 
-	basedir := filepath.Dir(path)
-	files, err := f.client.List(ctx, basedir)
+	file, err := f.client.Get(ctx, path)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
 		return
 	}
-	for _, file := range files.Files {
-		if file.Path == path {
-			tflog.Info(ctx, fmt.Sprintf("File found: %s", file.Path))
-
-			data.ModifiedTime = types.Int64Value(file.Additional.Time.Mtime.Unix())
-			data.AccessTime = types.Int64Value(file.Additional.Time.Atime.Unix())
-			data.ChangeTime = types.Int64Value(file.Additional.Time.Ctime.Unix())
-			data.CreateTime = types.Int64Value(file.Additional.Time.Crtime.Unix())
-			continue
-		}
-	}
+	data.ModifiedTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Mtime.Time)
+	data.AccessTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Atime.Time)
+	data.ChangeTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Ctime.Time)
+	data.CreateTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Crtime.Time)
+	data.RealPath = types.StringValue(file.Additional.RealPath)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -264,20 +276,28 @@ func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
 			},
-			"access_time": schema.Int64Attribute{
+			"access_time": schema.StringAttribute{
 				MarkdownDescription: "The time the file was last accessed.",
 				Computed:            true,
+				CustomType:          timetypes.RFC3339Type{},
 			},
-			"modified_time": schema.Int64Attribute{
+			"modified_time": schema.StringAttribute{
 				MarkdownDescription: "The time the file was last modified.",
 				Computed:            true,
+				CustomType:          timetypes.RFC3339Type{},
 			},
-			"change_time": schema.Int64Attribute{
+			"change_time": schema.StringAttribute{
 				MarkdownDescription: "The time the file was last changed.",
 				Computed:            true,
+				CustomType:          timetypes.RFC3339Type{},
 			},
-			"create_time": schema.Int64Attribute{
+			"create_time": schema.StringAttribute{
 				MarkdownDescription: "The time the file was created.",
+				Computed:            true,
+				CustomType:          timetypes.RFC3339Type{},
+			},
+			"real_path": schema.StringAttribute{
+				MarkdownDescription: "The real path of the folder.",
 				Computed:            true,
 			},
 		},
