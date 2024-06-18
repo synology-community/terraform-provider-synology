@@ -114,6 +114,29 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 		}
 	}
 
+	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
+
+		elements := []models.Config{}
+		diags := data.Configs.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			return "", fmt.Errorf("Failed to read configs")
+		}
+
+		project.Configs = map[string]composetypes.ConfigObjConfig{}
+
+		for _, v := range elements {
+			n := composetypes.ConfigObjConfig{}
+
+			diags := v.AsComposeConfig(ctx, &n)
+			if diags.HasError() {
+				return "", fmt.Errorf("Failed to read configs")
+			}
+
+			project.Configs[n.Name] = n
+		}
+	}
+
 	projectYAML, err := project.MarshalYAML()
 	if err != nil {
 		return "", fmt.Errorf("Failed to unmarshal docker-compose.yml")
@@ -647,7 +670,25 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the volume.",
+							Required:            true,
+						},
+						"driver": schema.StringAttribute{
+							MarkdownDescription: "The driver of the volume.",
 							Optional:            true,
+						},
+						"driver_opts": schema.MapAttribute{
+							MarkdownDescription: "The driver options of the volume.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"external": schema.BoolAttribute{
+							MarkdownDescription: "Whether the volume is external.",
+							Optional:            true,
+						},
+						"labels": schema.MapAttribute{
+							MarkdownDescription: "The labels of the volume.",
+							Optional:            true,
+							ElementType:         types.StringType,
 						},
 					},
 				},
@@ -667,6 +708,14 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the config.",
+							Required:            true,
+						},
+						"content": schema.StringAttribute{
+							MarkdownDescription: "The content of the config.",
+							Optional:            true,
+						},
+						"file": schema.StringAttribute{
+							MarkdownDescription: "The file of the config.",
 							Optional:            true,
 						},
 					},

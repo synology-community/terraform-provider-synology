@@ -58,9 +58,14 @@ resource "synology_container_project" "foo" {
 <a id="nestedblock--config"></a>
 ### Nested Schema for `config`
 
-Optional:
+Required:
 
 - `name` (String) The name of the config.
+
+Optional:
+
+- `content` (String) The content of the config.
+- `file` (String) The file of the config.
 
 
 <a id="nestedblock--extension"></a>
@@ -99,12 +104,34 @@ Optional:
 
 Optional:
 
+- `command` (List of String) The command of the service.
+- `environment` (Map of String) The environment of the service.
+- `health_check` (Block Set) Health check configuration. (see [below for nested schema](#nestedblock--service--health_check))
 - `image` (Block Set) The image of the service. (see [below for nested schema](#nestedblock--service--image))
 - `logging` (Block Set) Logging configuration for the docker service. (see [below for nested schema](#nestedblock--service--logging))
 - `name` (String) The name of the service.
 - `network` (Block Set) The networks of the service. (see [below for nested schema](#nestedblock--service--network))
+- `network_mode` (String) The network mode.
 - `port` (Block Set) The ports of the service. (see [below for nested schema](#nestedblock--service--port))
+- `privileged` (Boolean) Whether the service is privileged.
 - `replicas` (Number) The number of replicas.
+- `restart` (String) The restart policy.
+- `tmpfs` (List of String) The tmpfs of the service.
+- `ulimit` (Block Set) The ulimits of the service. (see [below for nested schema](#nestedblock--service--ulimit))
+- `volume` (Block Set) The volumes of the service. (see [below for nested schema](#nestedblock--service--volume))
+
+<a id="nestedblock--service--health_check"></a>
+### Nested Schema for `service.health_check`
+
+Optional:
+
+- `interval` (String) Interval to run the test.
+- `retries` (Number) Number of retries.
+- `start_interval` (String) Start interval.
+- `start_period` (String) Start period.
+- `test` (List of String) Test command to run.
+- `timeout` (String) Timeout to run the test.
+
 
 <a id="nestedblock--service--image"></a>
 ### Nested Schema for `service.image`
@@ -157,10 +184,56 @@ Optional:
 - `target` (Number) The target of the port.
 
 
+<a id="nestedblock--service--ulimit"></a>
+### Nested Schema for `service.ulimit`
+
+Required:
+
+- `name` (String) The name of the ulimit.
+
+Optional:
+
+- `hard` (Number) The hard of the ulimit.
+- `soft` (Number) The soft of the ulimit.
+- `value` (Number) The value of the ulimit.
+
+
+<a id="nestedblock--service--volume"></a>
+### Nested Schema for `service.volume`
+
+Required:
+
+- `type` (String) The type of the volume.
+
+Optional:
+
+- `bind` (Block Set) The bind of the volume. (see [below for nested schema](#nestedblock--service--volume--bind))
+- `read_only` (Boolean) Whether the volume is read only.
+- `source` (String) The source of the volume.
+- `target` (String) The target of the volume.
+
+<a id="nestedblock--service--volume--bind"></a>
+### Nested Schema for `service.volume.bind`
+
+Optional:
+
+- `create_host_path` (Boolean) Whether to create the host path.
+- `propagation` (String) The propagation of the bind.
+- `selinux` (String) The selinux of the bind.
+
+
+
 
 <a id="nestedblock--volume"></a>
 ### Nested Schema for `volume`
 
-Optional:
+Required:
 
 - `name` (String) The name of the volume.
+
+Optional:
+
+- `driver` (String) The driver of the volume.
+- `driver_opts` (Map of String) The driver options of the volume.
+- `external` (Boolean) Whether the volume is external.
+- `labels` (Map of String) The labels of the volume.

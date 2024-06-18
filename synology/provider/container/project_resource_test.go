@@ -105,6 +105,7 @@ const (
 			volume {
 				source = "/volume1/docker/k3s"
 				target = "/output"
+				type   = "bind"
 		  }
 		}
 	}`
