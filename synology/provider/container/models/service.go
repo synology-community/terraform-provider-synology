@@ -53,15 +53,43 @@ type HealthCheck struct {
 	Retries       types.Number         `tfsdk:"retries"`
 }
 
+type VolumeBind struct {
+	Propagation    types.String `tfsdk:"propagation"`
+	CreateHostPath types.Bool   `tfsdk:"create_host_path"`
+	SELinux        types.String `tfsdk:"selinux"`
+}
+
+type ServiceVolume struct {
+	Source   types.String `tfsdk:"source"`
+	Target   types.String `tfsdk:"target"`
+	ReadOnly types.Bool   `tfsdk:"read_only"`
+	Bind     types.Set    `tfsdk:"bind"`
+	Type     types.String `tfsdk:"type"`
+}
+
+type Ulimit struct {
+	Name  types.String `tfsdk:"name"`
+	Value types.Int64  `tfsdk:"single"`
+	Soft  types.Int64  `tfsdk:"soft"`
+	Hard  types.Int64  `tfsdk:"hard"`
+}
+
 type Service struct {
 	Name        types.String `tfsdk:"name"`
 	Image       types.Set    `tfsdk:"image"`
+	Command     types.List   `tfsdk:"command"`
 	Replicas    types.Int64  `tfsdk:"replicas"`
 	Logging     types.Set    `tfsdk:"logging"`
 	Ports       types.Set    `tfsdk:"port"`
 	Networks    types.Set    `tfsdk:"network"`
 	NetworkMode types.String `tfsdk:"network_mode"`
 	HealthCheck types.Set    `tfsdk:"health_check"`
+	Volumes     types.Set    `tfsdk:"volume"`
+	Privileged  types.Bool   `tfsdk:"privileged"`
+	Tmpfs       types.List   `tfsdk:"tmpfs"`
+	Ulimits     types.Set    `tfsdk:"ulimit"`
+	Environment types.Map    `tfsdk:"environment"`
+	Restart     types.String `tfsdk:"restart"`
 }
 
 func (m Service) ModelType() attr.Type {
@@ -80,6 +108,8 @@ func (m Service) AttrType() map[string]attr.Type {
 				},
 			},
 		},
+		"command":      types.ListType{ElemType: types.StringType},
+		"restart":      types.StringType, // "no", "always", "on-failure", "unless-stopped", "always", "unless-stopped", "on-failure", "no
 		"network_mode": types.StringType,
 		"replicas":     types.Int64Type,
 		"port": types.SetType{
@@ -99,13 +129,15 @@ func (m Service) AttrType() map[string]attr.Type {
 			ElemType: types.ObjectType{
 				AttrTypes: map[string]attr.Type{
 					"test":     types.ListType{ElemType: types.StringType},
-					"interval": types.StringType,
-					"timeout":  types.StringType,
+					"interval": timetypes.GoDurationType{},
+					"timeout":  timetypes.GoDurationType{},
 					"retries":  types.Int64Type,
-					"start":    types.StringType,
+					"start":    timetypes.GoDurationType{},
 				},
 			},
 		},
+		"privileged": types.BoolType,
+		"tmpfs":      types.ListType{ElemType: types.StringType},
 		"network": types.SetType{
 			ElemType: types.ObjectType{
 				AttrTypes: map[string]attr.Type{
@@ -120,6 +152,15 @@ func (m Service) AttrType() map[string]attr.Type {
 				},
 			},
 		},
+		"ulimits": types.MapType{
+			ElemType: types.ObjectType{
+				AttrTypes: map[string]attr.Type{
+					"single": types.Int64Type,
+					"soft":   types.Int64Type,
+					"hard":   types.Int64Type,
+				},
+			},
+		},
 		"logging": types.SetType{
 			ElemType: types.ObjectType{
 				AttrTypes: map[string]attr.Type{
@@ -130,6 +171,26 @@ func (m Service) AttrType() map[string]attr.Type {
 				},
 			},
 		},
+		"volume": types.SetType{
+			ElemType: types.ObjectType{
+				AttrTypes: map[string]attr.Type{
+					"source":    types.StringType,
+					"target":    types.StringType,
+					"read_only": types.BoolType,
+					"type":      types.StringType,
+					"bind": types.SetType{
+						ElemType: types.ObjectType{
+							AttrTypes: map[string]attr.Type{
+								"propagation":      types.StringType,
+								"create_host_path": types.BoolType,
+								"selinux":          types.StringType,
+							},
+						},
+					},
+				},
+			},
+		},
+		"environment": types.MapType{ElemType: types.StringType},
 	}
 }
 
@@ -137,9 +198,14 @@ func (m Service) Value() attr.Value {
 
 	var logging basetypes.SetValue
 	var image basetypes.SetValue
+	var commands basetypes.ListValue
 	var ports basetypes.SetValue
 	var networks basetypes.SetValue
 	var health_check basetypes.SetValue
+	var volumes basetypes.SetValue
+	var tmpfs basetypes.ListValue
+	var ulimits basetypes.SetValue
+	var environment basetypes.MapValue
 
 	if l, diag := m.Logging.ToSetValue(context.Background()); !diag.HasError() {
 		logging = l
@@ -147,6 +213,10 @@ func (m Service) Value() attr.Value {
 
 	if i, diag := m.Image.ToSetValue(context.Background()); !diag.HasError() {
 		image = i
+	}
+
+	if c, diag := m.Command.ToListValue(context.Background()); !diag.HasError() {
+		commands = c
 	}
 
 	if p, diag := m.Ports.ToSetValue(context.Background()); !diag.HasError() {
@@ -161,15 +231,38 @@ func (m Service) Value() attr.Value {
 		health_check = hc
 	}
 
+	if v, diag := m.Volumes.ToSetValue(context.Background()); !diag.HasError() {
+		volumes = v
+	}
+
+	if t, diag := m.Tmpfs.ToListValue(context.Background()); !diag.HasError() {
+		tmpfs = t
+	}
+
+	if u, diag := m.Ulimits.ToSetValue(context.Background()); !diag.HasError() {
+		ulimits = u
+	}
+
+	if e, diag := m.Environment.ToMapValue(context.Background()); !diag.HasError() {
+		environment = e
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"name":         types.StringValue(m.Name.ValueString()),
 		"image":        image,
+		"command":      commands,
 		"replicas":     types.Int64Value(m.Replicas.ValueInt64()),
 		"port":         ports,
 		"network":      networks,
 		"logging":      logging,
 		"network_mode": types.StringValue(m.NetworkMode.ValueString()),
 		"health_check": health_check,
+		"volume":       volumes,
+		"privileged":   types.BoolValue(m.Privileged.ValueBool()),
+		"tmpfs":        tmpfs,
+		"ulimit":       ulimits,
+		"environment":  environment,
+		"restart":      types.StringValue(m.Restart.ValueString()),
 	})
 }
 
@@ -187,6 +280,32 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 			opts := map[string]string{}
 			if diag := logging[0].Options.ElementsAs(context.Background(), &opts, true); !diag.HasError() {
 				service.Logging.Options = opts
+			}
+		}
+	}
+
+	if !m.Volumes.IsNull() && !m.Volumes.IsUnknown() {
+		volumes := []ServiceVolume{}
+		if diag := m.Volumes.ElementsAs(context.Background(), &volumes, true); !diag.HasError() {
+			service.Volumes = []composetypes.ServiceVolumeConfig{}
+			for _, v := range volumes {
+				volume := composetypes.ServiceVolumeConfig{
+					Source:   v.Source.ValueString(),
+					Target:   v.Target.ValueString(),
+					ReadOnly: v.ReadOnly.ValueBool(),
+				}
+				if !v.Bind.IsNull() && !v.Bind.IsUnknown() {
+					binds := []VolumeBind{}
+					if diag := v.Bind.ElementsAs(context.Background(), &binds, true); !diag.HasError() {
+						bind := binds[0]
+						volume.Bind = &composetypes.ServiceVolumeBind{
+							Propagation:    bind.Propagation.ValueString(),
+							CreateHostPath: bind.CreateHostPath.ValueBool(),
+							SELinux:        bind.SELinux.ValueString(),
+						}
+					}
+				}
+				service.Volumes = append(service.Volumes, volume)
 			}
 		}
 	}
@@ -257,6 +376,13 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 		}
 	}
 
+	if !m.Command.IsNull() && !m.Command.IsUnknown() {
+		commands := []string{}
+		if diag := m.Command.ElementsAs(context.Background(), &commands, true); !diag.HasError() {
+			service.Command = commands
+		}
+	}
+
 	if !m.Ports.IsNull() && !m.Ports.IsUnknown() {
 		ports := []Port{}
 		if diag := m.Ports.ElementsAs(context.Background(), &ports, true); !diag.HasError() {
@@ -319,6 +445,58 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				service.Networks[n.Name.ValueString()] = &network
 			}
 		}
+	}
+
+	if !m.Privileged.IsNull() && !m.Privileged.IsUnknown() {
+		service.Privileged = m.Privileged.ValueBool()
+	}
+
+	if !m.Tmpfs.IsNull() && !m.Tmpfs.IsUnknown() {
+		tmpfs := []string{}
+		if diag := m.Tmpfs.ElementsAs(context.Background(), &tmpfs, true); !diag.HasError() {
+			service.Tmpfs = tmpfs
+		}
+	}
+
+	if !m.Ulimits.IsNull() && !m.Ulimits.IsUnknown() {
+		ulimits := []Ulimit{}
+		if diag := m.Ulimits.ElementsAs(context.Background(), &ulimits, true); !diag.HasError() {
+			service.Ulimits = map[string]*composetypes.UlimitsConfig{}
+			for _, v := range ulimits {
+				ulimit := composetypes.UlimitsConfig{}
+				if !v.Hard.IsNull() && !v.Hard.IsUnknown() {
+					ulimit.Hard = int(v.Hard.ValueInt64())
+				}
+				if !v.Soft.IsNull() && !v.Soft.IsUnknown() {
+					ulimit.Soft = int(v.Soft.ValueInt64())
+				}
+				if !v.Value.IsNull() && !v.Value.IsUnknown() {
+					ulimit.Single = int(v.Value.ValueInt64())
+				}
+				k := v.Name.ValueString()
+				service.Ulimits[k] = &ulimit
+			}
+		}
+	}
+
+	ptr := func(s string) *string {
+		return &s
+	}
+
+	if !m.Environment.IsNull() && !m.Environment.IsUnknown() {
+		if service.Environment == nil {
+			service.Environment = map[string]*string{}
+		}
+		environment := map[string]string{}
+		if diag := m.Environment.ElementsAs(context.Background(), &environment, true); !diag.HasError() {
+			for k, v := range environment {
+				service.Environment[k] = ptr(v)
+			}
+		}
+	}
+
+	if !m.Restart.IsNull() && !m.Restart.IsUnknown() {
+		service.Restart = m.Restart.ValueString()
 	}
 
 	service.Name = sName

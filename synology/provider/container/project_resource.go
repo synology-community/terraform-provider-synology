@@ -46,17 +46,7 @@ type ProjectResourceModel struct {
 	// Environment  types.MapType  `tfsdk:"environment"`
 }
 
-// Create implements resource.Resource.
-func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ProjectResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
+func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, error) {
 	project := composetypes.Project{}
 
 	if !data.Services.IsNull() && !data.Services.IsUnknown() {
@@ -65,13 +55,10 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		diags := data.Services.ElementsAs(ctx, &elements, true)
 
 		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-			return
+			return "", fmt.Errorf("Failed to read services")
 		}
 
-		if project.Services == nil {
-			project.Services = make(map[string]composetypes.ServiceConfig)
-		}
+		project.Services = map[string]composetypes.ServiceConfig{}
 
 		for _, v := range elements {
 
@@ -87,27 +74,66 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		diags := data.Networks.ElementsAs(ctx, &elements, true)
 
 		if diags.HasError() {
-			resp.Diagnostics.AddError("Failed to read networks", "Unable to read networks")
-			return
+			return "", fmt.Errorf("Failed to read networks")
 		}
 
-		if project.Networks == nil {
-			project.Networks = make(map[string]composetypes.NetworkConfig)
-		}
+		project.Networks = map[string]composetypes.NetworkConfig{}
 
 		for _, v := range elements {
 			n := composetypes.NetworkConfig{}
 
-			resp.Diagnostics.Append(v.AsComposeConfig(ctx, &n)...)
-			if resp.Diagnostics.HasError() {
-				return
+			diags := v.AsComposeConfig(ctx, &n)
+			if diags.HasError() {
+				return "", fmt.Errorf("Failed to read networks")
 			}
 
 			project.Networks[n.Name] = n
 		}
 	}
 
+	if !data.Volumes.IsNull() && !data.Volumes.IsUnknown() {
+
+		elements := []models.Volume{}
+		diags := data.Volumes.ElementsAs(ctx, &elements, true)
+
+		if diags.HasError() {
+			return "", fmt.Errorf("Failed to read volumes")
+		}
+
+		project.Volumes = map[string]composetypes.VolumeConfig{}
+
+		for _, v := range elements {
+			n := composetypes.VolumeConfig{}
+
+			diags := v.AsComposeConfig(ctx, &n)
+			if diags.HasError() {
+				return "", fmt.Errorf("Failed to read volumes")
+			}
+
+			project.Volumes[n.Name] = n
+		}
+	}
+
 	projectYAML, err := project.MarshalYAML()
+	if err != nil {
+		return "", fmt.Errorf("Failed to unmarshal docker-compose.yml")
+	}
+
+	return string(projectYAML), nil
+}
+
+// Create implements resource.Resource.
+func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data ProjectResourceModel
+
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	projectYAML, err := getProjectYaml(ctx, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
 		return
@@ -117,7 +143,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
 		Name:                  data.Name.ValueString(),
-		Content:               string(projectYAML),
+		Content:               projectYAML,
 		SharePath:             fmt.Sprintf("/projects/%s", data.Name.ValueString()),
 		ServicePortalName:     "",
 		ServicePortalPort:     0,
@@ -159,14 +185,14 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 
 		if status == "RUNNING" {
-			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStopStreamRequest{
+			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
 				ID: data.ID.ValueString(),
 			})
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to stop project", err.Error())
 				return
 			}
-			_, err = f.client.ProjectCleanStream(ctx, docker.ProjectCleanStreamRequest{
+			_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
 				ID: data.ID.ValueString(),
 			})
 			if err != nil {
@@ -177,7 +203,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:      data.ID.ValueString(),
-			Content: string(projectYAML),
+			Content: projectYAML,
 		})
 
 		if err != nil {
@@ -228,6 +254,53 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	projectYAML, err := getProjectYaml(ctx, data)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
+		return
+	}
+
+	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
+		ID: data.ID.ValueString(),
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		return
+	}
+
+	if proj.Status == "RUNNING" {
+		_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+			ID: data.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to stop project", err.Error())
+			return
+		}
+	}
+
+	_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
+		ID: data.ID.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to clean project", err.Error())
+		return
+	}
+
+	_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+		ID:      data.ID.ValueString(),
+		Content: projectYAML,
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update project", err.Error())
+		return
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -272,9 +345,32 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The number of replicas.",
 							Optional:            true,
 						},
+						"command": schema.ListAttribute{
+							MarkdownDescription: "The command of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"restart": schema.StringAttribute{
+							MarkdownDescription: "The restart policy.",
+							Optional:            true,
+						},
 						"network_mode": schema.StringAttribute{
 							MarkdownDescription: "The network mode.",
 							Optional:            true,
+						},
+						"privileged": schema.BoolAttribute{
+							MarkdownDescription: "Whether the service is privileged.",
+							Optional:            true,
+						},
+						"tmpfs": schema.ListAttribute{
+							MarkdownDescription: "The tmpfs of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"environment": schema.MapAttribute{
+							MarkdownDescription: "The environment of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
 						},
 					},
 					Blocks: map[string]schema.Block{
@@ -412,7 +508,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 										Optional:            true,
 										CustomType:          timetypes.GoDurationType{},
 									},
-									"retries": schema.Int64Attribute{
+									"retries": schema.NumberAttribute{
 										MarkdownDescription: "Number of retries.",
 										Optional:            true,
 									},
@@ -427,6 +523,77 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 										CustomType:          timetypes.GoDurationType{},
 									},
 								},
+							},
+						},
+						"volume": schema.SetNestedBlock{
+							MarkdownDescription: "The volumes of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the volume.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the volume.",
+										Optional:            true,
+									},
+									"read_only": schema.BoolAttribute{
+										MarkdownDescription: "Whether the volume is read only.",
+										Optional:            true,
+									},
+									"type": schema.StringAttribute{
+										MarkdownDescription: "The type of the volume.",
+										Required:            true,
+									},
+								},
+								Blocks: map[string]schema.Block{
+									"bind": schema.SetNestedBlock{
+										MarkdownDescription: "The bind of the volume.",
+										NestedObject: schema.NestedBlockObject{
+											Attributes: map[string]schema.Attribute{
+												"propagation": schema.StringAttribute{
+													MarkdownDescription: "The propagation of the bind.",
+													Optional:            true,
+												},
+												"create_host_path": schema.BoolAttribute{
+													MarkdownDescription: "Whether to create the host path.",
+													Optional:            true,
+												},
+												"selinux": schema.StringAttribute{
+													MarkdownDescription: "The selinux of the bind.",
+													Optional:            true,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"ulimit": schema.SetNestedBlock{
+							MarkdownDescription: "The ulimits of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the ulimit.",
+										Required:            true,
+									},
+									"value": schema.Int64Attribute{
+										MarkdownDescription: "The value of the ulimit.",
+										Optional:            true,
+									},
+									"soft": schema.Int64Attribute{
+										MarkdownDescription: "The soft of the ulimit.",
+										Optional:            true,
+									},
+									"hard": schema.Int64Attribute{
+										MarkdownDescription: "The hard of the ulimit.",
+										Optional:            true,
+									},
+								},
+								// Validators: []validator.Object{
+								// 	objectvalidator.ConflictsWith(path.MatchRelative().AtName("value"), path.MatchRelative().AtName("soft")),
+								// 	objectvalidator.ConflictsWith(path.MatchRelative().AtName("value"), path.MatchRelative().AtName("hard")),
+								// },
 							},
 						},
 					},

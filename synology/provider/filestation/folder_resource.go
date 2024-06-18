@@ -2,54 +2,121 @@ package filestation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/filestation"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var (
-	_ resource.Resource = &FolderResource{}
-)
+var _ resource.Resource = &FolderResource{}
 
 func NewFolderResource() resource.Resource {
 	return &FolderResource{}
 }
 
 type FolderResource struct {
-	client client.Api
+	client filestation.Api
 }
 
 // FolderResourceModel describes the resource data model.
 type FolderResourceModel struct {
-	ConfigurableAttribute types.String `tfsdk:"configurable_attribute"`
-	Defaulted             types.String `tfsdk:"defaulted"`
-	Id                    types.String `tfsdk:"id"`
+	Name          types.String `tfsdk:"name"`
+	Path          types.String `tfsdk:"path"`
+	CreateParents types.Bool   `tfsdk:"create_parents"`
 }
 
 // Create implements resource.Resource.
-func (f *FolderResource) Create(context.Context, resource.CreateRequest, *resource.CreateResponse) {
-	panic("unimplemented")
+func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data FolderResourceModel
+
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	createParents := data.CreateParents.ValueBool()
+	path := data.Path.ValueString()
+	name := data.Name.ValueString()
+
+	flist, err := f.client.CreateFolder(ctx, []string{path}, []string{name}, createParents)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create folder", fmt.Sprintf("Failed to create folder, got error: %s", err))
+		return
+	}
+
+	if flist == nil {
+		resp.Diagnostics.AddError("Failed to create folder", fmt.Sprintf("Failed to create folder, got error: %s", err))
+		return
+	}
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Delete implements resource.Resource.
 func (f *FolderResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	panic("unimplemented")
+	var data FolderResourceModel
+	// Read Terraform configuration data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	path := data.Path.ValueString()
+	// Start Delete the file
+	_, err := f.client.Delete(ctx, []string{path}, true)
+
+	if err != nil {
+		if e := errors.Unwrap(err); e != nil {
+			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", e))
+		} else {
+			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
+		}
+		return
+	}
 }
 
 // Read implements resource.Resource.
 func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	panic("unimplemented")
+	var data FolderResourceModel
+
+	// Read Terraform configuration data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	path := data.Path.ValueString()
+	basedir := filepath.Dir(path)
+
+	files, err := f.client.List(ctx, basedir)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		return
+	}
+	found := false
+	for _, file := range files.Files {
+		if file.IsDir && file.Path == path {
+			found = true
+		}
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
+	}
 }
 
 // Update implements resource.Resource.
 func (f *FolderResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	panic("unimplemented")
+	// var data FolderResourceModel
+
+	// // Read Terraform configuration data into the model
+	// resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	// // Save data into Terraform state
+	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Metadata implements resource.Resource.
@@ -60,46 +127,22 @@ func (f *FolderResource) Metadata(_ context.Context, req resource.MetadataReques
 // Schema implements resource.Resource.
 func (f *FolderResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages a folder in the Synology FileStation.",
+		MarkdownDescription: "A file on the Synology NAS Folderstation.",
 
 		Attributes: map[string]schema.Attribute{
-			"iterations": schema.Int64Attribute{
-				MarkdownDescription: "Number of iterations.",
-				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(100000),
-			},
-			"format": schema.StringAttribute{
-				MarkdownDescription: "Output format; will additionally be base64 encoded.",
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("{{ printf \"%s:%s\" (b64enc .Salt) (b64enc .Key) }}"),
-			},
-			"password": schema.StringAttribute{
-				MarkdownDescription: "The password input to encrypt.",
+			"name": schema.StringAttribute{
+				MarkdownDescription: "The name of the folder to be created.",
 				Required:            true,
-				Sensitive:           true,
 			},
-			"hash_algorithm": schema.StringAttribute{
-				MarkdownDescription: "The hash function to use.",
+			"path": schema.StringAttribute{
+				MarkdownDescription: "A destination folder path starting with a shared folder to which files can be uploaded.",
+				Required:            true,
+			},
+			"create_parents": schema.BoolAttribute{
+				MarkdownDescription: "If true, create parent directories if they do not exist.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("sha256"),
-			},
-			"salt": schema.StringAttribute{
-				MarkdownDescription: "The generated salt value.",
-				Computed:            true,
-				Sensitive:           true,
-			},
-			"key": schema.StringAttribute{
-				MarkdownDescription: "The generated key value.",
-				Computed:            true,
-				Sensitive:           true,
-			},
-			"result": schema.StringAttribute{
-				MarkdownDescription: "The formatted key result.",
-				Computed:            true,
-				Sensitive:           true,
+				Default:             booldefault.StaticBool(true),
 			},
 		},
 	}
@@ -122,5 +165,5 @@ func (f *FolderResource) Configure(ctx context.Context, req resource.ConfigureRe
 		return
 	}
 
-	f.client = client
+	f.client = client.FileStationAPI()
 }
