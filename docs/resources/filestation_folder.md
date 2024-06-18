@@ -22,3 +22,7 @@ A file on the Synology NAS Folderstation.
 ### Optional
 
 - `create_parents` (Boolean) If true, create parent directories if they do not exist.
+
+### Read-Only
+
+- `real_path` (String) The real path of the folder.

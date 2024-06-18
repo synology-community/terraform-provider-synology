@@ -41,19 +41,23 @@ resource "synology_container_project" "foo" {
 ### Required
 
 - `name` (String) The name of the project.
+- `share_path` (String) The share path of the project.
 
 ### Optional
 
+- `build` (Boolean) Whether to build the project.
 - `config` (Block Set) (see [below for nested schema](#nestedblock--config))
 - `extension` (Block Set) (see [below for nested schema](#nestedblock--extension))
 - `network` (Block Set) (see [below for nested schema](#nestedblock--network))
 - `secret` (Block Set) (see [below for nested schema](#nestedblock--secret))
 - `service` (Block Set) (see [below for nested schema](#nestedblock--service))
+- `service_portal` (Block Set) (see [below for nested schema](#nestedblock--service_portal))
 - `volume` (Block Set) (see [below for nested schema](#nestedblock--volume))
 
 ### Read-Only
 
 - `id` (String) The ID of the guest.
+- `state` (String) The state of the project.
 
 <a id="nestedblock--config"></a>
 ### Nested Schema for `config`
@@ -105,10 +109,12 @@ Optional:
 Optional:
 
 - `command` (List of String) The command of the service.
+- `config` (Block Set) The configs of the service. (see [below for nested schema](#nestedblock--service--config))
 - `environment` (Map of String) The environment of the service.
 - `health_check` (Block Set) Health check configuration. (see [below for nested schema](#nestedblock--service--health_check))
 - `image` (Block Set) The image of the service. (see [below for nested schema](#nestedblock--service--image))
 - `logging` (Block Set) Logging configuration for the docker service. (see [below for nested schema](#nestedblock--service--logging))
+- `mem_limit` (String) The memory limit.
 - `name` (String) The name of the service.
 - `network` (Block Set) The networks of the service. (see [below for nested schema](#nestedblock--service--network))
 - `network_mode` (String) The network mode.
@@ -119,6 +125,18 @@ Optional:
 - `tmpfs` (List of String) The tmpfs of the service.
 - `ulimit` (Block Set) The ulimits of the service. (see [below for nested schema](#nestedblock--service--ulimit))
 - `volume` (Block Set) The volumes of the service. (see [below for nested schema](#nestedblock--service--volume))
+
+<a id="nestedblock--service--config"></a>
+### Nested Schema for `service.config`
+
+Optional:
+
+- `gid` (String) The GID of the config.
+- `mode` (String) The mode of the config.
+- `source` (String) The source of the config.
+- `target` (String) The target of the config.
+- `uid` (String) The UID of the config.
+
 
 <a id="nestedblock--service--health_check"></a>
 ### Nested Schema for `service.health_check`
@@ -222,6 +240,17 @@ Optional:
 - `selinux` (String) The selinux of the bind.
 
 
+
+
+<a id="nestedblock--service_portal"></a>
+### Nested Schema for `service_portal`
+
+Optional:
+
+- `enable` (Boolean) Whether to enable the service portal.
+- `name` (String) The name of the service portal.
+- `port` (Number) The port of the service portal.
+- `protocol` (String) The protocol of the service portal.
 
 
 <a id="nestedblock--volume"></a>

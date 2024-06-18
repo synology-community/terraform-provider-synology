@@ -27,7 +27,8 @@ A file on the Synology NAS Filestation.
 
 ### Read-Only
 
-- `access_time` (Number) The time the file was last accessed.
-- `change_time` (Number) The time the file was last changed.
-- `create_time` (Number) The time the file was created.
-- `modified_time` (Number) The time the file was last modified.
+- `access_time` (String) The time the file was last accessed.
+- `change_time` (String) The time the file was last changed.
+- `create_time` (String) The time the file was created.
+- `modified_time` (String) The time the file was last modified.
+- `real_path` (String) The real path of the folder.
