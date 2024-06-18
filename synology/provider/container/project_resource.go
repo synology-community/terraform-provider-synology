@@ -862,6 +862,33 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								// },
 							},
 						},
+						"config": schema.SetNestedBlock{
+							MarkdownDescription: "The configs of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the config.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the config.",
+										Optional:            true,
+									},
+									"uid": schema.StringAttribute{
+										MarkdownDescription: "The UID of the config.",
+										Optional:            true,
+									},
+									"gid": schema.StringAttribute{
+										MarkdownDescription: "The GID of the config.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the config.",
+										Optional:            true,
+									},
+								},
+							},
+						},
 					},
 				},
 			},

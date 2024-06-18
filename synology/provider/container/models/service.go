@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/docker/go-units"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
@@ -61,6 +62,14 @@ type VolumeBind struct {
 	SELinux        types.String `tfsdk:"selinux"`
 }
 
+type ServiceConfig struct {
+	Source types.String `tfsdk:"source"`
+	Target types.String `tfsdk:"target"`
+	UID    types.String `tfsdk:"uid"`
+	GID    types.String `tfsdk:"gid"`
+	Mode   types.String `tfsdk:"mode"`
+}
+
 type ServiceVolume struct {
 	Source   types.String `tfsdk:"source"`
 	Target   types.String `tfsdk:"target"`
@@ -93,6 +102,7 @@ type Service struct {
 	Ulimits     types.Set    `tfsdk:"ulimit"`
 	Environment types.Map    `tfsdk:"environment"`
 	Restart     types.String `tfsdk:"restart"`
+	Configs     types.Set    `tfsdk:"config"`
 }
 
 func (m Service) ModelType() attr.Type {
@@ -209,6 +219,7 @@ func (m Service) Value() attr.Value {
 	var tmpfs basetypes.ListValue
 	var ulimits basetypes.SetValue
 	var environment basetypes.MapValue
+	var configs basetypes.SetValue
 
 	if l, diag := m.Logging.ToSetValue(context.Background()); !diag.HasError() {
 		logging = l
@@ -250,6 +261,10 @@ func (m Service) Value() attr.Value {
 		environment = e
 	}
 
+	if c, diag := m.Configs.ToSetValue(context.Background()); !diag.HasError() {
+		configs = c
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"name":         types.StringValue(m.Name.ValueString()),
 		"image":        image,
@@ -266,6 +281,7 @@ func (m Service) Value() attr.Value {
 		"ulimit":       ulimits,
 		"environment":  environment,
 		"restart":      types.StringValue(m.Restart.ValueString()),
+		"config":       configs,
 	})
 }
 
@@ -319,6 +335,32 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 					}
 				}
 				service.Volumes = append(service.Volumes, volume)
+			}
+		}
+	}
+
+	if !m.Configs.IsNull() && !m.Configs.IsUnknown() {
+		configs := []ServiceConfig{}
+		if diag := m.Configs.ElementsAs(context.Background(), &configs, true); !diag.HasError() {
+			service.Configs = []composetypes.ServiceConfigObjConfig{}
+			for _, c := range configs {
+				cfg := composetypes.ServiceConfigObjConfig{
+					Source: c.Source.ValueString(),
+					Target: c.Target.ValueString(),
+					UID:    c.UID.ValueString(),
+					GID:    c.GID.ValueString(),
+				}
+				if !c.Mode.IsNull() && !c.Mode.IsUnknown() {
+					mode, err := strconv.ParseUint(c.Mode.ValueString(), 10, 32)
+
+					if err != nil {
+						log.Printf("error parsing mode: %v", err)
+					} else {
+						mode32 := uint32(mode)
+						cfg.Mode = &mode32
+					}
+				}
+				service.Configs = append(service.Configs, cfg)
 			}
 		}
 	}
