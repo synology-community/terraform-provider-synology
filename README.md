@@ -16,8 +16,8 @@ The following example shows how to use `synology_api` to manage machine learning
 ```hcl
 terraform {
   required_providers {
-    azapi = {
-      source  = "Azure/azapi"
+    synology = {
+      source  = "synology-community/synology"
     }
   }
 }
