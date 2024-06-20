@@ -3,22 +3,31 @@ package container
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api/core"
 	"github.com/synology-community/go-synology/pkg/api/docker"
+	"github.com/synology-community/go-synology/pkg/api/filestation"
+	"github.com/synology-community/go-synology/pkg/util/form"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
@@ -31,14 +40,9 @@ func NewProjectResource() resource.Resource {
 }
 
 type ProjectResource struct {
-	client docker.Api
-}
-
-type ServicePortalModel struct {
-	Enable   types.Bool   `tfsdk:"enable"`
-	Name     types.String `tfsdk:"name"`
-	Port     types.Int64  `tfsdk:"port"`
-	Protocol types.String `tfsdk:"protocol"`
+	client     docker.Api
+	fsClient   filestation.Api
+	coreClient core.Api
 }
 
 // ProjectResourceModel describes the resource data model.
@@ -52,12 +56,18 @@ type ProjectResourceModel struct {
 	Secrets       types.Set    `tfsdk:"secret"`
 	Configs       types.Set    `tfsdk:"config"`
 	Extensions    types.Set    `tfsdk:"extension"`
-	Build         types.Bool   `tfsdk:"build"`
+	Run           types.Bool   `tfsdk:"run"`
 	State         types.String `tfsdk:"state"`
 	ServicePortal types.Set    `tfsdk:"service_portal"`
 	// ComposeFiles types.ListType `tfsdk:"compose_files"`
 	// Environment  types.MapType  `tfsdk:"environment"`
 }
+
+const projectDescription = `A Docker Compose project for the Container Manager Synology API.
+
+> **Note:** Synology creates a shared folder for each project. The shared folder is created in the ` + "`/projects`" + ` directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the ` + "`/volume1/projects`" + ` directory on the Synology NAS.
+
+`
 
 func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, error) {
 	project := composetypes.Project{}
@@ -158,6 +168,78 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 	return string(projectYAML), nil
 }
 
+func projectExists(err error) bool {
+	errs, ok := err.(*multierror.Error)
+	if !ok {
+		return false
+	}
+
+	for _, e := range errs.Errors {
+		if e.Error() == "api response error code 2102: Project already exists" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath string) error {
+	folderParts := strings.Split(sharePath, "/")
+	plen := len(folderParts)
+
+	if plen < 2 {
+		return fmt.Errorf("Invalid share path: %s", sharePath)
+	}
+
+	folderName := folderParts[plen-1]
+	folderPath := strings.Join(folderParts[:plen-1], "/")
+	share := folderParts[1]
+
+	shares, err := f.coreClient.ShareList(ctx)
+	if err != nil {
+		return err
+	}
+
+	i := slices.IndexFunc(shares.Shares, func(s core.Share) bool {
+		return s.Name == share
+	})
+
+	if i == -1 {
+		volresp, err := f.coreClient.VolumeList(ctx)
+		if err != nil {
+			return err
+		}
+
+		vol := volresp.Volumes[0]
+
+		volPath := vol.VolumePath
+
+		err = f.coreClient.ShareCreate(ctx, core.ShareInfo{
+			Name:    share,
+			VolPath: volPath,
+		})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = f.fsClient.Get(ctx, sharePath)
+	if err != nil {
+		switch err.(type) {
+		case filestation.FileNotFoundError:
+			_, err = f.fsClient.CreateFolder(ctx, []string{folderPath}, []string{folderName}, true)
+			if err != nil {
+				return err
+			}
+		default:
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Create implements resource.Resource.
 func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data ProjectResourceModel
@@ -169,86 +251,96 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	if data.SharePath.IsNull() || data.SharePath.IsUnknown() {
+		data.SharePath = types.StringValue(fmt.Sprintf("/projects/%s", data.Name.ValueString()))
+	}
+
+	err := f.ensureProjectShare(ctx, data.SharePath.ValueString())
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create project share", err.Error())
+		return
+	}
+
+	// Set the file values where content is specified
+	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
+		elements := []models.Config{}
+		resp.Diagnostics.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		changed := false
+		for i, v := range elements {
+			if !v.Content.IsNull() || !v.Content.IsUnknown() {
+				fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
+				fileContent := v.Content.ValueString()
+				v.File = types.StringValue(fileName)
+				elements[i] = v
+				changed = true
+
+				// Upload the file
+				_, err := f.fsClient.Upload(
+					ctx,
+					data.SharePath.ValueString(),
+					form.File{
+						Name:    fileName,
+						Content: fileContent,
+					}, false,
+					true)
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+					return
+				}
+			}
+		}
+		if changed {
+			var elementValues []attr.Value
+			for _, v := range elements {
+				elementValues = append(elementValues, v.Value())
+			}
+			data.Configs = types.SetValueMust(models.Config{}.ModelType(), elementValues)
+		}
+	}
+
 	projectYAML, err := getProjectYaml(ctx, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
 		return
 	}
 
-	enableServicePortal := new(bool)
-	servicePortalName := ""
-	servicePortalPort := new(int64)
-	servicePortalProtocol := ""
-
-	if !data.ServicePortal.IsNull() && !data.ServicePortal.IsUnknown() {
-		elements := []ServicePortalModel{}
-		resp.Diagnostics.Append(data.ServicePortal.ElementsAs(ctx, &elements, true)...)
-
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		if len(elements) > 0 {
-			enableServicePortal = elements[0].Enable.ValueBoolPointer()
-			servicePortalName = elements[0].Name.ValueString()
-			servicePortalPort = elements[0].Port.ValueInt64Pointer()
-			servicePortalProtocol = elements[0].Protocol.ValueString()
-		}
-	}
-
-	var sharePath string
-
-	if !data.SharePath.IsNull() && !data.SharePath.IsUnknown() {
-		sharePath = data.SharePath.ValueString()
-	} else {
-		sharePath = fmt.Sprintf("/projects/%s", data.Name.ValueString())
-	}
+	servicePortal := models.ServicePortal{}
+	resp.Diagnostics.Append(servicePortal.First(ctx, data.ServicePortal)...)
 
 	shouldUpdate := false
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
 		Name:                  data.Name.ValueString(),
 		Content:               projectYAML,
-		SharePath:             sharePath,
-		EnableServicePortal:   enableServicePortal,
-		ServicePortalName:     servicePortalName,
-		ServicePortalPort:     servicePortalPort,
-		ServicePortalProtocol: servicePortalProtocol,
+		SharePath:             data.SharePath.ValueString(),
+		EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+		ServicePortalName:     servicePortal.Name.ValueString(),
+		ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+		ServicePortalProtocol: servicePortal.Protocol.ValueString(),
 	})
 
 	if err != nil {
-		errs, ok := err.(*multierror.Error)
-		if !ok {
-			resp.Diagnostics.AddError("Failed to create project", err.Error())
-			return
-		}
-
-		if errs.Errors[0].Error() == "api response error code 2102: Project already exists" {
+		if projectExists(err) {
 			shouldUpdate = true
 		} else {
-			for _, e := range errs.Errors {
-				resp.Diagnostics.AddError("Failed to create project", e.Error())
-			}
+			resp.Diagnostics.AddError("Failed to create project", err.Error())
 			return
 		}
 	}
 
 	if shouldUpdate {
-		status := ""
-
-		listResult, err := f.client.ProjectList(ctx, docker.ProjectListRequest{})
+		p, err := f.client.ProjectGetByName(ctx, data.Name.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to list projects", err.Error())
+			resp.Diagnostics.AddError("Failed to get project", err.Error())
 			return
 		}
 
-		for k, p := range *listResult {
-			if p.Name == data.Name.ValueString() {
-				status = p.Status
-				data.ID = types.StringValue(k)
-				break
-			}
-		}
+		data.ID = types.StringValue(p.ID)
+		status := p.Status
 
 		if status == "RUNNING" {
 			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
@@ -270,10 +362,10 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:                    data.ID.ValueString(),
 			Content:               projectYAML,
-			EnableServicePortal:   enableServicePortal,
-			ServicePortalName:     servicePortalName,
-			ServicePortalPort:     servicePortalPort,
-			ServicePortalProtocol: servicePortalProtocol,
+			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+			ServicePortalName:     servicePortal.Name.ValueString(),
+			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+			ServicePortalProtocol: servicePortal.Protocol.ValueString(),
 		})
 
 		if err != nil {
@@ -285,7 +377,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		data.ID = types.StringValue(res.ID)
 	}
 
-	if !data.Build.IsNull() && !data.Build.IsUnknown() && data.Build.ValueBool() {
+	if !data.Run.IsNull() && !data.Run.IsUnknown() && data.Run.ValueBool() {
 		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 			ID: data.ID.ValueString(),
 		})
@@ -296,9 +388,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
-		ID: data.ID.ValueString(),
-	})
+	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get project", err.Error())
@@ -321,9 +411,7 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
-		ID: data.ID.ValueString(),
-	})
+	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get project", err.Error())
@@ -373,138 +461,189 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
-		ID: data.ID.ValueString(),
-	})
+	id := data.ID.ValueString()
+
+	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
-		emessage := err.Error()
-		projects, err := f.client.ProjectList(ctx, docker.ProjectListRequest{})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to list projects", err.Error())
-			return
-		}
-		found := false
-		for k, p := range *projects {
-			if p.Name == data.Name.ValueString() {
-				data.ID = types.StringValue(k)
-				found = true
+		if proj, err = f.client.ProjectGetByName(ctx, data.Name.ValueString()); err != nil {
+			switch err.(type) {
+			case docker.ProjectNotFoundError:
+				resp.State.RemoveResource(ctx)
+				return
+			default:
+				resp.Diagnostics.AddError("Failed to get project", err.Error())
+				return
 			}
+		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(proj.ID))...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			id = proj.ID
 		}
-		if !found {
-			resp.State.RemoveResource(ctx)
-			return
-		}
-		resp.Diagnostics.AddError("Failed to get project", emessage)
-		return
 	}
 
-	data.State = types.StringValue(proj.Status)
-
-	if proj.Status != "RUNNING" && data.Build.ValueBool() {
+	if !proj.IsRunning() && data.Run.ValueBool() {
 		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
-			ID: data.ID.ValueString(),
+			ID: id,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to build project", err.Error())
 			return
 		}
+		proj, err = f.client.ProjectGet(ctx, id)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get project", err.Error())
+			return
+		}
 	}
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	if data.State.ValueString() != proj.Status {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("state"), types.StringValue(proj.Status))...)
+	}
 }
 
 // Update implements resource.Resource.
 func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ProjectResourceModel
+	var plan, state ProjectResourceModel
 
 	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	enableServicePortal := new(bool)
-	servicePortalName := ""
-	servicePortalPort := new(int64)
-	servicePortalProtocol := ""
+	var servicesChanged, configChanged bool
 
-	if !data.ServicePortal.IsNull() && !data.ServicePortal.IsUnknown() {
-		elements := []ServicePortalModel{}
-		resp.Diagnostics.Append(data.ServicePortal.ElementsAs(ctx, &elements, true)...)
+	if !reflect.DeepEqual(plan.Services, state.Services) {
+		servicesChanged = true
+	}
 
-		if resp.Diagnostics.HasError() {
+	if !reflect.DeepEqual(plan.Configs, state.Configs) {
+		configChanged = true
+	}
+
+	if !servicesChanged && !configChanged {
+		tflog.Info(ctx, "No changes detected in services or configs, skipping update")
+		return
+	}
+
+	servicePortal := models.ServicePortal{}
+	resp.Diagnostics.Append(servicePortal.First(ctx, plan.ServicePortal)...)
+
+	if configChanged {
+		// Set the file values where content is specified
+		if !plan.Configs.IsNull() && !plan.Configs.IsUnknown() {
+			elements := []models.Config{}
+			stateElements := []models.Config{}
+			resp.Diagnostics.Append(plan.Configs.ElementsAs(ctx, &elements, true)...)
+			resp.Diagnostics.Append(state.Configs.ElementsAs(ctx, &stateElements, true)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			changed := false
+			for i, v := range elements {
+				if !(v.Content.IsNull() || v.Content.IsUnknown()) {
+					fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
+					fileContent := v.Content.ValueString()
+					v.File = types.StringValue(fileName)
+					elements[i] = v
+					changed = true
+
+					// Upload the file
+					_, err := f.fsClient.Upload(
+						ctx,
+						plan.SharePath.ValueString(),
+						form.File{
+							Name:    fileName,
+							Content: fileContent,
+						}, false,
+						true)
+					if err != nil {
+						resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+						return
+					}
+				} else {
+					if len(stateElements) != len(elements) {
+						servicesChanged = true
+					} else {
+						sv := stateElements[i]
+						if sv.File.ValueString() != v.File.ValueString() {
+							servicesChanged = true
+						}
+					}
+				}
+			}
+			if changed {
+				var elementValues []attr.Value
+				for _, v := range elements {
+					elementValues = append(elementValues, v.Value())
+				}
+				plan.Configs = types.SetValueMust(models.Config{}.ModelType(), elementValues)
+			}
+		}
+	}
+
+	if servicesChanged {
+		projectYAML, err := getProjectYaml(ctx, plan)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
 			return
 		}
 
-		if len(elements) > 0 {
-			enableServicePortal = elements[0].Enable.ValueBoolPointer()
-			servicePortalName = elements[0].Name.ValueString()
-			servicePortalPort = elements[0].Port.ValueInt64Pointer()
-			servicePortalProtocol = elements[0].Protocol.ValueString()
+		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get project", err.Error())
+			return
 		}
-	}
 
-	projectYAML, err := getProjectYaml(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
-		return
-	}
+		if proj.Content == projectYAML {
+			tflog.Info(ctx, "No changes detected in project, skipping update")
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("state"), types.StringValue(proj.Status))...)
+			return
 
-	proj, err := f.client.ProjectGet(ctx, docker.ProjectGetRequest{
-		ID: data.ID.ValueString(),
-	})
+		}
 
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to get project", err.Error())
-		return
-	}
+		if proj.IsRunning() {
+			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+				ID: plan.ID.ValueString(),
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to stop project", err.Error())
+				return
+			}
+		}
 
-	if proj.Content == projectYAML {
-		tflog.Info(ctx, "No changes detected in project, skipping update")
-		data.State = types.StringValue(proj.Status)
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-		return
-
-	}
-
-	if proj.Status == "RUNNING" {
-		_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
-			ID: data.ID.ValueString(),
+		_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
 		})
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to stop project", err.Error())
+			resp.Diagnostics.AddError("Failed to clean project", err.Error())
+			return
+		}
+
+		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+			ID:                    plan.ID.ValueString(),
+			Content:               projectYAML,
+			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+			ServicePortalName:     servicePortal.Name.ValueString(),
+			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+			ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+		})
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update project", err.Error())
 			return
 		}
 	}
 
-	_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
-		ID: data.ID.ValueString(),
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to clean project", err.Error())
-		return
-	}
-
-	_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-		ID:                    data.ID.ValueString(),
-		Content:               projectYAML,
-		EnableServicePortal:   enableServicePortal,
-		ServicePortalName:     servicePortalName,
-		ServicePortalPort:     servicePortalPort,
-		ServicePortalProtocol: servicePortalProtocol,
-	})
-
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to update project", err.Error())
-		return
-	}
-
-	if !data.Build.IsNull() && !data.Build.IsUnknown() && data.Build.ValueBool() {
-		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
-			ID: data.ID.ValueString(),
+	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
+		_, err := f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
 		})
 
 		if err != nil {
@@ -513,19 +652,17 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
-	proj, err = f.client.ProjectGet(ctx, docker.ProjectGetRequest{
-		ID: data.ID.ValueString(),
-	})
+	proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get project", err.Error())
 		return
 	}
 
-	data.State = types.StringValue(proj.Status)
+	plan.State = types.StringValue(proj.Status)
 
 	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Metadata implements resource.Resource.
@@ -536,11 +673,11 @@ func (f *ProjectResource) Metadata(_ context.Context, req resource.MetadataReque
 // Schema implements resource.Resource.
 func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A Docker Compose project for the Container Manager Synology API.",
+		MarkdownDescription: projectDescription,
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the guest.",
+				MarkdownDescription: "The ID of the project.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -552,13 +689,20 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"share_path": schema.StringAttribute{
 				MarkdownDescription: "The share path of the project.",
-				Required:            true,
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Computed: true,
 			},
-			"build": schema.BoolAttribute{
-				MarkdownDescription: "Whether to build the project.",
+			"run": schema.BoolAttribute{
+				MarkdownDescription: "Whether to run the project.",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"state": schema.StringAttribute{
 				MarkdownDescription: "The state of the project.",
@@ -572,6 +716,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		},
 		Blocks: map[string]schema.Block{
 			"service_portal": schema.SetNestedBlock{
+				MarkdownDescription: "Synology Web Station configuration for the docker compose project.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"enable": schema.BoolAttribute{
@@ -597,6 +742,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"service": schema.SetNestedBlock{
+				MarkdownDescription: "Docker compose services.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -893,6 +1039,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"network": schema.SetNestedBlock{
+				MarkdownDescription: "Docker compose networks.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -936,6 +1083,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"volume": schema.SetNestedBlock{
+				MarkdownDescription: "Docker compose volumes.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -964,6 +1112,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"secret": schema.SetNestedBlock{
+				MarkdownDescription: "Docker compose secrets.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -974,6 +1123,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"config": schema.SetNestedBlock{
+				MarkdownDescription: "Docker compose configs.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -983,10 +1133,18 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 						"content": schema.StringAttribute{
 							MarkdownDescription: "The content of the config.",
 							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"file": schema.StringAttribute{
 							MarkdownDescription: "The file of the config.",
 							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 					},
 				},
@@ -1023,4 +1181,6 @@ func (f *ProjectResource) Configure(ctx context.Context, req resource.ConfigureR
 	}
 
 	f.client = client.DockerAPI()
+	f.fsClient = client.FileStationAPI()
+	f.coreClient = client.CoreAPI()
 }

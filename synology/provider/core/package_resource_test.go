@@ -22,11 +22,23 @@ func TestAccPackageResource_basic(t *testing.T) {
 		// 		name = "exFAT-Free"
 		// 	}`,
 		// },
+		// {
+		// 	"package name is set",
+		// 	`
+		// 	resource "synology_core_package" "foo" {
+		// 		name = "transmission"
+		// 	}`,
+		// },
 		{
-			"package name is set",
+			"mariadb",
 			`
-			resource "synology_core_package" "foo" {
-				name = "transmission"
+			resource "synology_core_package" "mariadb" {
+				name = "MariaDB10"
+
+				wizard = {
+					pkgwizard_port              = 3306
+					pkgwizard_new_root_password = "T3stP@ssw0rd"
+				}
 			}`,
 		},
 	}
