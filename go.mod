@@ -14,6 +14,7 @@ require (
 	github.com/hashicorp/terraform-plugin-testing v1.8.0
 	github.com/kdomanski/iso9660 v0.4.0
 	github.com/synology-community/go-synology v0.1.4
+	github.com/tredoe/osutil v1.5.0
 )
 
 require (

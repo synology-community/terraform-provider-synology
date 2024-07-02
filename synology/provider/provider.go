@@ -144,7 +144,7 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 
 	var resp []func() resource.Resource
 
-	resp = append(resp, NewApiResource)
+	resp = append(resp, NewApiResource, NewPasswordResource)
 	resp = append(resp, core.Resources()...)
 	resp = append(resp, filestation.Resources()...)
 	resp = append(resp, virtualization.Resources()...)
@@ -168,6 +168,7 @@ func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.
 func (p *SynologyProvider) Functions(ctx context.Context) []func() function.Function {
 	return []func() function.Function{
 		NewISOFunction,
+		NewMkPasswdFunction,
 	}
 }
 

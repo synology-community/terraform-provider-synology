@@ -34,7 +34,8 @@ type GuestResource struct {
 }
 
 type GuestIsoModel struct {
-	ID types.String `tfsdk:"image_id"`
+	ID   types.String `tfsdk:"image_id"`
+	Boot types.Bool   `tfsdk:"boot"`
 }
 
 // GuestResourceModel describes the resource data model.
@@ -152,6 +153,10 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							MarkdownDescription: "Image ID for the iso.",
 							Required:            true,
 						},
+						"boot": schema.BoolAttribute{
+							MarkdownDescription: "Boot from this iso.",
+							Optional:            true,
+						},
 					},
 				},
 			},
@@ -188,7 +193,11 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
-		for i, v := range elements {
+		for _, v := range elements {
+			i := 1
+			if !v.Boot.IsNull() && !v.Boot.IsUnknown() && v.Boot.ValueBool() {
+				i = 0
+			}
 			isoImages[i] = v.ID.ValueString()
 		}
 	}
@@ -370,7 +379,17 @@ func (f *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			return
 		}
 
-		for i, v := range elements {
+		if len(elements) > 2 {
+			resp.Diagnostics.AddError("iso length", "iso length must not be greater than 2")
+			return
+		}
+
+		for _, v := range elements {
+			i := 1
+			if !v.Boot.IsNull() && !v.Boot.IsUnknown() && v.Boot.ValueBool() {
+				i = 0
+			}
+
 			isoImages[i] = v.ID.ValueString()
 		}
 	}

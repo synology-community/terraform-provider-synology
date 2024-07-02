@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/appkins/terraform-provider-synology/synology/util"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -299,4 +300,28 @@ func (f *CloudInitResource) Configure(ctx context.Context, req resource.Configur
 	}
 
 	f.client = client.FileStationAPI()
+}
+
+func (f *CloudInitResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	p := req.ID
+	basedir := filepath.Dir(p)
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("path"), p)...)
+
+	files, err := f.client.List(ctx, basedir)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		return
+	}
+	for _, file := range files.Files {
+		if file.Path == p {
+			tflog.Info(ctx, fmt.Sprintf("File found: %s", file.Path))
+
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("modified_time"), file.Additional.Time.Mtime.Unix())...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("access_time"), file.Additional.Time.Atime.Unix())...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("change_time"), file.Additional.Time.Ctime.Unix())...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("create_time"), file.Additional.Time.Crtime.Unix())...)
+			continue
+		}
+	}
 }
