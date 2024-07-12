@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -69,23 +70,28 @@ const projectDescription = `A Docker Compose project for the Container Manager S
 
 `
 
-func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, error) {
+func getProjectYaml(ctx context.Context, data ProjectResourceModel, projYaml *string) (diags diag.Diagnostics) {
+	diags = []diag.Diagnostic{}
 	project := composetypes.Project{}
 
 	if !data.Services.IsNull() && !data.Services.IsUnknown() {
 
 		elements := []models.Service{}
-		diags := data.Services.ElementsAs(ctx, &elements, true)
+		diags.Append(data.Services.ElementsAs(ctx, &elements, true)...)
 
 		if diags.HasError() {
-			return "", fmt.Errorf("Failed to read services")
+			return
 		}
 
 		project.Services = map[string]composetypes.ServiceConfig{}
 
 		for _, v := range elements {
 
-			service := v.AsComposeServiceConfig()
+			service := composetypes.ServiceConfig{}
+			diags.Append(v.AsComposeConfig(ctx, &service)...)
+			if diags.HasError() {
+				return
+			}
 
 			project.Services[service.Name] = service
 		}
@@ -94,10 +100,10 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
 
 		elements := []models.Network{}
-		diags := data.Networks.ElementsAs(ctx, &elements, true)
+		diags.Append(data.Networks.ElementsAs(ctx, &elements, true)...)
 
 		if diags.HasError() {
-			return "", fmt.Errorf("Failed to read networks")
+			return
 		}
 
 		project.Networks = map[string]composetypes.NetworkConfig{}
@@ -105,9 +111,9 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 		for _, v := range elements {
 			n := composetypes.NetworkConfig{}
 
-			diags := v.AsComposeConfig(ctx, &n)
+			diags.Append(v.AsComposeConfig(ctx, &n)...)
 			if diags.HasError() {
-				return "", fmt.Errorf("Failed to read networks")
+				return
 			}
 
 			project.Networks[n.Name] = n
@@ -117,10 +123,10 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 	if !data.Volumes.IsNull() && !data.Volumes.IsUnknown() {
 
 		elements := []models.Volume{}
-		diags := data.Volumes.ElementsAs(ctx, &elements, true)
+		diags.Append(data.Volumes.ElementsAs(ctx, &elements, true)...)
 
 		if diags.HasError() {
-			return "", fmt.Errorf("Failed to read volumes")
+			return
 		}
 
 		project.Volumes = map[string]composetypes.VolumeConfig{}
@@ -128,9 +134,9 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 		for _, v := range elements {
 			n := composetypes.VolumeConfig{}
 
-			diags := v.AsComposeConfig(ctx, &n)
+			diags.Append(v.AsComposeConfig(ctx, &n)...)
 			if diags.HasError() {
-				return "", fmt.Errorf("Failed to read volumes")
+				return
 			}
 
 			project.Volumes[n.Name] = n
@@ -140,10 +146,10 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
 
 		elements := []models.Config{}
-		diags := data.Configs.ElementsAs(ctx, &elements, true)
+		diags.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
 
 		if diags.HasError() {
-			return "", fmt.Errorf("Failed to read configs")
+			return
 		}
 
 		project.Configs = map[string]composetypes.ConfigObjConfig{}
@@ -151,9 +157,9 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 		for _, v := range elements {
 			n := composetypes.ConfigObjConfig{}
 
-			diags := v.AsComposeConfig(ctx, &n)
+			diags.Append(v.AsComposeConfig(ctx, &n)...)
 			if diags.HasError() {
-				return "", fmt.Errorf("Failed to read configs")
+				return
 			}
 
 			project.Configs[n.Name] = n
@@ -162,10 +168,13 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel) (string, err
 
 	projectYAML, err := project.MarshalYAML()
 	if err != nil {
-		return "", fmt.Errorf("Failed to unmarshal docker-compose.yml")
+		diags.Append(diag.NewErrorDiagnostic("Failed to marshal docker-compose.yml", err.Error()))
+		return
 	}
+	pyaml := string(projectYAML)
+	*projYaml = pyaml
 
-	return string(projectYAML), nil
+	return
 }
 
 func projectExists(err error) bool {
@@ -302,9 +311,9 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	projectYAML, err := getProjectYaml(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
+	projectYAML := ""
+	resp.Diagnostics.Append(getProjectYaml(ctx, data, &projectYAML)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -588,9 +597,9 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	if servicesChanged {
-		projectYAML, err := getProjectYaml(ctx, plan)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to unmarshal docker-compose.yml", err.Error())
+		projectYAML := ""
+		resp.Diagnostics.Append(getProjectYaml(ctx, plan, &projectYAML)...)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 
@@ -749,6 +758,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The name of the service.",
 							Optional:            true,
 						},
+						"container_name": schema.StringAttribute{
+							MarkdownDescription: "The container name.",
+							Optional:            true,
+						},
 						"replicas": schema.Int64Attribute{
 							MarkdownDescription: "The number of replicas.",
 							Optional:            true,
@@ -779,8 +792,23 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
+						"security_opt": schema.ListAttribute{
+							MarkdownDescription: "The security options of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
 						"environment": schema.MapAttribute{
 							MarkdownDescription: "The environment of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"labels": schema.MapAttribute{
+							MarkdownDescription: "The labels of the network.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"dns": schema.ListAttribute{
+							MarkdownDescription: "The DNS of the service.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
@@ -838,6 +866,29 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 									},
 									"host_ip": schema.StringAttribute{
 										MarkdownDescription: "The host IP of the port.",
+										Optional:            true,
+									},
+								},
+							},
+						},
+						"depends_on": schema.SetNestedBlock{
+							MarkdownDescription: "The dependencies of the service.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the dependency.",
+										Required:            true,
+									},
+									"condition": schema.StringAttribute{
+										MarkdownDescription: "The condition of the dependency.",
+										Optional:            true,
+									},
+									"restart": schema.BoolAttribute{
+										MarkdownDescription: "Whether to restart.",
+										Optional:            true,
+									},
+									"required": schema.BoolAttribute{
+										MarkdownDescription: "Whether the dependency is required.",
 										Optional:            true,
 									},
 								},
@@ -1078,6 +1129,45 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 						"enable_ipv6": schema.BoolAttribute{
 							MarkdownDescription: "Whether to enable IPv6.",
 							Optional:            true,
+						},
+					},
+					Blocks: map[string]schema.Block{
+						"ipam": schema.SetNestedBlock{
+							MarkdownDescription: "The IPAM of the network.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"driver": schema.StringAttribute{
+										MarkdownDescription: "The driver of the IPAM.",
+										Optional:            true,
+									},
+								},
+								Blocks: map[string]schema.Block{
+									"config": schema.SetNestedBlock{
+										MarkdownDescription: "The config of the IPAM.",
+										NestedObject: schema.NestedBlockObject{
+											Attributes: map[string]schema.Attribute{
+												"subnet": schema.StringAttribute{
+													MarkdownDescription: "The subnet of the config.",
+													Optional:            true,
+												},
+												"ip_range": schema.StringAttribute{
+													MarkdownDescription: "The IP range of the config.",
+													Optional:            true,
+												},
+												"gateway": schema.StringAttribute{
+													MarkdownDescription: "The gateway of the config.",
+													Optional:            true,
+												},
+												"aux_address": schema.MapAttribute{
+													MarkdownDescription: "The aux addresses of the config.",
+													Optional:            true,
+													ElementType:         types.StringType,
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},

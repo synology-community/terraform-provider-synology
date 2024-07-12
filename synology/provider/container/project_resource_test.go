@@ -9,6 +9,57 @@ import (
 )
 
 const (
+	testProject = `
+	resource "synology_container_project" "foo" {
+		name = "foo"
+
+		network {
+			name   = "foo"
+			driver = "bridge"
+		}
+
+		network {
+			name   = "bar"
+			driver = "macvlan"
+			driver_opts = {
+				"parent" = "ovs_bond0"
+			}
+			ipam {
+				driver = "macvlan"
+				config {
+					subnet  = "10.0.0.0/16"
+					gateway = "10.0.0.1"
+					ip_range = "10.0.60.1/28"
+					aux_address = {
+						host = "10.0.60.2"
+					}
+				}
+			}
+		}
+
+		service {
+			name     = "bar"
+			replicas = 1
+
+			image {
+				name = "nginx"
+			}
+
+			logging {
+				driver = "json-file"
+			}
+
+			port {
+				target    = 80
+				published = "8557"
+				protocol  = "tcp"
+			}
+
+			network {
+				name = "foo"
+			}
+		}
+	}`
 	homebridgeProject = `
 	resource "synology_container_project" "foo" {
 		name = "homebridge"
@@ -119,9 +170,13 @@ func TestAccProjectResource_basic(t *testing.T) {
 		ResourceBlock string
 	}{
 		{
-			"k3s project",
-			k3sProject,
+			"foo",
+			testProject,
 		},
+		// {
+		// 	"k3s project",
+		// 	k3sProject,
+		// },
 		// {
 		// 	"homebridge project",
 		// 	homebridgeProject,
@@ -171,7 +226,7 @@ func TestAccProjectResource_basic(t *testing.T) {
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
 							r.TestCheckResourceAttrWith("synology_container_project.foo", "name", func(attr string) error {
-								if attr != "homebridge" {
+								if attr != tt.Name {
 									return fmt.Errorf("expected project name to be 'homebridge', got %s", attr)
 								}
 								return nil

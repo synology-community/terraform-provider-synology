@@ -69,6 +69,10 @@ Required:
 
 - `image_id` (String) Image ID for the iso.
 
+Optional:
+
+- `boot` (Boolean) Boot from this iso.
+
 
 <a id="nestedblock--network"></a>
 ### Nested Schema for `network`

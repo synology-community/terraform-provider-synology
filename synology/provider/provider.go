@@ -29,6 +29,7 @@ const (
 	SYNOLOGY_HOST_ENV_VAR            = "SYNOLOGY_HOST"
 	SYNOLOGY_USER_ENV_VAR            = "SYNOLOGY_USER"
 	SYNOLOGY_PASSWORD_ENV_VAR        = "SYNOLOGY_PASSWORD"
+	SYNOLOGY_OTP_SECRET_ENV_VAR      = "SYNOLOGY_OTP_SECRET"
 	SYNOLOGY_SKIP_CERT_CHECK_ENV_VAR = "SYNOLOGY_SKIP_CERT_CHECK"
 )
 
@@ -43,6 +44,7 @@ type SynologyProviderModel struct {
 	Host          types.String `tfsdk:"host"`
 	User          types.String `tfsdk:"user"`
 	Password      types.String `tfsdk:"password"`
+	OtpSecret     types.String `tfsdk:"otp_secret"`
 	SkipCertCheck types.Bool   `tfsdk:"skip_cert_check"`
 }
 
@@ -68,6 +70,11 @@ func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaReques
 				Optional:    true,
 				Sensitive:   true,
 			},
+			"otp_secret": schema.StringAttribute{
+				Description: "OTP secret to use when connecting to Synology station.",
+				Optional:    true,
+				Sensitive:   true,
+			},
 			"skip_cert_check": schema.BoolAttribute{
 				Description: "Whether to skip SSL certificate checks.",
 				Optional:    true,
@@ -84,17 +91,28 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 	host := data.Host.ValueString()
-	if v := os.Getenv(SYNOLOGY_HOST_ENV_VAR); v != "" {
-		host = v
+	if host == "" {
+		if v := os.Getenv(SYNOLOGY_HOST_ENV_VAR); v != "" {
+			host = v
+		}
 	}
-
 	user := data.User.ValueString()
-	if v := os.Getenv(SYNOLOGY_USER_ENV_VAR); v != "" {
-		user = v
+	if user == "" {
+		if v := os.Getenv(SYNOLOGY_USER_ENV_VAR); v != "" {
+			user = v
+		}
 	}
 	password := data.Password.ValueString()
-	if v := os.Getenv(SYNOLOGY_PASSWORD_ENV_VAR); v != "" {
-		password = v
+	if password == "" {
+		if v := os.Getenv(SYNOLOGY_PASSWORD_ENV_VAR); v != "" {
+			password = v
+		}
+	}
+	otp_secret := data.OtpSecret.ValueString()
+	if otp_secret == "" {
+		if v := os.Getenv(SYNOLOGY_OTP_SECRET_ENV_VAR); v != "" {
+			otp_secret = v
+		}
 	}
 
 	skipCertificateCheck := data.SkipCertCheck.ValueBool()
@@ -122,6 +140,11 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 			"invalid provider configuration",
 			"password information is not provided"))
 	}
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Example client configuration for data sources and resources
 	c, err := client.New(api.Options{
 		Host:       host,
@@ -132,7 +155,7 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
 
-	if _, err := c.Login(ctx, user, password); err != nil {
+	if _, err := c.Login(ctx, user, password, otp_secret); err != nil {
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
 	}
 

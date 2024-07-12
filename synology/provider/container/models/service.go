@@ -9,6 +9,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
@@ -85,24 +86,36 @@ type Ulimit struct {
 	Hard  types.Int64  `tfsdk:"hard"`
 }
 
+type ServiceDependency struct {
+	Name      types.String `tfsdk:"name"`
+	Condition types.String `tfsdk:"condition"`
+	Restart   types.Bool   `tfsdk:"restart"`
+	Required  types.Bool   `tfsdk:"required"`
+}
+
 type Service struct {
-	Name        types.String `tfsdk:"name"`
-	Image       types.Set    `tfsdk:"image"`
-	MemLimit    types.String `tfsdk:"mem_limit"`
-	Command     types.List   `tfsdk:"command"`
-	Replicas    types.Int64  `tfsdk:"replicas"`
-	Logging     types.Set    `tfsdk:"logging"`
-	Ports       types.Set    `tfsdk:"port"`
-	Networks    types.Set    `tfsdk:"network"`
-	NetworkMode types.String `tfsdk:"network_mode"`
-	HealthCheck types.Set    `tfsdk:"health_check"`
-	Volumes     types.Set    `tfsdk:"volume"`
-	Privileged  types.Bool   `tfsdk:"privileged"`
-	Tmpfs       types.List   `tfsdk:"tmpfs"`
-	Ulimits     types.Set    `tfsdk:"ulimit"`
-	Environment types.Map    `tfsdk:"environment"`
-	Restart     types.String `tfsdk:"restart"`
-	Configs     types.Set    `tfsdk:"config"`
+	Name          types.String `tfsdk:"name"`
+	ContainerName types.String `tfsdk:"container_name"`
+	Image         types.Set    `tfsdk:"image"`
+	MemLimit      types.String `tfsdk:"mem_limit"`
+	Command       types.List   `tfsdk:"command"`
+	Replicas      types.Int64  `tfsdk:"replicas"`
+	Logging       types.Set    `tfsdk:"logging"`
+	Ports         types.Set    `tfsdk:"port"`
+	Networks      types.Set    `tfsdk:"network"`
+	NetworkMode   types.String `tfsdk:"network_mode"`
+	HealthCheck   types.Set    `tfsdk:"health_check"`
+	SecurityOpt   types.List   `tfsdk:"security_opt"`
+	Volumes       types.Set    `tfsdk:"volume"`
+	Dependencies  types.Set    `tfsdk:"depends_on"`
+	Privileged    types.Bool   `tfsdk:"privileged"`
+	Tmpfs         types.List   `tfsdk:"tmpfs"`
+	Ulimits       types.Set    `tfsdk:"ulimit"`
+	Environment   types.Map    `tfsdk:"environment"`
+	Restart       types.String `tfsdk:"restart"`
+	Configs       types.Set    `tfsdk:"config"`
+	Labels        types.Map    `tfsdk:"labels"`
+	DNS           types.List   `tfsdk:"dns"`
 }
 
 func (m Service) ModelType() attr.Type {
@@ -149,8 +162,9 @@ func (m Service) AttrType() map[string]attr.Type {
 				},
 			},
 		},
-		"privileged": types.BoolType,
-		"tmpfs":      types.ListType{ElemType: types.StringType},
+		"privileged":   types.BoolType,
+		"security_opt": types.ListType{ElemType: types.StringType},
+		"tmpfs":        types.ListType{ElemType: types.StringType},
 		"network": types.SetType{
 			ElemType: types.ObjectType{
 				AttrTypes: map[string]attr.Type{
@@ -204,6 +218,7 @@ func (m Service) AttrType() map[string]attr.Type {
 			},
 		},
 		"environment": types.MapType{ElemType: types.StringType},
+		"dns":         types.ListType{ElemType: types.StringType},
 	}
 }
 
@@ -215,11 +230,19 @@ func (m Service) Value() attr.Value {
 	var ports basetypes.SetValue
 	var networks basetypes.SetValue
 	var health_check basetypes.SetValue
+	var dependencies basetypes.SetValue
 	var volumes basetypes.SetValue
 	var tmpfs basetypes.ListValue
 	var ulimits basetypes.SetValue
 	var environment basetypes.MapValue
 	var configs basetypes.SetValue
+	var labels basetypes.MapValue
+	var dns basetypes.ListValue
+	var securityOpt basetypes.ListValue
+
+	if s, diag := m.SecurityOpt.ToListValue(context.Background()); !diag.HasError() {
+		securityOpt = s
+	}
 
 	if l, diag := m.Logging.ToSetValue(context.Background()); !diag.HasError() {
 		logging = l
@@ -227,6 +250,10 @@ func (m Service) Value() attr.Value {
 
 	if i, diag := m.Image.ToSetValue(context.Background()); !diag.HasError() {
 		image = i
+	}
+
+	if d, diag := m.Dependencies.ToSetValue(context.Background()); !diag.HasError() {
+		dependencies = d
 	}
 
 	if c, diag := m.Command.ToListValue(context.Background()); !diag.HasError() {
@@ -261,34 +288,56 @@ func (m Service) Value() attr.Value {
 		environment = e
 	}
 
+	if l, diag := m.Labels.ToMapValue(context.Background()); !diag.HasError() {
+		labels = l
+	}
+
 	if c, diag := m.Configs.ToSetValue(context.Background()); !diag.HasError() {
 		configs = c
 	}
 
+	if d, diag := m.DNS.ToListValue(context.Background()); !diag.HasError() {
+		dns = d
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"name":         types.StringValue(m.Name.ValueString()),
-		"image":        image,
-		"command":      commands,
-		"replicas":     types.Int64Value(m.Replicas.ValueInt64()),
-		"port":         ports,
-		"network":      networks,
-		"logging":      logging,
-		"network_mode": types.StringValue(m.NetworkMode.ValueString()),
-		"health_check": health_check,
-		"volume":       volumes,
-		"privileged":   types.BoolValue(m.Privileged.ValueBool()),
-		"tmpfs":        tmpfs,
-		"ulimit":       ulimits,
-		"environment":  environment,
-		"restart":      types.StringValue(m.Restart.ValueString()),
-		"config":       configs,
+		"name":           types.StringValue(m.Name.ValueString()),
+		"container_name": types.StringValue(m.ContainerName.ValueString()),
+		"image":          image,
+		"command":        commands,
+		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
+		"port":           ports,
+		"network":        networks,
+		"logging":        logging,
+		"network_mode":   types.StringValue(m.NetworkMode.ValueString()),
+		"health_check":   health_check,
+		"security_opt":   securityOpt,
+		"depends_on":     dependencies,
+		"volume":         volumes,
+		"privileged":     types.BoolValue(m.Privileged.ValueBool()),
+		"tmpfs":          tmpfs,
+		"ulimit":         ulimits,
+		"environment":    environment,
+		"restart":        types.StringValue(m.Restart.ValueString()),
+		"config":         configs,
+		"labels":         labels,
+		"dns":            dns,
 	})
 }
 
-func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
-	service := composetypes.ServiceConfig{}
+func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.ServiceConfig) (d diag.Diagnostics) {
+	d = []diag.Diagnostic{}
 
 	sName := m.Name.ValueString()
+
+	if !m.SecurityOpt.IsNull() && !m.SecurityOpt.IsUnknown() {
+		securityOpts := []string{}
+		if diag := m.SecurityOpt.ElementsAs(ctx, &securityOpts, true); !diag.HasError() {
+			service.SecurityOpt = securityOpts
+		} else {
+			d = append(d, diag...)
+		}
+	}
 
 	if !m.MemLimit.IsNull() && !m.MemLimit.IsUnknown() {
 		b, err := units.RAMInBytes(m.MemLimit.ValueString())
@@ -302,19 +351,28 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 	if !m.Logging.IsNull() && !m.Logging.IsUnknown() {
 		service.Logging = &composetypes.LoggingConfig{}
 		logging := []Logging{}
-		if diag := m.Logging.ElementsAs(context.Background(), &logging, true); !diag.HasError() {
+		if diag := m.Logging.ElementsAs(ctx, &logging, true); !diag.HasError() {
 			service.Logging.Driver = logging[0].Driver.ValueString()
 
 			opts := map[string]string{}
-			if diag := logging[0].Options.ElementsAs(context.Background(), &opts, true); !diag.HasError() {
+			if diag := logging[0].Options.ElementsAs(ctx, &opts, true); !diag.HasError() {
 				service.Logging.Options = opts
 			}
 		}
 	}
 
+	if !m.DNS.IsNull() && !m.DNS.IsUnknown() {
+		dns := []string{}
+		if diag := m.DNS.ElementsAs(ctx, &dns, true); !diag.HasError() {
+			service.DNS = dns
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
 	if !m.Volumes.IsNull() && !m.Volumes.IsUnknown() {
 		volumes := []ServiceVolume{}
-		if diag := m.Volumes.ElementsAs(context.Background(), &volumes, true); !diag.HasError() {
+		if diag := m.Volumes.ElementsAs(ctx, &volumes, true); !diag.HasError() {
 			service.Volumes = []composetypes.ServiceVolumeConfig{}
 			for _, v := range volumes {
 				volume := composetypes.ServiceVolumeConfig{
@@ -325,23 +383,44 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				}
 				if !v.Bind.IsNull() && !v.Bind.IsUnknown() {
 					binds := []VolumeBind{}
-					if diag := v.Bind.ElementsAs(context.Background(), &binds, true); !diag.HasError() {
+					if diag := v.Bind.ElementsAs(ctx, &binds, true); !diag.HasError() {
 						bind := binds[0]
 						volume.Bind = &composetypes.ServiceVolumeBind{
 							Propagation:    bind.Propagation.ValueString(),
 							CreateHostPath: bind.CreateHostPath.ValueBool(),
 							SELinux:        bind.SELinux.ValueString(),
 						}
+					} else {
+						d = append(d, diag...)
 					}
 				}
 				service.Volumes = append(service.Volumes, volume)
 			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	if !m.Dependencies.IsNull() && !m.Dependencies.IsUnknown() {
+		dependencies := []ServiceDependency{}
+		if diag := m.Dependencies.ElementsAs(ctx, &dependencies, true); !diag.HasError() {
+			service.DependsOn = map[string]composetypes.ServiceDependency{}
+			for _, d := range dependencies {
+				dependency := composetypes.ServiceDependency{
+					Condition: d.Condition.ValueString(),
+					Restart:   d.Restart.ValueBool(),
+					Required:  d.Required.ValueBool(),
+				}
+				service.DependsOn[d.Name.ValueString()] = dependency
+			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
 	if !m.Configs.IsNull() && !m.Configs.IsUnknown() {
 		configs := []ServiceConfig{}
-		if diag := m.Configs.ElementsAs(context.Background(), &configs, true); !diag.HasError() {
+		if diag := m.Configs.ElementsAs(ctx, &configs, true); !diag.HasError() {
 			service.Configs = []composetypes.ServiceConfigObjConfig{}
 			for _, c := range configs {
 				cfg := composetypes.ServiceConfigObjConfig{
@@ -362,17 +441,19 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				}
 				service.Configs = append(service.Configs, cfg)
 			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
 	if !m.HealthCheck.IsNull() && !m.HealthCheck.IsUnknown() && len(m.HealthCheck.Elements()) == 1 {
 		service.HealthCheck = &composetypes.HealthCheckConfig{}
 		healthCheck := []HealthCheck{}
-		if diag := m.HealthCheck.ElementsAs(context.Background(), &healthCheck, true); !diag.HasError() {
+		if diag := m.HealthCheck.ElementsAs(ctx, &healthCheck, true); !diag.HasError() {
 			hc := healthCheck[0]
 			if !hc.Test.IsNull() || !hc.Test.IsUnknown() {
 				test := []string{}
-				if diag := hc.Test.ElementsAs(context.Background(), &test, true); !diag.HasError() {
+				if diag := hc.Test.ElementsAs(ctx, &test, true); !diag.HasError() {
 					service.HealthCheck.Test = test
 				}
 			}
@@ -408,12 +489,14 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				retries, _ := hc.Retries.ValueBigFloat().Uint64()
 				service.HealthCheck.Retries = &retries
 			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
 	if !m.Image.IsNull() && !m.Image.IsUnknown() {
 		image := []Image{}
-		if diag := m.Image.ElementsAs(context.Background(), &image, true); !diag.HasError() {
+		if diag := m.Image.ElementsAs(ctx, &image, true); !diag.HasError() {
 			i := image[0]
 			iName := i.Name.ValueString()
 			var iTag, iRepo string
@@ -428,19 +511,23 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				iTag = i.Tag.ValueString()
 			}
 			service.Image = fmt.Sprintf("%s/%s:%s", iRepo, iName, iTag)
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
 	if !m.Command.IsNull() && !m.Command.IsUnknown() {
 		commands := []string{}
-		if diag := m.Command.ElementsAs(context.Background(), &commands, true); !diag.HasError() {
+		if diag := m.Command.ElementsAs(ctx, &commands, true); !diag.HasError() {
 			service.Command = commands
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
 	if !m.Ports.IsNull() && !m.Ports.IsUnknown() {
 		ports := []Port{}
-		if diag := m.Ports.ElementsAs(context.Background(), &ports, true); !diag.HasError() {
+		if diag := m.Ports.ElementsAs(ctx, &ports, true); !diag.HasError() {
 			service.Ports = []composetypes.ServicePortConfig{}
 			for _, p := range ports {
 				port := composetypes.ServicePortConfig{
@@ -454,6 +541,8 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				}
 				service.Ports = append(service.Ports, port)
 			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
@@ -463,7 +552,7 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 
 	if !m.Networks.IsNull() && !m.Networks.IsUnknown() {
 		networks := []ServiceNetwork{}
-		if diag := m.Networks.ElementsAs(context.Background(), &networks, true); !diag.HasError() {
+		if diag := m.Networks.ElementsAs(ctx, &networks, true); !diag.HasError() {
 			service.Networks = map[string]*composetypes.ServiceNetworkConfig{}
 			for _, n := range networks {
 				network := composetypes.ServiceNetworkConfig{
@@ -478,27 +567,33 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 
 				if n.Aliases.IsNull() || n.Aliases.IsUnknown() {
 					aliases := []string{}
-					if diag := n.Aliases.ElementsAs(context.Background(), &aliases, true); !diag.HasError() {
+					if diag := n.Aliases.ElementsAs(ctx, &aliases, true); !diag.HasError() {
 						network.Aliases = aliases
 					}
 				}
 
 				if n.LinkLocalIPs.IsNull() || n.LinkLocalIPs.IsUnknown() {
 					linkLocalIPs := []string{}
-					if diag := n.LinkLocalIPs.ElementsAs(context.Background(), &linkLocalIPs, true); !diag.HasError() {
+					if diag := n.LinkLocalIPs.ElementsAs(ctx, &linkLocalIPs, true); !diag.HasError() {
 						network.LinkLocalIPs = linkLocalIPs
+					} else {
+						d = append(d, diag...)
 					}
 				}
 
 				if !n.DriverOpts.IsNull() && !n.DriverOpts.IsUnknown() {
 					driverOpts := map[string]string{}
-					if diag := n.DriverOpts.ElementsAs(context.Background(), &driverOpts, true); !diag.HasError() {
+					if diag := n.DriverOpts.ElementsAs(ctx, &driverOpts, true); !diag.HasError() {
 						network.DriverOpts = driverOpts
+					} else {
+						d = append(d, diag...)
 					}
 				}
 
 				service.Networks[n.Name.ValueString()] = &network
 			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
@@ -508,14 +603,16 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 
 	if !m.Tmpfs.IsNull() && !m.Tmpfs.IsUnknown() {
 		tmpfs := []string{}
-		if diag := m.Tmpfs.ElementsAs(context.Background(), &tmpfs, true); !diag.HasError() {
+		if diag := m.Tmpfs.ElementsAs(ctx, &tmpfs, true); !diag.HasError() {
 			service.Tmpfs = tmpfs
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
 	if !m.Ulimits.IsNull() && !m.Ulimits.IsUnknown() {
 		ulimits := []Ulimit{}
-		if diag := m.Ulimits.ElementsAs(context.Background(), &ulimits, true); !diag.HasError() {
+		if diag := m.Ulimits.ElementsAs(ctx, &ulimits, true); !diag.HasError() {
 			service.Ulimits = map[string]*composetypes.UlimitsConfig{}
 			for _, v := range ulimits {
 				ulimit := composetypes.UlimitsConfig{}
@@ -531,6 +628,8 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 				k := v.Name.ValueString()
 				service.Ulimits[k] = &ulimit
 			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
@@ -543,10 +642,26 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 			service.Environment = map[string]*string{}
 		}
 		environment := map[string]string{}
-		if diag := m.Environment.ElementsAs(context.Background(), &environment, true); !diag.HasError() {
+		if diag := m.Environment.ElementsAs(ctx, &environment, true); !diag.HasError() {
 			for k, v := range environment {
 				service.Environment[k] = ptr(v)
 			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	if !m.Labels.IsNull() && !m.Labels.IsUnknown() {
+		if service.Labels == nil {
+			service.Labels = map[string]string{}
+		}
+		labels := map[string]string{}
+		if diag := m.Labels.ElementsAs(ctx, &labels, true); !diag.HasError() {
+			for k, v := range labels {
+				service.Labels[k] = v
+			}
+		} else {
+			d = append(d, diag...)
 		}
 	}
 
@@ -554,6 +669,7 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 		service.Restart = m.Restart.ValueString()
 	}
 
+	service.ContainerName = m.ContainerName.ValueString()
 	service.Name = sName
 	replicas := m.Replicas.ValueInt64()
 	intReplicas := int(replicas)
@@ -561,5 +677,5 @@ func (m Service) AsComposeServiceConfig() composetypes.ServiceConfig {
 		Replicas: &intReplicas,
 	}
 
-	return service
+	return d
 }

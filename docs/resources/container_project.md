@@ -3,11 +3,14 @@ page_title: "Container: synology_container_project"
 subcategory: "Container"
 description: |-
   A Docker Compose project for the Container Manager Synology API.
+  Note: Synology creates a shared folder for each project. The shared folder is created in the /projects directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the /volume1/projects directory on the Synology NAS.
 ---
 
 # Container: Project (Resource)
 
 A Docker Compose project for the Container Manager Synology API.
+
+> **Note:** Synology creates a shared folder for each project. The shared folder is created in the `/projects` directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the `/volume1/projects` directory on the Synology NAS.
 
 ## Example Usage
 
@@ -41,22 +44,22 @@ resource "synology_container_project" "foo" {
 ### Required
 
 - `name` (String) The name of the project.
-- `share_path` (String) The share path of the project.
 
 ### Optional
 
-- `build` (Boolean) Whether to build the project.
-- `config` (Block Set) (see [below for nested schema](#nestedblock--config))
+- `config` (Block Set) Docker compose configs. (see [below for nested schema](#nestedblock--config))
 - `extension` (Block Set) (see [below for nested schema](#nestedblock--extension))
-- `network` (Block Set) (see [below for nested schema](#nestedblock--network))
-- `secret` (Block Set) (see [below for nested schema](#nestedblock--secret))
-- `service` (Block Set) (see [below for nested schema](#nestedblock--service))
-- `service_portal` (Block Set) (see [below for nested schema](#nestedblock--service_portal))
-- `volume` (Block Set) (see [below for nested schema](#nestedblock--volume))
+- `network` (Block Set) Docker compose networks. (see [below for nested schema](#nestedblock--network))
+- `run` (Boolean) Whether to run the project.
+- `secret` (Block Set) Docker compose secrets. (see [below for nested schema](#nestedblock--secret))
+- `service` (Block Set) Docker compose services. (see [below for nested schema](#nestedblock--service))
+- `service_portal` (Block Set) Synology Web Station configuration for the docker compose project. (see [below for nested schema](#nestedblock--service_portal))
+- `share_path` (String) The share path of the project.
+- `volume` (Block Set) Docker compose volumes. (see [below for nested schema](#nestedblock--volume))
 
 ### Read-Only
 
-- `id` (String) The ID of the guest.
+- `id` (String) The ID of the project.
 - `state` (String) The state of the project.
 
 <a id="nestedblock--config"></a>
@@ -91,8 +94,29 @@ Optional:
 - `enable_ipv6` (Boolean) Whether to enable IPv6.
 - `external` (Boolean) Whether the network is external.
 - `internal` (Boolean) Whether the network is internal.
+- `ipam` (Block Set) The IPAM of the network. (see [below for nested schema](#nestedblock--network--ipam))
 - `labels` (Map of String) The labels of the network.
 - `name` (String) The name of the network.
+
+<a id="nestedblock--network--ipam"></a>
+### Nested Schema for `network.ipam`
+
+Optional:
+
+- `config` (Block Set) The config of the IPAM. (see [below for nested schema](#nestedblock--network--ipam--config))
+- `driver` (String) The driver of the IPAM.
+
+<a id="nestedblock--network--ipam--config"></a>
+### Nested Schema for `network.ipam.config`
+
+Optional:
+
+- `aux_address` (Map of String) The aux addresses of the config.
+- `gateway` (String) The gateway of the config.
+- `ip_range` (String) The IP range of the config.
+- `subnet` (String) The subnet of the config.
+
+
 
 
 <a id="nestedblock--secret"></a>
@@ -110,9 +134,13 @@ Optional:
 
 - `command` (List of String) The command of the service.
 - `config` (Block Set) The configs of the service. (see [below for nested schema](#nestedblock--service--config))
+- `container_name` (String) The container name.
+- `depends_on` (Block Set) The dependencies of the service. (see [below for nested schema](#nestedblock--service--depends_on))
+- `dns` (List of String) The DNS of the service.
 - `environment` (Map of String) The environment of the service.
 - `health_check` (Block Set) Health check configuration. (see [below for nested schema](#nestedblock--service--health_check))
 - `image` (Block Set) The image of the service. (see [below for nested schema](#nestedblock--service--image))
+- `labels` (Map of String) The labels of the network.
 - `logging` (Block Set) Logging configuration for the docker service. (see [below for nested schema](#nestedblock--service--logging))
 - `mem_limit` (String) The memory limit.
 - `name` (String) The name of the service.
@@ -122,6 +150,7 @@ Optional:
 - `privileged` (Boolean) Whether the service is privileged.
 - `replicas` (Number) The number of replicas.
 - `restart` (String) The restart policy.
+- `security_opt` (List of String) The security options of the service.
 - `tmpfs` (List of String) The tmpfs of the service.
 - `ulimit` (Block Set) The ulimits of the service. (see [below for nested schema](#nestedblock--service--ulimit))
 - `volume` (Block Set) The volumes of the service. (see [below for nested schema](#nestedblock--service--volume))
@@ -136,6 +165,20 @@ Optional:
 - `source` (String) The source of the config.
 - `target` (String) The target of the config.
 - `uid` (String) The UID of the config.
+
+
+<a id="nestedblock--service--depends_on"></a>
+### Nested Schema for `service.depends_on`
+
+Required:
+
+- `name` (String) The name of the dependency.
+
+Optional:
+
+- `condition` (String) The condition of the dependency.
+- `required` (Boolean) Whether the dependency is required.
+- `restart` (Boolean) Whether to restart.
 
 
 <a id="nestedblock--service--health_check"></a>

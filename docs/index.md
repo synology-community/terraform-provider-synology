@@ -25,6 +25,7 @@ provider "synology" {
 ### Optional
 
 - `host` (String) Remote Synology station host in form of 'host:port'.
+- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station.
 - `password` (String, Sensitive) Password to use when connecting to Synology station.
 - `skip_cert_check` (Boolean) Whether to skip SSL certificate checks.
 - `user` (String) User to connect to Synology station with.
