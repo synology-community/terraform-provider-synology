@@ -3,13 +3,18 @@ package core
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"time"
 
 	"github.com/appkins/terraform-provider-synology/synology/util"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
@@ -37,65 +42,6 @@ func NewTaskResource() resource.Resource {
 
 type TaskResource struct {
 	client core.Api
-}
-
-func parseSchedule(c string) (res core.TaskSchedule, err error) {
-	if c == "" {
-		return
-	}
-
-	s, err := util.ParseStandard(c)
-	if err != nil {
-		return
-	}
-
-	t := core.TaskSchedule{
-		DateType:              0,
-		Minute:                s.Minute,
-		Hour:                  s.Hour,
-		RepeatDate:            s.RepeatDate,
-		RepeatHour:            s.RepeatHour,
-		RepeatMin:             s.RepeatMin,
-		WeekDay:               "0,1,2,3,4,5,6",
-		MonthlyWeek:           []string{},
-		RepeatMinStoreConfig:  []int64{1, 5, 10, 15, 20, 30},
-		RepeatHourStoreConfig: []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	}
-	if t.RepeatDate == 0 {
-		t.RepeatDate = 1001
-	}
-	return t, nil
-}
-
-func getTaskRequest(data TaskResourceModel) (taskReq core.TaskRequest, err error) {
-	taskType := "script"
-
-	if !data.Script.IsNull() && !data.Script.IsUnknown() && data.Script.ValueString() != "" {
-		taskType = "script"
-	}
-
-	user := data.User.ValueString()
-
-	taskReq = core.TaskRequest{
-		Name:      data.Name.ValueString(),
-		RealOwner: "root",
-		Owner:     user,
-		Type:      taskType,
-		Extra: core.TaskExtra{
-			Script: data.Script.ValueString(),
-		},
-	}
-
-	if !data.Schedule.IsNull() && !data.Schedule.IsUnknown() && data.Schedule.ValueString() != "" {
-		schedule, e := parseSchedule(data.Schedule.ValueString())
-		if e != nil {
-			err = e
-			return
-		}
-		taskReq.Schedule = schedule
-	}
-
-	return taskReq, nil
 }
 
 // Create implements resource.Resource.
@@ -129,54 +75,13 @@ func (p *TaskResource) Create(ctx context.Context, req resource.CreateRequest, r
 		resp.Diagnostics.AddError("Task install failed", err.Error())
 		return
 	}
-	resp.State.SetAttribute(ctx, path.Root("id"), res.ID)
 
-	// task, err := p.client.TaskFind(ctx, data.Name.ValueString())
-	// if err != nil {
-	// 	tflog.Info(ctx, "Task not found, creating new task")
-
-	// 	switch err.(type) {
-	// 	case core.TaskNotFoundError:
-	// 		if user == "root" {
-	// 			res, err := p.client.RootTaskCreate(ctx, taskReq)
-	// 			if err != nil {
-	// 				resp.Diagnostics.AddError("Task install failed", err.Error())
-	// 				return
-	// 			}
-	// 			resp.State.SetAttribute(ctx, path.Root("id"), res.ID)
-	// 		} else {
-	// 			res, err := p.client.TaskCreate(ctx, taskReq)
-	// 			if err != nil {
-	// 				resp.Diagnostics.AddError("Task install failed", err.Error())
-	// 				return
-	// 			}
-	// 			resp.State.SetAttribute(ctx, path.Root("id"), res.ID)
-	// 		}
-	// 	default:
-	// 		taskReq.ID = task.ID
-	// 		if user == "root" {
-	// 			res, err := p.client.RootTaskUpdate(ctx, taskReq)
-	// 			if err != nil {
-	// 				resp.Diagnostics.AddError("Task update failed", err.Error())
-	// 				return
-	// 			}
-	// 			resp.State.SetAttribute(ctx, path.Root("id"), res.ID)
-	// 		} else {
-	// 			res, err := p.client.TaskUpdate(ctx, taskReq)
-	// 			if err != nil {
-	// 				resp.Diagnostics.AddError("Task update failed", err.Error())
-	// 				return
-	// 			}
-	// 			resp.State.SetAttribute(ctx, path.Root("id"), res.ID)
-	// 		}
-	// 	}
-	// }
-
+	data.ID = types.Int64PointerValue(res.ID)
 	// Save data into Terraform state
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 // Update implements resource.Resource.
@@ -216,21 +121,22 @@ func (p *TaskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 // Delete implements resource.Resource.
 func (p *TaskResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data TaskResourceModel
-	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	taskID := data.ID.ValueInt64()
-	err := p.client.TaskDelete(ctx, core.TaskDeleteRequest{
-		Tasks: []core.TaskRef{
-			{ID: taskID},
-		},
-	})
-	if err != nil {
+	if data.Run.ValueBool() && data.When.ValueString() == "destroy" {
+		err := p.client.TaskRun(ctx, data.ID.ValueInt64())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to run task", err.Error())
+			return
+		}
+	}
 
+	taskID := data.ID.ValueInt64()
+	err := p.client.TaskDelete(ctx, taskID)
+	if err != nil {
 		task, err := p.client.TaskGet(ctx, taskID)
 		// Success, task not found
 		if err != nil && task == nil {
@@ -253,9 +159,10 @@ func (p *TaskResource) Metadata(ctx context.Context, req resource.MetadataReques
 // Read implements resource.Resource.
 func (p *TaskResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data TaskResourceModel
-
-	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	taskID := data.ID.ValueInt64()
 	_, err := p.client.TaskGet(ctx, taskID)
@@ -283,11 +190,16 @@ func (p *TaskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"schedule": schema.StringAttribute{
 				MarkdownDescription: "Schedule expressed in cron.",
 				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|s|m|h))+)|((((\d+,)+\d+|(\d+(\/|-)\d+)|\d+|\*) ?){5,7})`),
+						"value must contain a valid cron expression",
+					),
+				},
 			},
 			"service": schema.StringAttribute{
 				MarkdownDescription: "Systemctl service to change state.",
 				Optional:            true,
-				Computed:            true,
 			},
 			"script": schema.StringAttribute{
 				MarkdownDescription: "Script content to run in the task.",
@@ -309,6 +221,9 @@ func (p *TaskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("apply"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("apply", "destroy", "upgrade"),
+				},
 			},
 		},
 	}
@@ -334,25 +249,87 @@ func (f *TaskResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	f.client = client.CoreAPI()
 }
 
-// ImportState implements resource.ResourceWithImportState.
-// func (p *TaskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-// 	task, err := p.client.TaskGet(ctx, req.ID)
-// 	if err != nil {
-// 		resp.Diagnostics.AddError("Failed to find task", err.Error())
-// 		return
-// 	}
+func (p *TaskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	id, err := strconv.ParseInt(req.ID, 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse ID", err.Error())
+		return
+	}
 
-// 	taskInfo, err := p.client.TaskFind(ctx, task.ID)
-// 	if err != nil {
-// 		resp.Diagnostics.AddError("Failed to find task", err.Error())
-// 		return
-// 	}
+	task, err := p.client.TaskGet(ctx, id)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to find task", err.Error())
+		return
+	}
 
-// 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), task.ID)...)
-// 	if task.User != "" {
-// 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), task.User)...)
-// 	}
-// 	if taskInfo.Link != "" {
-// 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), taskInfo.Link)...)
-// 	}
-// }
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), task.ID)...)
+}
+
+func newTaskSchedule() core.TaskSchedule {
+	return core.TaskSchedule{
+		WeekDay:               "0,1,2,3,4,5,6",
+		MonthlyWeek:           []string{},
+		RepeatMinStoreConfig:  []int64{1, 5, 10, 15, 20, 30},
+		RepeatHourStoreConfig: []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
+	}
+}
+
+func parseSchedule(c string) (res core.TaskSchedule, err error) {
+	if c == "" {
+		return
+	}
+
+	s, err := util.ParseStandard(c)
+	if err != nil {
+		return
+	}
+
+	t := newTaskSchedule()
+
+	t.Minute = s.Minute
+	t.Hour = s.Hour
+	t.RepeatDate = s.RepeatDate
+	t.RepeatHour = s.RepeatHour
+	t.RepeatMin = s.RepeatMin
+
+	if t.DateType == 0 && t.RepeatDate == 0 {
+		t.RepeatDate = 1001
+	}
+	return t, nil
+}
+
+func getTaskRequest(data TaskResourceModel) (taskReq core.TaskRequest, err error) {
+	taskType := "script"
+
+	if !data.Script.IsNull() && !data.Script.IsUnknown() && data.Script.ValueString() != "" {
+		taskType = "script"
+	}
+
+	user := data.User.ValueString()
+
+	taskReq = core.TaskRequest{
+		Name:      data.Name.ValueString(),
+		RealOwner: "root",
+		Owner:     user,
+		Type:      taskType,
+		Extra: core.TaskExtra{
+			Script: data.Script.ValueString(),
+		},
+	}
+
+	if !data.Schedule.IsNull() && !data.Schedule.IsUnknown() && data.Schedule.ValueString() != "" {
+		schedule, e := parseSchedule(data.Schedule.ValueString())
+		if e != nil {
+			err = e
+			return
+		}
+		taskReq.Schedule = schedule
+	} else {
+		t := newTaskSchedule()
+		pkgRunTime := time.Now().Local().Add(-time.Minute * 5)
+		t.Date = fmt.Sprintf("%d-%02d-%02d", pkgRunTime.Year(), pkgRunTime.Month(), pkgRunTime.Day())
+		taskReq.Schedule = t
+	}
+
+	return taskReq, nil
+}
