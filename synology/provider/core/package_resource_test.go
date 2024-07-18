@@ -73,8 +73,8 @@ func TestAccPackageResource_url(t *testing.T) {
 			"package url is set",
 			`
 			resource "synology_core_package" "noble" {
-				path = "/data/cluster_storage/noble-server-cloudimg-amd64.img"
-				url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+				name = "vault"
+				url = "https://synology-community.github.io/spksrc/packages/vault_1.17.2_linux_amd64.spk"
 			}`,
 		},
 	}

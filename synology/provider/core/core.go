@@ -13,6 +13,7 @@ func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		NewPackageResource,
 		NewPackageFeedResource,
+		NewTaskResource,
 	}
 }
 

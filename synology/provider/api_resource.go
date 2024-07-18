@@ -84,10 +84,10 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 	parameters := getParams(params)
 
 	method := api.Method{
-		API:          data.API.ValueString(),
-		Method:       data.Method.ValueString(),
-		Version:      int(data.Version.ValueInt64()),
-		ErrorSummary: api.GlobalErrors,
+		API:            data.API.ValueString(),
+		Method:         data.Method.ValueString(),
+		Version:        int(data.Version.ValueInt64()),
+		ErrorSummaries: api.GlobalErrors,
 	}
 
 	result, err := api.GetQuery[map[string]any](a.client, ctx, parameters, method)
@@ -131,10 +131,10 @@ func (a *ApiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		}
 
 		result, err := api.GetQuery[map[string]any](a.client, ctx, getParams(params), api.Method{
-			API:          data.API.ValueString(),
-			Method:       data.Method.ValueString(),
-			Version:      int(data.Version.ValueInt64()),
-			ErrorSummary: api.GlobalErrors,
+			API:            data.API.ValueString(),
+			Method:         data.Method.ValueString(),
+			Version:        int(data.Version.ValueInt64()),
+			ErrorSummaries: api.GlobalErrors,
 		})
 
 		if err != nil {
