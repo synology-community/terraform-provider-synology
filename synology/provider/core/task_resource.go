@@ -82,6 +82,14 @@ func (p *TaskResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	if data.Run.ValueBool() && data.When.ValueString() == "apply" {
+		err := p.client.TaskRun(ctx, data.ID.ValueInt64())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to run task", err.Error())
+			return
+		}
+	}
 }
 
 // Update implements resource.Resource.
@@ -116,6 +124,29 @@ func (p *TaskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
+	if plan.Run.ValueBool() != state.Run.ValueBool() {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("run"), plan.Run)...)
+	}
+
+	if plan.When.ValueString() != state.When.ValueString() {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("when"), plan.When)...)
+	}
+
+	if plan.Name.ValueString() != state.Name.ValueString() {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), plan.Name)...)
+	}
+
+	if (!plan.Service.IsNull() && !plan.Service.IsUnknown()) && (plan.Service.ValueString() != state.Service.ValueString()) {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("service"), plan.Service)...)
+	}
+
+	if plan.Run.ValueBool() && plan.When.ValueString() == "upgrade" {
+		err := p.client.TaskRun(ctx, plan.ID.ValueInt64())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to run task", err.Error())
+			return
+		}
+	}
 }
 
 // Delete implements resource.Resource.
