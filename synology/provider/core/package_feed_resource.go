@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -172,4 +173,32 @@ func (f *PackageFeedResource) Configure(ctx context.Context, req resource.Config
 	}
 
 	f.client = client.CoreAPI()
+}
+
+// ImportState implements resource.ResourceWithImportState.
+func (p *PackageFeedResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	feeds, err := p.client.PackageFeedList(ctx)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list package feeds", err.Error())
+		return
+	}
+
+	found := false
+	foundURL := ""
+	for _, feed := range feeds.Items {
+		if feed.Name == req.ID {
+			found = true
+			foundURL = feed.Feed
+			break
+		}
+	}
+
+	if !found {
+		resp.Diagnostics.AddError("Package feed not found", fmt.Sprintf("Package feed %s not found", req.ID))
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), req.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), foundURL)...)
 }

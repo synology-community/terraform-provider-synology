@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
@@ -16,9 +18,12 @@ import (
 type PackageResourceModel struct {
 	Name    types.String `tfsdk:"name"`
 	Version types.String `tfsdk:"version"`
+	File    types.String `tfsdk:"file"`
 	URL     types.String `tfsdk:"url"`
 	Wizard  types.Map    `tfsdk:"wizard"`
 	Beta    types.Bool   `tfsdk:"beta"`
+
+	Run types.Bool `tfsdk:"run"`
 }
 
 var _ resource.Resource = &PackageResource{}
@@ -39,42 +44,34 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	if data.Name.IsNull() || data.Name.IsUnknown() {
-		resp.Diagnostics.AddError("Name is required", "Name is required")
-		return
-	}
+	size := int64(0)
+	if data.URL.ValueString() == "" {
+		pkg, err := p.client.PackageFind(ctx, data.Name.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to find package", err.Error())
+			return
+		}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("beta"), data.Beta.ValueBool())...)
-
-	pkg, err := p.client.PackageFind(ctx, data.Name.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to find package", err.Error())
-		return
-	}
-
-	if data.Version.IsUnknown() || data.Version.IsNull() {
-		if pkg.Version != "" {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), pkg.Version)...)
+		if data.Version.IsUnknown() || data.Version.IsNull() {
 			data.Version = types.StringValue(pkg.Version)
 		}
-	}
 
-	if data.URL.IsUnknown() || data.URL.IsNull() {
-		if pkg.Link != "" {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), pkg.Link)...)
+		if data.URL.IsUnknown() || data.URL.IsNull() {
 			data.URL = types.StringValue(pkg.Link)
+		}
+
+		if pkg.Size != 0 {
+			size = pkg.Size
 		}
 	}
 
-	size := int64(0)
-	if pkg.Size != 0 {
-		size = pkg.Size
-	} else {
-		size, err = p.client.ContentLength(context.Background(), pkg.Link)
+	if size == 0 {
+		s, err := p.client.ContentLength(context.Background(), data.URL.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to get file size", err.Error())
 			return
 		}
+		size = s
 	}
 
 	wizardConf := make(map[string]string)
@@ -82,11 +79,12 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 		data.Wizard.ElementsAs(ctx, &wizardConf, true)
 	}
 
-	err = p.client.PackageInstallCompound(ctx, core.PackageInstallCompoundRequest{
+	err := p.client.PackageInstallCompound(ctx, core.PackageInstallCompoundRequest{
 		Name:        data.Name.ValueString(),
 		URL:         data.URL.ValueString(),
 		Size:        size,
 		ExtraValues: wizardConf,
+		Run:         data.Run.ValueBool(),
 	})
 
 	if err != nil {
@@ -95,45 +93,15 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Save data into Terraform state
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
-}
-
-// Delete implements resource.Resource.
-func (p *PackageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data PackageResourceModel
-	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	packageName := data.Name.ValueString()
-	_, err := p.client.PackageUninstall(ctx, core.PackageUninstallRequest{
-		ID: packageName,
-	})
-	if err != nil {
-
-		pkg, err := p.client.PackageGet(ctx, packageName)
-		// Success, package not found
-		if err != nil && pkg == nil {
-			resp.State.RemoveResource(ctx)
-			return
-		} else {
-			resp.Diagnostics.AddError("Failed to uninstall package", err.Error())
-			return
-		}
-	}
-
-	resp.State.RemoveResource(ctx)
 }
 
-// Metadata implements resource.Resource.
-func (p *PackageResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = buildName(req.ProviderTypeName, "package")
+// Update implements resource.Resource.
+func (p *PackageResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
+
 }
 
 // Read implements resource.Resource.
@@ -180,6 +148,39 @@ func (p *PackageResource) Read(ctx context.Context, req resource.ReadRequest, re
 	//resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// Delete implements resource.Resource.
+func (p *PackageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data PackageResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	packageName := data.Name.ValueString()
+	_, err := p.client.PackageUninstall(ctx, core.PackageUninstallRequest{
+		ID: packageName,
+	})
+	if err != nil {
+
+		pkg, err := p.client.PackageGet(ctx, packageName)
+		// Success, package not found
+		if err != nil && pkg == nil {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
+			resp.Diagnostics.AddError("Failed to uninstall package", err.Error())
+			return
+		}
+	}
+
+	resp.State.RemoveResource(ctx)
+}
+
+// Metadata implements resource.Resource.
+func (p *PackageResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = buildName(req.ProviderTypeName, "package")
+}
+
 // Schema implements resource.Resource.
 func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
@@ -189,6 +190,9 @@ func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of the package to install.",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"version": schema.StringAttribute{
 				MarkdownDescription: "The package version.",
@@ -211,13 +215,14 @@ func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
+			"run": schema.BoolAttribute{
+				MarkdownDescription: "Whether to run the package after installation.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(true),
+			},
 		},
 	}
-}
-
-// Update implements resource.Resource.
-func (p *PackageResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
-
 }
 
 func (f *PackageResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

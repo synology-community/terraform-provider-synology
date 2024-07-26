@@ -235,7 +235,6 @@ func (p *TaskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"script": schema.StringAttribute{
 				MarkdownDescription: "Script content to run in the task.",
 				Optional:            true,
-				Computed:            true,
 			},
 			"user": schema.StringAttribute{
 				MarkdownDescription: "The user that will execute the task.",

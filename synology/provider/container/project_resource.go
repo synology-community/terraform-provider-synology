@@ -200,8 +200,6 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 		return fmt.Errorf("Invalid share path: %s", sharePath)
 	}
 
-	folderName := folderParts[plen-1]
-	folderPath := strings.Join(folderParts[:plen-1], "/")
 	share := folderParts[1]
 
 	shares, err := f.coreClient.ShareList(ctx)
@@ -233,6 +231,8 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 		}
 	}
 
+	folderName := folderParts[plen-1]
+	folderPath := strings.Join(folderParts[:plen-1], "/")
 	_, err = f.fsClient.Get(ctx, sharePath)
 	if err != nil {
 		switch err.(type) {
