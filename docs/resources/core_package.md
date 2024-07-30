@@ -32,6 +32,7 @@ resource "synology_core_package" "mariadb" {
 ### Optional
 
 - `beta` (Boolean) Whether to install beta versions of the package.
+- `run` (Boolean) Whether to run the package after installation.
 - `url` (String) The URL to the package to install.
 - `version` (String) The package version.
 - `wizard` (Map of String) Wizard configuration values.
