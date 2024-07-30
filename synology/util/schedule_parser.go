@@ -269,7 +269,7 @@ func getRange(expr string, r bounds) (int64, error) {
 	if lowAndHigh[0] == "*" || lowAndHigh[0] == "?" {
 		start = r.min
 		end = r.max
-		var ustr uint = starBit
+		var ustr uint64 = starBit
 		extra = int64(ustr)
 	} else {
 		start, err = parseIntOrName(lowAndHigh[0], r.names)
@@ -361,7 +361,7 @@ func getBits(min, max, step int64) int64 {
 	return bits
 }
 
-func toInt64(starBit uint) int64 {
+func toInt64(starBit uint64) int64 {
 	return int64(starBit)
 }
 
