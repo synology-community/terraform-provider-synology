@@ -10,7 +10,6 @@ import (
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
-	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -29,8 +28,6 @@ import (
 	"github.com/synology-community/go-synology/pkg/api/docker"
 	"github.com/synology-community/go-synology/pkg/api/filestation"
 	"github.com/synology-community/go-synology/pkg/util/form"
-
-	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -58,10 +55,20 @@ type ProjectResourceModel struct {
 	Configs       types.Set    `tfsdk:"config"`
 	Extensions    types.Set    `tfsdk:"extension"`
 	Run           types.Bool   `tfsdk:"run"`
-	State         types.String `tfsdk:"state"`
+	Status        types.String `tfsdk:"status"`
 	ServicePortal types.Set    `tfsdk:"service_portal"`
 	// ComposeFiles types.ListType `tfsdk:"compose_files"`
 	// Environment  types.MapType  `tfsdk:"environment"`
+	CreatedAt timetypes.RFC3339 `tfsdk:"created_at"`
+	UpdatedAt timetypes.RFC3339 `tfsdk:"updated_at"`
+}
+
+func (p ProjectResourceModel) IsRunning() bool {
+	return strings.ToUpper(p.Status.ValueString()) == "RUNNING"
+}
+
+func (p ProjectResourceModel) ShouldRun() bool {
+	return !p.IsRunning() && p.Run.ValueBool()
 }
 
 const projectDescription = `A Docker Compose project for the Container Manager Synology API.
@@ -71,110 +78,19 @@ const projectDescription = `A Docker Compose project for the Container Manager S
 `
 
 func getProjectYaml(ctx context.Context, data ProjectResourceModel, projYaml *string) (diags diag.Diagnostics) {
-	diags = []diag.Diagnostic{}
-	project := composetypes.Project{}
-
-	if !data.Services.IsNull() && !data.Services.IsUnknown() {
-
-		elements := []models.Service{}
-		diags.Append(data.Services.ElementsAs(ctx, &elements, true)...)
-
-		if diags.HasError() {
-			return
-		}
-
-		project.Services = map[string]composetypes.ServiceConfig{}
-
-		for _, v := range elements {
-
-			service := composetypes.ServiceConfig{}
-			diags.Append(v.AsComposeConfig(ctx, &service)...)
-			if diags.HasError() {
-				return
-			}
-
-			project.Services[service.Name] = service
-		}
-	}
-
-	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
-
-		elements := []models.Network{}
-		diags.Append(data.Networks.ElementsAs(ctx, &elements, true)...)
-
-		if diags.HasError() {
-			return
-		}
-
-		project.Networks = map[string]composetypes.NetworkConfig{}
-
-		for _, v := range elements {
-			n := composetypes.NetworkConfig{}
-
-			diags.Append(v.AsComposeConfig(ctx, &n)...)
-			if diags.HasError() {
-				return
-			}
-
-			project.Networks[n.Name] = n
-		}
-	}
-
-	if !data.Volumes.IsNull() && !data.Volumes.IsUnknown() {
-
-		elements := []models.Volume{}
-		diags.Append(data.Volumes.ElementsAs(ctx, &elements, true)...)
-
-		if diags.HasError() {
-			return
-		}
-
-		project.Volumes = map[string]composetypes.VolumeConfig{}
-
-		for _, v := range elements {
-			n := composetypes.VolumeConfig{}
-
-			diags.Append(v.AsComposeConfig(ctx, &n)...)
-			if diags.HasError() {
-				return
-			}
-
-			project.Volumes[n.Name] = n
-		}
-	}
-
-	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
-
-		elements := []models.Config{}
-		diags.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
-
-		if diags.HasError() {
-			return
-		}
-
-		project.Configs = map[string]composetypes.ConfigObjConfig{}
-
-		for _, v := range elements {
-			n := composetypes.ConfigObjConfig{}
-
-			diags.Append(v.AsComposeConfig(ctx, &n)...)
-			if diags.HasError() {
-				return
-			}
-
-			project.Configs[n.Name] = n
-		}
-	}
-
-	projectYAML, err := project.MarshalYAML()
-	if err != nil {
-		diags.Append(diag.NewErrorDiagnostic("Failed to marshal docker-compose.yml", err.Error()))
-		return
-	}
-	pyaml := string(projectYAML)
-	*projYaml = pyaml
-
-	return
+	return models.NewComposeContentBuilder(
+		ctx,
+	).SetServices(
+		&data.Services,
+	).SetNetworks(
+		&data.Networks,
+	).SetVolumes(
+		&data.Volumes,
+	).SetConfigs(
+		&data.Configs,
+	).Build(
+		projYaml,
+	)
 }
 
 func projectExists(err error) bool {
@@ -339,6 +255,9 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 			resp.Diagnostics.AddError("Failed to create project", err.Error())
 			return
 		}
+	} else {
+		data.CreatedAt = timetypes.NewRFC3339TimeValue(res.CreatedAt)
+		data.UpdatedAt = timetypes.NewRFC3339TimeValue(res.UpdatedAt)
 	}
 
 	if shouldUpdate {
@@ -349,9 +268,11 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 
 		data.ID = types.StringValue(p.ID)
-		status := p.Status
+		data.Status = types.StringValue(p.Status)
+		data.CreatedAt = timetypes.NewRFC3339TimeValue(p.CreatedAt)
+		data.UpdatedAt = timetypes.NewRFC3339TimeValue(p.UpdatedAt)
 
-		if status == "RUNNING" {
+		if data.Status.ValueString() == "RUNNING" {
 			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
 				ID: data.ID.ValueString(),
 			})
@@ -365,6 +286,15 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to clean project", err.Error())
 				return
+			}
+			if !data.Run.IsNull() && !data.Run.IsUnknown() && data.Run.ValueBool() {
+				_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+					ID: data.ID.ValueString(),
+				})
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to build project", err.Error())
+					return
+				}
 			}
 		}
 
@@ -404,7 +334,8 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	data.State = types.StringValue(proj.Status)
+	data.Status = types.StringValue(proj.Status)
+	data.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -470,8 +401,6 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	id := data.ID.ValueString()
-
 	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
@@ -485,32 +414,32 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				return
 			}
 		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(proj.ID))...)
-			if resp.Diagnostics.HasError() {
-				return
+			if proj.ID != "" {
+				data.ID = types.StringValue(proj.ID)
 			}
-			id = proj.ID
 		}
 	}
 
 	if !proj.IsRunning() && data.Run.ValueBool() {
 		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
-			ID: id,
+			ID: data.ID.String(),
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to build project", err.Error())
 			return
 		}
-		proj, err = f.client.ProjectGet(ctx, id)
+		proj, err = f.client.ProjectGet(ctx, data.ID.String())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to get project", err.Error())
 			return
 		}
 	}
 
-	if data.State.ValueString() != proj.Status {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("state"), types.StringValue(proj.Status))...)
-	}
+	data.Status = types.StringValue(proj.Status)
+	data.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
+	data.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Update implements resource.Resource.
@@ -612,7 +541,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 
 		if proj.Content == projectYAML {
 			tflog.Info(ctx, "No changes detected in project, skipping update")
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("state"), types.StringValue(proj.Status))...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), types.StringValue(proj.Status))...)
 			return
 
 		}
@@ -668,7 +597,9 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	plan.State = types.StringValue(proj.Status)
+	plan.Status = types.StringValue(proj.Status)
+	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
+	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -713,9 +644,19 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"state": schema.StringAttribute{
-				MarkdownDescription: "The state of the project.",
+			"status": schema.StringAttribute{
+				MarkdownDescription: "The status of the project.",
 				Computed:            true,
+			},
+			"created_at": schema.StringAttribute{
+				MarkdownDescription: "The time the project was created.",
+				Computed:            true,
+				CustomType:          timetypes.RFC3339Type{},
+			},
+			"updated_at": schema.StringAttribute{
+				MarkdownDescription: "The time the project was updated.",
+				Computed:            true,
+				CustomType:          timetypes.RFC3339Type{},
 			},
 			// "compose_files": schema.ListAttribute{
 			// 	MarkdownDescription: "The list of compose files.",
@@ -770,10 +711,19 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The memory limit.",
 							Optional:            true,
 						},
+						"entrypoint": schema.ListAttribute{
+							MarkdownDescription: "The entrypoint of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
 						"command": schema.ListAttribute{
 							MarkdownDescription: "The command of the service.",
 							Optional:            true,
 							ElementType:         types.StringType,
+						},
+						"user": schema.StringAttribute{
+							MarkdownDescription: "The user of the service.",
+							Optional:            true,
 						},
 						"restart": schema.StringAttribute{
 							MarkdownDescription: "The restart policy.",
@@ -812,28 +762,31 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
+						"capabilities": schema.ObjectAttribute{
+							MarkdownDescription: "The capabilities of the service.",
+							Optional:            true,
+							AttributeTypes: map[string]attr.Type{
+								"add":  types.SetType{ElemType: types.StringType},
+								"drop": types.SetType{ElemType: types.StringType},
+							},
+						},
 					},
 					Blocks: map[string]schema.Block{
-						"image": schema.SetNestedBlock{
+						"image": schema.SingleNestedBlock{
 							MarkdownDescription: "The image of the service.",
-							NestedObject: schema.NestedBlockObject{
-								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the image.",
-										Required:            true,
-									},
-									"repository": schema.StringAttribute{
-										MarkdownDescription: "The repository of the image. Default is `docker.io`.",
-										Optional:            true,
-									},
-									"tag": schema.StringAttribute{
-										MarkdownDescription: "The tag of the image. Default is `latest`.",
-										Optional:            true,
-									},
+							Attributes: map[string]schema.Attribute{
+								"name": schema.StringAttribute{
+									MarkdownDescription: "The name of the image.",
+									Required:            true,
 								},
-							},
-							Validators: []validator.Set{
-								setvalidator.SizeBetween(1, 1),
+								"repository": schema.StringAttribute{
+									MarkdownDescription: "The repository of the image. Default is `docker.io`.",
+									Optional:            true,
+								},
+								"tag": schema.StringAttribute{
+									MarkdownDescription: "The tag of the image. Default is `latest`.",
+									Optional:            true,
+								},
 							},
 						},
 						"port": schema.SetNestedBlock{
@@ -1053,10 +1006,6 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 										Optional:            true,
 									},
 								},
-								// Validators: []validator.Object{
-								// 	objectvalidator.ConflictsWith(path.MatchRelative().AtName("value"), path.MatchRelative().AtName("soft")),
-								// 	objectvalidator.ConflictsWith(path.MatchRelative().AtName("value"), path.MatchRelative().AtName("hard")),
-								// },
 							},
 						},
 						"config": schema.SetNestedBlock{
