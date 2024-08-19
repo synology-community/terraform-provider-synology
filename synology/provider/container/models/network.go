@@ -6,6 +6,7 @@ import (
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
 type IPAMPool struct {
@@ -24,7 +25,7 @@ type Network struct {
 	Name       types.String `tfsdk:"name"`
 	Driver     types.String `tfsdk:"driver"`
 	DriverOpts types.Map    `tfsdk:"driver_opts"`
-	Ipam       types.Set    `tfsdk:"ipam"`
+	Ipam       types.Object `tfsdk:"ipam"`
 	External   types.Bool   `tfsdk:"external"`
 	Internal   types.Bool   `tfsdk:"internal"`
 	Attachable types.Bool   `tfsdk:"attachable"`
@@ -72,36 +73,33 @@ func (m Network) AsComposeConfig(ctx context.Context, network *composetypes.Netw
 	}
 
 	if !m.Ipam.IsNull() && !m.Ipam.IsUnknown() {
-		ipams := []IPAMConfig{}
-		ipam := composetypes.IPAMConfig{}
-		if diag := m.Ipam.ElementsAs(ctx, &ipams, true); !diag.HasError() {
-			for _, i := range ipams {
-				ipam.Driver = i.Driver.ValueString()
+		ipam := IPAMConfig{}
+		if diag := m.Ipam.As(ctx, &ipam, basetypes.ObjectAsOptions{}); !diag.HasError() {
+			network.Ipam = composetypes.IPAMConfig{
+				Driver: ipam.Driver.ValueString(),
+			}
 
-				ipamConfigs := []IPAMPool{}
-				if diag := i.Configs.ElementsAs(ctx, &ipamConfigs, true); !diag.HasError() {
-					for _, ipamCfg := range ipamConfigs {
-						ipamConfig := composetypes.IPAMPool{
-							Subnet:  ipamCfg.Subnet.ValueString(),
-							Gateway: ipamCfg.Gateway.ValueString(),
-							IPRange: ipamCfg.IPRange.ValueString(),
-						}
-
-						if !ipamCfg.AuxAddress.IsNull() && !ipamCfg.AuxAddress.IsUnknown() {
-							var auxAddress map[string]string
-							d.Append(ipamCfg.AuxAddress.ElementsAs(ctx, &auxAddress, true)...)
-							if !d.HasError() {
-								ipamConfig.AuxiliaryAddresses = auxAddress
-							}
-						}
-
-						ipam.Config = append(ipam.Config, &ipamConfig)
+			ipamPools := []IPAMPool{}
+			if diag := ipam.Configs.ElementsAs(ctx, &ipamPools, true); !diag.HasError() {
+				for _, ipamCfg := range ipamPools {
+					ipamPool := composetypes.IPAMPool{
+						Subnet:  ipamCfg.Subnet.ValueString(),
+						Gateway: ipamCfg.Gateway.ValueString(),
+						IPRange: ipamCfg.IPRange.ValueString(),
 					}
-				} else {
-					d = append(d, diag...)
-				}
 
-				network.Ipam = ipam
+					if !ipamCfg.AuxAddress.IsNull() && !ipamCfg.AuxAddress.IsUnknown() {
+						var auxAddress map[string]string
+						d.Append(ipamCfg.AuxAddress.ElementsAs(ctx, &auxAddress, true)...)
+						if !d.HasError() {
+							ipamPool.AuxiliaryAddresses = auxAddress
+						}
+					}
+
+					network.Ipam.Config = append(network.Ipam.Config, &ipamPool)
+				}
+			} else {
+				d = append(d, diag...)
 			}
 		} else {
 			d = append(d, diag...)

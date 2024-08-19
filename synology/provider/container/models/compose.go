@@ -26,10 +26,10 @@ func NewComposeContentBuilder(ctx context.Context) *ComposeContentBuilder {
 	}
 }
 
-func (c *ComposeContentBuilder) SetNetworks(networks *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetNetworks(networks *types.Map) *ComposeContentBuilder {
 	if !networks.IsNull() && !networks.IsUnknown() {
 
-		elements := []Network{}
+		elements := map[string]Network{}
 		c.diags.Append(networks.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -52,10 +52,10 @@ func (c *ComposeContentBuilder) SetNetworks(networks *types.Set) *ComposeContent
 	return c
 }
 
-func (c *ComposeContentBuilder) SetServices(services *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetServices(services *types.Map) *ComposeContentBuilder {
 	if !services.IsNull() && !services.IsUnknown() {
 
-		elements := []Service{}
+		elements := map[string]Service{}
 		c.diags.Append(services.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -78,10 +78,10 @@ func (c *ComposeContentBuilder) SetServices(services *types.Set) *ComposeContent
 	return c
 }
 
-func (c *ComposeContentBuilder) SetVolumes(volumes *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetVolumes(volumes *types.Map) *ComposeContentBuilder {
 	if !volumes.IsNull() && !volumes.IsUnknown() {
 
-		elements := []Volume{}
+		elements := map[string]Volume{}
 		c.diags.Append(volumes.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -104,10 +104,10 @@ func (c *ComposeContentBuilder) SetVolumes(volumes *types.Set) *ComposeContentBu
 	return c
 }
 
-func (c *ComposeContentBuilder) SetConfigs(configs *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBuilder {
 	if !configs.IsNull() && !configs.IsUnknown() {
 
-		elements := []Config{}
+		elements := map[string]Config{}
 		c.diags.Append(configs.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {

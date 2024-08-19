@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
@@ -48,15 +49,15 @@ type ProjectResourceModel struct {
 	ID            types.String `tfsdk:"id"`
 	Name          types.String `tfsdk:"name"`
 	SharePath     types.String `tfsdk:"share_path"`
-	Services      types.Set    `tfsdk:"service"`
-	Networks      types.Set    `tfsdk:"network"`
-	Volumes       types.Set    `tfsdk:"volume"`
-	Secrets       types.Set    `tfsdk:"secret"`
-	Configs       types.Set    `tfsdk:"config"`
-	Extensions    types.Set    `tfsdk:"extension"`
+	Services      types.Map    `tfsdk:"service"`
+	Networks      types.Map    `tfsdk:"network"`
+	Volumes       types.Map    `tfsdk:"volume"`
+	Secrets       types.Map    `tfsdk:"secret"`
+	Configs       types.Map    `tfsdk:"config"`
+	Extensions    types.Map    `tfsdk:"extension"`
 	Run           types.Bool   `tfsdk:"run"`
 	Status        types.String `tfsdk:"status"`
-	ServicePortal types.Set    `tfsdk:"service_portal"`
+	ServicePortal types.Object `tfsdk:"service_portal"`
 	// ComposeFiles types.ListType `tfsdk:"compose_files"`
 	// Environment  types.MapType  `tfsdk:"environment"`
 	CreatedAt timetypes.RFC3339 `tfsdk:"created_at"`
@@ -189,18 +190,18 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Set the file values where content is specified
 	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
-		elements := []models.Config{}
+		elements := map[string]models.Config{}
 		resp.Diagnostics.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		changed := false
-		for i, v := range elements {
+		for k, v := range elements {
 			if !v.Content.IsNull() || !v.Content.IsUnknown() {
 				fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
 				fileContent := v.Content.ValueString()
 				v.File = types.StringValue(fileName)
-				elements[i] = v
+				elements[k] = v
 				changed = true
 
 				// Upload the file
@@ -219,11 +220,11 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 			}
 		}
 		if changed {
-			var elementValues []attr.Value
-			for _, v := range elements {
-				elementValues = append(elementValues, v.Value())
+			elementValues := map[string]attr.Value{}
+			for k, v := range elements {
+				elementValues[k] = v.Value()
 			}
-			data.Configs = types.SetValueMust(models.Config{}.ModelType(), elementValues)
+			data.Configs = types.MapValueMust(models.Config{}.ModelType(), elementValues)
 		}
 	}
 
@@ -234,7 +235,13 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	servicePortal := models.ServicePortal{}
-	resp.Diagnostics.Append(servicePortal.First(ctx, data.ServicePortal)...)
+
+	if !data.ServicePortal.IsNull() && !data.ServicePortal.IsUnknown() {
+		resp.Diagnostics.Append(data.ServicePortal.As(ctx, &servicePortal, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
 
 	shouldUpdate := false
 
@@ -470,25 +477,31 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	servicePortal := models.ServicePortal{}
-	resp.Diagnostics.Append(servicePortal.First(ctx, plan.ServicePortal)...)
+
+	if !plan.ServicePortal.IsNull() && !plan.ServicePortal.IsUnknown() {
+		resp.Diagnostics.Append(plan.ServicePortal.As(ctx, &servicePortal, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
 
 	if configChanged {
 		// Set the file values where content is specified
 		if !plan.Configs.IsNull() && !plan.Configs.IsUnknown() {
-			elements := []models.Config{}
-			stateElements := []models.Config{}
+			elements := map[string]models.Config{}
+			stateElements := map[string]models.Config{}
 			resp.Diagnostics.Append(plan.Configs.ElementsAs(ctx, &elements, true)...)
 			resp.Diagnostics.Append(state.Configs.ElementsAs(ctx, &stateElements, true)...)
 			if resp.Diagnostics.HasError() {
 				return
 			}
 			changed := false
-			for i, v := range elements {
+			for k, v := range elements {
 				if !(v.Content.IsNull() || v.Content.IsUnknown()) {
 					fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
 					fileContent := v.Content.ValueString()
 					v.File = types.StringValue(fileName)
-					elements[i] = v
+					elements[k] = v
 					changed = true
 
 					// Upload the file
@@ -508,7 +521,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 					if len(stateElements) != len(elements) {
 						servicesChanged = true
 					} else {
-						sv := stateElements[i]
+						sv := stateElements[k]
 						if sv.File.ValueString() != v.File.ValueString() {
 							servicesChanged = true
 						}
@@ -516,11 +529,11 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 				}
 			}
 			if changed {
-				var elementValues []attr.Value
-				for _, v := range elements {
-					elementValues = append(elementValues, v.Value())
+				elementValues := map[string]attr.Value{}
+				for k, v := range elements {
+					elementValues[k] = v.Value()
 				}
-				plan.Configs = types.SetValueMust(models.Config{}.ModelType(), elementValues)
+				plan.Configs = types.MapValueMust(models.Config{}.ModelType(), elementValues)
 			}
 		}
 	}
@@ -658,42 +671,35 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				CustomType:          timetypes.RFC3339Type{},
 			},
-			// "compose_files": schema.ListAttribute{
-			// 	MarkdownDescription: "The list of compose files.",
-			// 	ElementType:         types.StringType,
-			// 	Optional:            true,
-			// },
-		},
-		Blocks: map[string]schema.Block{
-			"service_portal": schema.SetNestedBlock{
+			"service_portal": schema.SingleNestedAttribute{
 				MarkdownDescription: "Synology Web Station configuration for the docker compose project.",
-				NestedObject: schema.NestedBlockObject{
-					Attributes: map[string]schema.Attribute{
-						"enable": schema.BoolAttribute{
-							MarkdownDescription: "Whether to enable the service portal.",
-							Optional:            true,
-						},
-						"name": schema.StringAttribute{
-							MarkdownDescription: "The name of the service portal.",
-							Optional:            true,
-						},
-						"port": schema.Int64Attribute{
-							MarkdownDescription: "The port of the service portal.",
-							Optional:            true,
-						},
-						"protocol": schema.StringAttribute{
-							MarkdownDescription: "The protocol of the service portal.",
-							Optional:            true,
-							Validators: []validator.String{
-								stringvalidator.OneOf("http", "https"),
-							},
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"enable": schema.BoolAttribute{
+						MarkdownDescription: "Whether to enable the service portal.",
+						Optional:            true,
+					},
+					"name": schema.StringAttribute{
+						MarkdownDescription: "The name of the service portal.",
+						Optional:            true,
+					},
+					"port": schema.Int64Attribute{
+						MarkdownDescription: "The port of the service portal.",
+						Optional:            true,
+					},
+					"protocol": schema.StringAttribute{
+						MarkdownDescription: "The protocol of the service portal.",
+						Optional:            true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("http", "https"),
 						},
 					},
 				},
 			},
-			"service": schema.SetNestedBlock{
+			"services": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose services.",
-				NestedObject: schema.NestedBlockObject{
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the service.",
@@ -762,18 +768,25 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
-						"capabilities": schema.ObjectAttribute{
+						"capabilities": schema.SingleNestedAttribute{
 							MarkdownDescription: "The capabilities of the service.",
 							Optional:            true,
-							AttributeTypes: map[string]attr.Type{
-								"add":  types.SetType{ElemType: types.StringType},
-								"drop": types.SetType{ElemType: types.StringType},
+							Attributes: map[string]schema.Attribute{
+								"add": schema.ListAttribute{
+									MarkdownDescription: "The capabilities to add.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+								"drop": schema.ListAttribute{
+									MarkdownDescription: "The capabilities to drop.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
 							},
 						},
-					},
-					Blocks: map[string]schema.Block{
-						"image": schema.SingleNestedBlock{
+						"image": schema.SingleNestedAttribute{
 							MarkdownDescription: "The image of the service.",
+							Optional:            true,
 							Attributes: map[string]schema.Attribute{
 								"name": schema.StringAttribute{
 									MarkdownDescription: "The name of the image.",
@@ -789,9 +802,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"port": schema.SetNestedBlock{
+						"ports": schema.ListNestedAttribute{
 							MarkdownDescription: "The ports of the service.",
-							NestedObject: schema.NestedBlockObject{
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"name": schema.StringAttribute{
 										MarkdownDescription: "The name of the port.",
@@ -824,9 +838,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"depends_on": schema.SetNestedBlock{
+						"depends_on": schema.MapNestedAttribute{
 							MarkdownDescription: "The dependencies of the service.",
-							NestedObject: schema.NestedBlockObject{
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"name": schema.StringAttribute{
 										MarkdownDescription: "The name of the dependency.",
@@ -847,9 +862,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"network": schema.SetNestedBlock{
+						"networks": schema.MapNestedAttribute{
 							MarkdownDescription: "The networks of the service.",
-							NestedObject: schema.NestedBlockObject{
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"name": schema.StringAttribute{
 										MarkdownDescription: "The name of the network.",
@@ -889,61 +905,60 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"logging": schema.SetNestedBlock{
+						"logging": schema.SingleNestedAttribute{
 							MarkdownDescription: "Logging configuration for the docker service.",
-							NestedObject: schema.NestedBlockObject{
-								Attributes: map[string]schema.Attribute{
-									"driver": schema.StringAttribute{
-										MarkdownDescription: "The driver of the logging.",
-										Optional:            true,
-									},
-									"options": schema.MapAttribute{
-										MarkdownDescription: "The options of the logging.",
-										Optional:            true,
-										ElementType:         types.StringType,
-									},
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"driver": schema.StringAttribute{
+									MarkdownDescription: "The driver of the logging.",
+									Optional:            true,
+								},
+								"options": schema.MapAttribute{
+									MarkdownDescription: "The options of the logging.",
+									Optional:            true,
+									ElementType:         types.StringType,
 								},
 							},
 						},
-						"health_check": schema.SetNestedBlock{
+						"healthcheck": schema.SingleNestedAttribute{
 							MarkdownDescription: "Health check configuration.",
-							NestedObject: schema.NestedBlockObject{
-								Attributes: map[string]schema.Attribute{
-									"test": schema.ListAttribute{
-										MarkdownDescription: "Test command to run.",
-										Optional:            true,
-										ElementType:         types.StringType,
-									},
-									"interval": schema.StringAttribute{
-										MarkdownDescription: "Interval to run the test.",
-										Optional:            true,
-										CustomType:          timetypes.GoDurationType{},
-									},
-									"timeout": schema.StringAttribute{
-										MarkdownDescription: "Timeout to run the test.",
-										Optional:            true,
-										CustomType:          timetypes.GoDurationType{},
-									},
-									"retries": schema.NumberAttribute{
-										MarkdownDescription: "Number of retries.",
-										Optional:            true,
-									},
-									"start_period": schema.StringAttribute{
-										MarkdownDescription: "Start period.",
-										Optional:            true,
-										CustomType:          timetypes.GoDurationType{},
-									},
-									"start_interval": schema.StringAttribute{
-										MarkdownDescription: "Start interval.",
-										Optional:            true,
-										CustomType:          timetypes.GoDurationType{},
-									},
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"test": schema.ListAttribute{
+									MarkdownDescription: "Test command to run.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+								"interval": schema.StringAttribute{
+									MarkdownDescription: "Interval to run the test.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"timeout": schema.StringAttribute{
+									MarkdownDescription: "Timeout to run the test.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"retries": schema.NumberAttribute{
+									MarkdownDescription: "Number of retries.",
+									Optional:            true,
+								},
+								"start_period": schema.StringAttribute{
+									MarkdownDescription: "Start period.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"start_interval": schema.StringAttribute{
+									MarkdownDescription: "Start interval.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
 								},
 							},
 						},
-						"volume": schema.SetNestedBlock{
+						"volumes": schema.ListNestedAttribute{
 							MarkdownDescription: "The volumes of the service.",
-							NestedObject: schema.NestedBlockObject{
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"source": schema.StringAttribute{
 										MarkdownDescription: "The source of the volume.",
@@ -961,33 +976,31 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 										MarkdownDescription: "The type of the volume.",
 										Required:            true,
 									},
-								},
-								Blocks: map[string]schema.Block{
-									"bind": schema.SetNestedBlock{
+									"bind": schema.SingleNestedAttribute{
 										MarkdownDescription: "The bind of the volume.",
-										NestedObject: schema.NestedBlockObject{
-											Attributes: map[string]schema.Attribute{
-												"propagation": schema.StringAttribute{
-													MarkdownDescription: "The propagation of the bind.",
-													Optional:            true,
-												},
-												"create_host_path": schema.BoolAttribute{
-													MarkdownDescription: "Whether to create the host path.",
-													Optional:            true,
-												},
-												"selinux": schema.StringAttribute{
-													MarkdownDescription: "The selinux of the bind.",
-													Optional:            true,
-												},
+										Optional:            true,
+										Attributes: map[string]schema.Attribute{
+											"propagation": schema.StringAttribute{
+												MarkdownDescription: "The propagation of the bind.",
+												Optional:            true,
+											},
+											"create_host_path": schema.BoolAttribute{
+												MarkdownDescription: "Whether to create the host path.",
+												Optional:            true,
+											},
+											"selinux": schema.StringAttribute{
+												MarkdownDescription: "The selinux of the bind.",
+												Optional:            true,
 											},
 										},
 									},
 								},
 							},
 						},
-						"ulimit": schema.SetNestedBlock{
+						"ulimits": schema.MapNestedAttribute{
 							MarkdownDescription: "The ulimits of the service.",
-							NestedObject: schema.NestedBlockObject{
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"name": schema.StringAttribute{
 										MarkdownDescription: "The name of the ulimit.",
@@ -1008,9 +1021,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"config": schema.SetNestedBlock{
+						"configs": schema.ListNestedAttribute{
 							MarkdownDescription: "The configs of the service.",
-							NestedObject: schema.NestedBlockObject{
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"source": schema.StringAttribute{
 										MarkdownDescription: "The source of the config.",
@@ -1038,9 +1052,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					},
 				},
 			},
-			"network": schema.SetNestedBlock{
+			"networks": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose networks.",
-				NestedObject: schema.NestedBlockObject{
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the network.",
@@ -1079,39 +1094,35 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "Whether to enable IPv6.",
 							Optional:            true,
 						},
-					},
-					Blocks: map[string]schema.Block{
-						"ipam": schema.SetNestedBlock{
+						"ipam": schema.SingleNestedAttribute{
 							MarkdownDescription: "The IPAM of the network.",
-							NestedObject: schema.NestedBlockObject{
-								Attributes: map[string]schema.Attribute{
-									"driver": schema.StringAttribute{
-										MarkdownDescription: "The driver of the IPAM.",
-										Optional:            true,
-									},
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"driver": schema.StringAttribute{
+									MarkdownDescription: "The driver of the IPAM.",
+									Optional:            true,
 								},
-								Blocks: map[string]schema.Block{
-									"config": schema.SetNestedBlock{
-										MarkdownDescription: "The config of the IPAM.",
-										NestedObject: schema.NestedBlockObject{
-											Attributes: map[string]schema.Attribute{
-												"subnet": schema.StringAttribute{
-													MarkdownDescription: "The subnet of the config.",
-													Optional:            true,
-												},
-												"ip_range": schema.StringAttribute{
-													MarkdownDescription: "The IP range of the config.",
-													Optional:            true,
-												},
-												"gateway": schema.StringAttribute{
-													MarkdownDescription: "The gateway of the config.",
-													Optional:            true,
-												},
-												"aux_address": schema.MapAttribute{
-													MarkdownDescription: "The aux addresses of the config.",
-													Optional:            true,
-													ElementType:         types.StringType,
-												},
+								"config": schema.MapNestedAttribute{
+									MarkdownDescription: "The config of the IPAM.",
+									Optional:            true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"subnet": schema.StringAttribute{
+												MarkdownDescription: "The subnet of the config.",
+												Optional:            true,
+											},
+											"ip_range": schema.StringAttribute{
+												MarkdownDescription: "The IP range of the config.",
+												Optional:            true,
+											},
+											"gateway": schema.StringAttribute{
+												MarkdownDescription: "The gateway of the config.",
+												Optional:            true,
+											},
+											"aux_address": schema.MapAttribute{
+												MarkdownDescription: "The aux addresses of the config.",
+												Optional:            true,
+												ElementType:         types.StringType,
 											},
 										},
 									},
@@ -1121,9 +1132,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					},
 				},
 			},
-			"volume": schema.SetNestedBlock{
+			"volumes": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose volumes.",
-				NestedObject: schema.NestedBlockObject{
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the volume.",
@@ -1150,9 +1162,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					},
 				},
 			},
-			"secret": schema.SetNestedBlock{
+			"secrets": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose secrets.",
-				NestedObject: schema.NestedBlockObject{
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the secret.",
@@ -1161,9 +1174,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					},
 				},
 			},
-			"config": schema.SetNestedBlock{
+			"configs": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose configs.",
-				NestedObject: schema.NestedBlockObject{
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the config.",
@@ -1188,8 +1202,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					},
 				},
 			},
-			"extension": schema.SetNestedBlock{
-				NestedObject: schema.NestedBlockObject{
+			"extensions": schema.MapNestedAttribute{
+				MarkdownDescription: "Docker compose extensions.",
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the extension.",

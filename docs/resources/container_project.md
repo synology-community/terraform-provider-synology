@@ -18,21 +18,21 @@ A Docker Compose project for the Container Manager Synology API.
 resource "synology_container_project" "foo" {
   name = "foo"
 
-  service {
-    name = "bar"
+  services = {
+    "bar" = {
+      image = {
+        name = "nginx"
+        tag  = "latest"
+      }
 
-    image {
-      name = "nginx"
-      tag  = "latest"
-    }
+      port = {
+        container_port = 80
+        host_port      = 80
+      }
 
-    port {
-      container_port = 80
-      host_port      = 80
-    }
-
-    logging {
-      driver = "json-file"
+      logging = {
+        driver = "json-file"
+      }
     }
   }
 }
@@ -47,15 +47,15 @@ resource "synology_container_project" "foo" {
 
 ### Optional
 
-- `config` (Block Set) Docker compose configs. (see [below for nested schema](#nestedblock--config))
-- `extension` (Block Set) (see [below for nested schema](#nestedblock--extension))
-- `network` (Block Set) Docker compose networks. (see [below for nested schema](#nestedblock--network))
+- `configs` (Attributes Map) Docker compose configs. (see [below for nested schema](#nestedatt--configs))
+- `extensions` (Attributes Map) Docker compose extensions. (see [below for nested schema](#nestedatt--extensions))
+- `networks` (Attributes Map) Docker compose networks. (see [below for nested schema](#nestedatt--networks))
 - `run` (Boolean) Whether to run the project.
-- `secret` (Block Set) Docker compose secrets. (see [below for nested schema](#nestedblock--secret))
-- `service` (Block Set) Docker compose services. (see [below for nested schema](#nestedblock--service))
-- `service_portal` (Block Set) Synology Web Station configuration for the docker compose project. (see [below for nested schema](#nestedblock--service_portal))
+- `secrets` (Attributes Map) Docker compose secrets. (see [below for nested schema](#nestedatt--secrets))
+- `service` (Attributes Map) Docker compose services. (see [below for nested schema](#nestedatt--service))
+- `service_portal` (Attributes) Synology Web Station configuration for the docker compose project. (see [below for nested schema](#nestedatt--service_portal))
 - `share_path` (String) The share path of the project.
-- `volume` (Block Set) Docker compose volumes. (see [below for nested schema](#nestedblock--volume))
+- `volumes` (Attributes Map) Docker compose volumes. (see [below for nested schema](#nestedatt--volumes))
 
 ### Read-Only
 
@@ -64,8 +64,8 @@ resource "synology_container_project" "foo" {
 - `status` (String) The status of the project.
 - `updated_at` (String) The time the project was updated.
 
-<a id="nestedblock--config"></a>
-### Nested Schema for `config`
+<a id="nestedatt--configs"></a>
+### Nested Schema for `configs`
 
 Required:
 
@@ -77,16 +77,16 @@ Optional:
 - `file` (String) The file of the config.
 
 
-<a id="nestedblock--extension"></a>
-### Nested Schema for `extension`
+<a id="nestedatt--extensions"></a>
+### Nested Schema for `extensions`
 
 Optional:
 
 - `name` (String) The name of the extension.
 
 
-<a id="nestedblock--network"></a>
-### Nested Schema for `network`
+<a id="nestedatt--networks"></a>
+### Nested Schema for `networks`
 
 Optional:
 
@@ -96,20 +96,20 @@ Optional:
 - `enable_ipv6` (Boolean) Whether to enable IPv6.
 - `external` (Boolean) Whether the network is external.
 - `internal` (Boolean) Whether the network is internal.
-- `ipam` (Block Set) The IPAM of the network. (see [below for nested schema](#nestedblock--network--ipam))
+- `ipam` (Attributes) The IPAM of the network. (see [below for nested schema](#nestedatt--networks--ipam))
 - `labels` (Map of String) The labels of the network.
 - `name` (String) The name of the network.
 
-<a id="nestedblock--network--ipam"></a>
-### Nested Schema for `network.ipam`
+<a id="nestedatt--networks--ipam"></a>
+### Nested Schema for `networks.ipam`
 
 Optional:
 
-- `config` (Block Set) The config of the IPAM. (see [below for nested schema](#nestedblock--network--ipam--config))
+- `config` (Attributes Map) The config of the IPAM. (see [below for nested schema](#nestedatt--networks--ipam--config))
 - `driver` (String) The driver of the IPAM.
 
-<a id="nestedblock--network--ipam--config"></a>
-### Nested Schema for `network.ipam.config`
+<a id="nestedatt--networks--ipam--config"></a>
+### Nested Schema for `networks.ipam.config`
 
 Optional:
 
@@ -121,56 +121,56 @@ Optional:
 
 
 
-<a id="nestedblock--secret"></a>
-### Nested Schema for `secret`
+<a id="nestedatt--secrets"></a>
+### Nested Schema for `secrets`
 
 Optional:
 
 - `name` (String) The name of the secret.
 
 
-<a id="nestedblock--service"></a>
+<a id="nestedatt--service"></a>
 ### Nested Schema for `service`
 
 Optional:
 
-- `capabilities` (Object) The capabilities of the service. (see [below for nested schema](#nestedatt--service--capabilities))
+- `capabilities` (Attributes) The capabilities of the service. (see [below for nested schema](#nestedatt--service--capabilities))
 - `command` (List of String) The command of the service.
-- `config` (Block Set) The configs of the service. (see [below for nested schema](#nestedblock--service--config))
+- `configs` (Attributes Map) The configs of the service. (see [below for nested schema](#nestedatt--service--configs))
 - `container_name` (String) The container name.
-- `depends_on` (Block Set) The dependencies of the service. (see [below for nested schema](#nestedblock--service--depends_on))
+- `depends_on` (Attributes Map) The dependencies of the service. (see [below for nested schema](#nestedatt--service--depends_on))
 - `dns` (List of String) The DNS of the service.
 - `entrypoint` (List of String) The entrypoint of the service.
 - `environment` (Map of String) The environment of the service.
-- `health_check` (Block Set) Health check configuration. (see [below for nested schema](#nestedblock--service--health_check))
-- `image` (Block, Optional) The image of the service. (see [below for nested schema](#nestedblock--service--image))
+- `healthcheck` (Attributes) Health check configuration. (see [below for nested schema](#nestedatt--service--healthcheck))
+- `image` (Attributes) The image of the service. (see [below for nested schema](#nestedatt--service--image))
 - `labels` (Map of String) The labels of the network.
-- `logging` (Block Set) Logging configuration for the docker service. (see [below for nested schema](#nestedblock--service--logging))
+- `logging` (Attributes) Logging configuration for the docker service. (see [below for nested schema](#nestedatt--service--logging))
 - `mem_limit` (String) The memory limit.
 - `name` (String) The name of the service.
-- `network` (Block Set) The networks of the service. (see [below for nested schema](#nestedblock--service--network))
 - `network_mode` (String) The network mode.
-- `port` (Block Set) The ports of the service. (see [below for nested schema](#nestedblock--service--port))
+- `networks` (Attributes Map) The networks of the service. (see [below for nested schema](#nestedatt--service--networks))
+- `ports` (Attributes List) The ports of the service. (see [below for nested schema](#nestedatt--service--ports))
 - `privileged` (Boolean) Whether the service is privileged.
 - `replicas` (Number) The number of replicas.
 - `restart` (String) The restart policy.
 - `security_opt` (List of String) The security options of the service.
 - `tmpfs` (List of String) The tmpfs of the service.
-- `ulimit` (Block Set) The ulimits of the service. (see [below for nested schema](#nestedblock--service--ulimit))
+- `ulimits` (Attributes Map) The ulimits of the service. (see [below for nested schema](#nestedatt--service--ulimits))
 - `user` (String) The user of the service.
-- `volume` (Block Set) The volumes of the service. (see [below for nested schema](#nestedblock--service--volume))
+- `volumes` (Attributes Map) The volumes of the service. (see [below for nested schema](#nestedatt--service--volumes))
 
 <a id="nestedatt--service--capabilities"></a>
 ### Nested Schema for `service.capabilities`
 
 Optional:
 
-- `add` (Set of String)
-- `drop` (Set of String)
+- `add` (List of String) The capabilities to add.
+- `drop` (List of String) The capabilities to drop.
 
 
-<a id="nestedblock--service--config"></a>
-### Nested Schema for `service.config`
+<a id="nestedatt--service--configs"></a>
+### Nested Schema for `service.configs`
 
 Optional:
 
@@ -181,7 +181,7 @@ Optional:
 - `uid` (String) The UID of the config.
 
 
-<a id="nestedblock--service--depends_on"></a>
+<a id="nestedatt--service--depends_on"></a>
 ### Nested Schema for `service.depends_on`
 
 Required:
@@ -195,8 +195,8 @@ Optional:
 - `restart` (Boolean) Whether to restart.
 
 
-<a id="nestedblock--service--health_check"></a>
-### Nested Schema for `service.health_check`
+<a id="nestedatt--service--healthcheck"></a>
+### Nested Schema for `service.healthcheck`
 
 Optional:
 
@@ -208,7 +208,7 @@ Optional:
 - `timeout` (String) Timeout to run the test.
 
 
-<a id="nestedblock--service--image"></a>
+<a id="nestedatt--service--image"></a>
 ### Nested Schema for `service.image`
 
 Required:
@@ -221,7 +221,7 @@ Optional:
 - `tag` (String) The tag of the image. Default is `latest`.
 
 
-<a id="nestedblock--service--logging"></a>
+<a id="nestedatt--service--logging"></a>
 ### Nested Schema for `service.logging`
 
 Optional:
@@ -230,8 +230,8 @@ Optional:
 - `options` (Map of String) The options of the logging.
 
 
-<a id="nestedblock--service--network"></a>
-### Nested Schema for `service.network`
+<a id="nestedatt--service--networks"></a>
+### Nested Schema for `service.networks`
 
 Optional:
 
@@ -245,8 +245,8 @@ Optional:
 - `priority` (Number) The priority of the network.
 
 
-<a id="nestedblock--service--port"></a>
-### Nested Schema for `service.port`
+<a id="nestedatt--service--ports"></a>
+### Nested Schema for `service.ports`
 
 Optional:
 
@@ -259,8 +259,8 @@ Optional:
 - `target` (Number) The target of the port.
 
 
-<a id="nestedblock--service--ulimit"></a>
-### Nested Schema for `service.ulimit`
+<a id="nestedatt--service--ulimits"></a>
+### Nested Schema for `service.ulimits`
 
 Required:
 
@@ -273,8 +273,8 @@ Optional:
 - `value` (Number) The value of the ulimit.
 
 
-<a id="nestedblock--service--volume"></a>
-### Nested Schema for `service.volume`
+<a id="nestedatt--service--volumes"></a>
+### Nested Schema for `service.volumes`
 
 Required:
 
@@ -282,13 +282,13 @@ Required:
 
 Optional:
 
-- `bind` (Block Set) The bind of the volume. (see [below for nested schema](#nestedblock--service--volume--bind))
+- `bind` (Attributes) The bind of the volume. (see [below for nested schema](#nestedatt--service--volumes--bind))
 - `read_only` (Boolean) Whether the volume is read only.
 - `source` (String) The source of the volume.
 - `target` (String) The target of the volume.
 
-<a id="nestedblock--service--volume--bind"></a>
-### Nested Schema for `service.volume.bind`
+<a id="nestedatt--service--volumes--bind"></a>
+### Nested Schema for `service.volumes.bind`
 
 Optional:
 
@@ -299,7 +299,7 @@ Optional:
 
 
 
-<a id="nestedblock--service_portal"></a>
+<a id="nestedatt--service_portal"></a>
 ### Nested Schema for `service_portal`
 
 Optional:
@@ -310,8 +310,8 @@ Optional:
 - `protocol` (String) The protocol of the service portal.
 
 
-<a id="nestedblock--volume"></a>
-### Nested Schema for `volume`
+<a id="nestedatt--volumes"></a>
+### Nested Schema for `volumes`
 
 Required:
 
