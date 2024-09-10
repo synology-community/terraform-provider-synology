@@ -27,7 +27,7 @@
          - name: Checkout Source
            uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
          - name: Run Gosec Security Scanner
-           uses: securego/gosec@0ce4453ddd8cca1291d2056cf903b545baad95a0 # v2.21.1
+           uses: securego/gosec@abfe8cfd6d5687c96abf31f8e7f57982df2a6e4f # v2.21.2
            with:
              args: '-no-fail -fmt sarif -out results.sarif ./...'
          - name: Upload SARIF file
