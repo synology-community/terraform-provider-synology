@@ -16,6 +16,11 @@ import (
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
 
+type Capabilities struct {
+	Add  types.Set `tfsdk:"add"`
+	Drop types.Set `tfsdk:"drop"`
+}
+
 type Logging struct {
 	Driver  types.String `tfsdk:"driver"`
 	Options types.Map    `tfsdk:"options"`
@@ -96,8 +101,9 @@ type ServiceDependency struct {
 type Service struct {
 	Name          types.String `tfsdk:"name"`
 	ContainerName types.String `tfsdk:"container_name"`
-	Image         types.Set    `tfsdk:"image"`
+	Image         types.Object `tfsdk:"image"`
 	MemLimit      types.String `tfsdk:"mem_limit"`
+	Entrypoint    types.List   `tfsdk:"entrypoint"`
 	Command       types.List   `tfsdk:"command"`
 	Replicas      types.Int64  `tfsdk:"replicas"`
 	Logging       types.Set    `tfsdk:"logging"`
@@ -116,6 +122,8 @@ type Service struct {
 	Configs       types.Set    `tfsdk:"config"`
 	Labels        types.Map    `tfsdk:"labels"`
 	DNS           types.List   `tfsdk:"dns"`
+	User          types.String `tfsdk:"user"`
+	Capabilities  types.Object `tfsdk:"capabilities"`
 }
 
 func (m Service) ModelType() attr.Type {
@@ -134,10 +142,12 @@ func (m Service) AttrType() map[string]attr.Type {
 				},
 			},
 		},
+		"entrypoint":   types.StringType,
 		"command":      types.ListType{ElemType: types.StringType},
 		"restart":      types.StringType, // "no", "always", "on-failure", "unless-stopped", "always", "unless-stopped", "on-failure", "no
 		"network_mode": types.StringType,
 		"replicas":     types.Int64Type,
+		"user":         types.StringType,
 		"port": types.SetType{
 			ElemType: types.ObjectType{
 				AttrTypes: map[string]attr.Type{
@@ -219,13 +229,20 @@ func (m Service) AttrType() map[string]attr.Type {
 		},
 		"environment": types.MapType{ElemType: types.StringType},
 		"dns":         types.ListType{ElemType: types.StringType},
+		"capabilities": types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"add":  types.SetType{ElemType: types.StringType},
+				"drop": types.SetType{ElemType: types.StringType},
+			},
+		},
 	}
 }
 
 func (m Service) Value() attr.Value {
 
 	var logging basetypes.SetValue
-	var image basetypes.SetValue
+	var image basetypes.ObjectValue
+	var entrypoints basetypes.ListValue
 	var commands basetypes.ListValue
 	var ports basetypes.SetValue
 	var networks basetypes.SetValue
@@ -239,6 +256,7 @@ func (m Service) Value() attr.Value {
 	var labels basetypes.MapValue
 	var dns basetypes.ListValue
 	var securityOpt basetypes.ListValue
+	var capabilities basetypes.ObjectValue
 
 	if s, diag := m.SecurityOpt.ToListValue(context.Background()); !diag.HasError() {
 		securityOpt = s
@@ -248,7 +266,7 @@ func (m Service) Value() attr.Value {
 		logging = l
 	}
 
-	if i, diag := m.Image.ToSetValue(context.Background()); !diag.HasError() {
+	if i, diag := m.Image.ToObjectValue(context.Background()); !diag.HasError() {
 		image = i
 	}
 
@@ -300,10 +318,15 @@ func (m Service) Value() attr.Value {
 		dns = d
 	}
 
+	if c, diag := m.Capabilities.ToObjectValue(context.Background()); !diag.HasError() {
+		capabilities = c
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"name":           types.StringValue(m.Name.ValueString()),
 		"container_name": types.StringValue(m.ContainerName.ValueString()),
 		"image":          image,
+		"entrypoint":     entrypoints,
 		"command":        commands,
 		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
 		"port":           ports,
@@ -322,6 +345,8 @@ func (m Service) Value() attr.Value {
 		"config":         configs,
 		"labels":         labels,
 		"dns":            dns,
+		"user":           types.StringValue(m.User.ValueString()),
+		"capabilities":   capabilities,
 	})
 }
 
@@ -495,22 +520,33 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 	}
 
 	if !m.Image.IsNull() && !m.Image.IsUnknown() {
-		image := []Image{}
-		if diag := m.Image.ElementsAs(ctx, &image, true); !diag.HasError() {
-			i := image[0]
-			iName := i.Name.ValueString()
+		image := Image{}
+		if diag := m.Image.As(ctx, &image, basetypes.ObjectAsOptions{
+			UnhandledNullAsEmpty:    false,
+			UnhandledUnknownAsEmpty: false,
+		}); !diag.HasError() {
+			iName := image.Name.ValueString()
 			var iTag, iRepo string
-			if i.Repository.IsNull() || i.Repository.IsUnknown() {
+			if image.Repository.IsNull() || image.Repository.IsUnknown() {
 				iRepo = "docker.io"
 			} else {
-				iRepo = i.Repository.ValueString()
+				iRepo = image.Repository.ValueString()
 			}
-			if i.Tag.IsNull() || i.Tag.IsUnknown() {
+			if image.Tag.IsNull() || image.Tag.IsUnknown() {
 				iTag = "latest"
 			} else {
-				iTag = i.Tag.ValueString()
+				iTag = image.Tag.ValueString()
 			}
 			service.Image = fmt.Sprintf("%s/%s:%s", iRepo, iName, iTag)
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	if !m.Entrypoint.IsNull() && !m.Entrypoint.IsUnknown() {
+		entrypoints := []string{}
+		if diag := m.Entrypoint.ElementsAs(ctx, &entrypoints, true); !diag.HasError() {
+			service.Entrypoint = entrypoints
 		} else {
 			d = append(d, diag...)
 		}
@@ -669,6 +705,35 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		service.Restart = m.Restart.ValueString()
 	}
 
+	if !m.Capabilities.IsNull() && !m.Capabilities.IsUnknown() {
+		capabilities := Capabilities{}
+		if diag := m.Capabilities.As(ctx, &capabilities, basetypes.ObjectAsOptions{
+			UnhandledNullAsEmpty:    false,
+			UnhandledUnknownAsEmpty: false,
+		}); !diag.HasError() {
+			service.CapAdd = []string{}
+			service.CapDrop = []string{}
+			if !capabilities.Add.IsNull() && !capabilities.Add.IsUnknown() {
+				add := []string{}
+				if diag := capabilities.Add.ElementsAs(ctx, &add, true); !diag.HasError() {
+					service.CapAdd = add
+				} else {
+					d = append(d, diag...)
+				}
+			}
+			if !capabilities.Drop.IsNull() && !capabilities.Drop.IsUnknown() {
+				drop := []string{}
+				if diag := capabilities.Drop.ElementsAs(ctx, &drop, true); !diag.HasError() {
+					service.CapDrop = drop
+				} else {
+					d = append(d, diag...)
+				}
+			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
 	service.ContainerName = m.ContainerName.ValueString()
 	service.Name = sName
 	replicas := m.Replicas.ValueInt64()
@@ -676,6 +741,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 	service.Deploy = &composetypes.DeployConfig{
 		Replicas: &intReplicas,
 	}
+	service.User = m.User.ValueString()
 
 	return d
 }

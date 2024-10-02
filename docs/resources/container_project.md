@@ -59,8 +59,10 @@ resource "synology_container_project" "foo" {
 
 ### Read-Only
 
+- `created_at` (String) The time the project was created.
 - `id` (String) The ID of the project.
-- `state` (String) The state of the project.
+- `status` (String) The status of the project.
+- `updated_at` (String) The time the project was updated.
 
 <a id="nestedblock--config"></a>
 ### Nested Schema for `config`
@@ -132,14 +134,16 @@ Optional:
 
 Optional:
 
+- `capabilities` (Object) The capabilities of the service. (see [below for nested schema](#nestedatt--service--capabilities))
 - `command` (List of String) The command of the service.
 - `config` (Block Set) The configs of the service. (see [below for nested schema](#nestedblock--service--config))
 - `container_name` (String) The container name.
 - `depends_on` (Block Set) The dependencies of the service. (see [below for nested schema](#nestedblock--service--depends_on))
 - `dns` (List of String) The DNS of the service.
+- `entrypoint` (List of String) The entrypoint of the service.
 - `environment` (Map of String) The environment of the service.
 - `health_check` (Block Set) Health check configuration. (see [below for nested schema](#nestedblock--service--health_check))
-- `image` (Block Set) The image of the service. (see [below for nested schema](#nestedblock--service--image))
+- `image` (Block, Optional) The image of the service. (see [below for nested schema](#nestedblock--service--image))
 - `labels` (Map of String) The labels of the network.
 - `logging` (Block Set) Logging configuration for the docker service. (see [below for nested schema](#nestedblock--service--logging))
 - `mem_limit` (String) The memory limit.
@@ -153,7 +157,17 @@ Optional:
 - `security_opt` (List of String) The security options of the service.
 - `tmpfs` (List of String) The tmpfs of the service.
 - `ulimit` (Block Set) The ulimits of the service. (see [below for nested schema](#nestedblock--service--ulimit))
+- `user` (String) The user of the service.
 - `volume` (Block Set) The volumes of the service. (see [below for nested schema](#nestedblock--service--volume))
+
+<a id="nestedatt--service--capabilities"></a>
+### Nested Schema for `service.capabilities`
+
+Optional:
+
+- `add` (Set of String)
+- `drop` (Set of String)
+
 
 <a id="nestedblock--service--config"></a>
 ### Nested Schema for `service.config`
