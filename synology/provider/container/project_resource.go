@@ -81,24 +81,6 @@ const projectDescription = `A Docker Compose project for the Container Manager S
 
 `
 
-func getProjectYaml(ctx context.Context, data ProjectResourceModel, projYaml *string) (diags diag.Diagnostics) {
-	return models.NewComposeContentBuilder(
-		ctx,
-	).SetServices(
-		&data.Services,
-	).SetNetworks(
-		&data.Networks,
-	).SetVolumes(
-		&data.Volumes,
-	).SetConfigs(
-		&data.Configs,
-	).SetSecrets(
-		&data.Secrets,
-	).Build(
-		projYaml,
-	)
-}
-
 func projectExists(err error) bool {
 	errs, ok := err.(*multierror.Error)
 	if !ok {
@@ -274,7 +256,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	if shouldUpdate {
 		p, err := f.client.ProjectGetByName(ctx, data.Name.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to get project", err.Error())
+			resp.Diagnostics.AddError("Failed to get project on create", err.Error())
 			return
 		}
 
@@ -341,7 +323,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to get project after update", err.Error())
+		resp.Diagnostics.AddError("Failed to get project after create", err.Error())
 		return
 	}
 
@@ -424,35 +406,20 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				resp.State.RemoveResource(ctx)
 				return
 			default:
-				resp.Diagnostics.AddError("Failed to read project", err.Error())
+				resp.Diagnostics.AddError("Failed to get project on read", err.Error())
 				return
 			}
-		} else if proj.ID != "" && (data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID) {
-			data.ID = types.StringValue(proj.ID)
-			data.Content = types.StringValue(proj.Content)
-		} else {
-			data.Content = types.StringValue(proj.Content)
+		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
+			if proj.ID != "" {
+				data.ID = types.StringValue(proj.ID)
+			}
 		}
-	} else {
-		data.Content = types.StringValue(proj.Content)
 	}
-	// 	_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
-	// 		ID: data.ID.String(),
-	// 	})
-	// 	if err != nil {
-	// 		resp.Diagnostics.AddError("Failed to build project", err.Error())
-	// 		return
-	// 	}
-	// 	proj, err = f.client.ProjectGet(ctx, data.ID.String())
-	// 	if err != nil {
-	// 		resp.Diagnostics.AddError("Failed to get project", err.Error())
-	// 		return
-	// 	}
-	// }
 
 	data.Status = types.StringValue(proj.Status)
 	data.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	data.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
+	data.Content = types.StringValue(proj.Content)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -512,7 +479,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to get project", err.Error())
+			resp.Diagnostics.AddError("Failed to get project on update", err.Error())
 			return
 		}
 
@@ -570,7 +537,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		resp.Diagnostics.AddError("Failed to get project after update", err.Error())
 		return
 	}
 
