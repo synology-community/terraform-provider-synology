@@ -89,6 +89,8 @@ func getProjectYaml(ctx context.Context, data ProjectResourceModel, projYaml *st
 		&data.Volumes,
 	).SetConfigs(
 		&data.Configs,
+	).SetSecrets(
+		&data.Secrets,
 	).Build(
 		projYaml,
 	)
@@ -329,7 +331,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		})
 
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to build project", err.Error())
+			resp.Diagnostics.AddError("Failed to build project after update", err.Error())
 			return
 		}
 	}
@@ -337,7 +339,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		resp.Diagnostics.AddError("Failed to get project after update", err.Error())
 		return
 	}
 
@@ -361,7 +363,7 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to get project", err.Error())
+		resp.Diagnostics.AddError("Failed to get project before deletion", err.Error())
 		return
 	}
 
@@ -370,7 +372,7 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 			ID: data.ID.ValueString(),
 		})
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to stop project", err.Error())
+			resp.Diagnostics.AddError("Failed to stop project during deletion", err.Error())
 			return
 		}
 	}
@@ -380,7 +382,7 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to clean project", err.Error())
+		resp.Diagnostics.AddError("Failed to clean project for deletion", err.Error())
 		return
 	}
 
@@ -417,7 +419,7 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				resp.State.RemoveResource(ctx)
 				return
 			default:
-				resp.Diagnostics.AddError("Failed to get project", err.Error())
+				resp.Diagnostics.AddError("Failed to read project", err.Error())
 				return
 			}
 		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
@@ -427,20 +429,20 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		}
 	}
 
-	if !proj.IsRunning() && data.Run.ValueBool() {
-		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
-			ID: data.ID.String(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to build project", err.Error())
-			return
-		}
-		proj, err = f.client.ProjectGet(ctx, data.ID.String())
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to get project", err.Error())
-			return
-		}
-	}
+	// if !proj.IsRunning() && data.Run.ValueBool() {
+	// 	_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+	// 		ID: data.ID.String(),
+	// 	})
+	// 	if err != nil {
+	// 		resp.Diagnostics.AddError("Failed to build project", err.Error())
+	// 		return
+	// 	}
+	// 	proj, err = f.client.ProjectGet(ctx, data.ID.String())
+	// 	if err != nil {
+	// 		resp.Diagnostics.AddError("Failed to get project", err.Error())
+	// 		return
+	// 	}
+	// }
 
 	data.Status = types.StringValue(proj.Status)
 	data.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
@@ -1049,6 +1051,34 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
+						"secrets": schema.ListNestedAttribute{
+							MarkdownDescription: "The secrets of the service.",
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the config.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the config.",
+										Optional:            true,
+									},
+									"uid": schema.StringAttribute{
+										MarkdownDescription: "The UID of the config.",
+										Optional:            true,
+									},
+									"gid": schema.StringAttribute{
+										MarkdownDescription: "The GID of the config.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the config.",
+										Optional:            true,
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -1170,6 +1200,22 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the secret.",
 							Optional:            true,
+						},
+						"content": schema.StringAttribute{
+							MarkdownDescription: "The content of the config.",
+							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"file": schema.StringAttribute{
+							MarkdownDescription: "The file of the config.",
+							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 					},
 				},

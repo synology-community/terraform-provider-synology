@@ -130,6 +130,32 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBu
 	return c
 }
 
+func (c *ComposeContentBuilder) SetSecrets(secrets *types.Map) *ComposeContentBuilder {
+	if !secrets.IsNull() && !secrets.IsUnknown() {
+
+		elements := map[string]Secret{}
+		c.diags.Append(secrets.ElementsAs(c.ctx, &elements, true)...)
+
+		if c.diags.HasError() {
+			return c
+		}
+
+		c.project.Secrets = map[string]composetypes.SecretConfig{}
+
+		for _, v := range elements {
+			sec := composetypes.SecretConfig{}
+
+			c.diags.Append(v.AsComposeConfig(c.ctx, &sec)...)
+			if c.diags.HasError() {
+				return c
+			}
+
+			c.project.Secrets[sec.Name] = sec
+		}
+	}
+	return c
+}
+
 func (c *ComposeContentBuilder) Build(content *string) diag.Diagnostics {
 
 	projectYAML, err := c.project.MarshalYAML()
