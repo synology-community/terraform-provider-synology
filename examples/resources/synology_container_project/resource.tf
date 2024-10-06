@@ -9,13 +9,36 @@ resource "synology_container_project" "foo" {
       }
 
       port = {
-        container_port = 80
-        host_port      = 80
+        target    = 80
+        published = 80
       }
 
-      logging = {
-        driver = "json-file"
+      configs = {
+        "baz" = {
+          source = "baz"
+          target = "/config/baz.txt"
+          gid    = 0
+          uid    = 0
+          mode   = "0660"
+        }
+
+        "qux" = {
+          source = "qux"
+          target = "/config/qux.toml"
+        }
       }
+
+      logging = { driver = "json-file" }
+    }
+  }
+
+  configs = {
+    "baz" = {
+      content = "Hello, World!"
+    }
+
+    "qux" = {
+      file = "/volume1/foo/bar"
     }
   }
 }
