@@ -86,6 +86,8 @@ func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaReques
 func (p *SynologyProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data SynologyProviderModel
 
+	tflog.Info(ctx, "Configuring Synology provider")
+
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -155,8 +157,15 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
 
-	if _, err := c.Login(ctx, user, password, otp_secret); err != nil {
-		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
+	if _, err := c.Login(ctx, api.LoginOptions{
+		Username:  user,
+		Password:  password,
+		OTPSecret: otp_secret,
+	}); err != nil {
+
+		if c.Credentials().Token == "" {
+			resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
+		}
 	}
 
 	resp.DataSourceData = c

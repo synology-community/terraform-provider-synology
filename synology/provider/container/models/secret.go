@@ -17,11 +17,9 @@ type Secret struct {
 
 func (m Secret) AsComposeConfig(ctx context.Context, secret *composetypes.SecretConfig) (d diag.Diagnostics) {
 	secret.Name = m.Name.ValueString()
-
 	if !m.File.IsNull() && !m.File.IsUnknown() {
 		secret.File = m.File.ValueString()
 	}
-
 	return
 }
 
@@ -43,4 +41,11 @@ func (m Secret) Value() attr.Value {
 		"content": types.StringValue(m.Content.ValueString()),
 		"file":    types.StringValue(m.File.ValueString()),
 	})
+}
+
+func (m *Secret) FromComposeConfig(ctx context.Context, volume *composetypes.SecretConfig) (d diag.Diagnostics) {
+	m.Name = types.StringValue(volume.Name)
+	m.Content = types.StringValue(volume.Content)
+	m.File = types.StringValue(volume.File)
+	return
 }

@@ -25,6 +25,13 @@ func (m Config) AsComposeConfig(ctx context.Context, config *composetypes.Config
 	return
 }
 
+func (m *Config) FromComposeConfig(ctx context.Context, config *composetypes.ConfigObjConfig) (d diag.Diagnostics) {
+	m.Name = types.StringValue(config.Name)
+	m.File = types.StringValue(config.File)
+	m.Content = types.StringValue(config.Content)
+	return
+}
+
 func (m Config) ModelType() attr.Type {
 	return types.ObjectType{AttrTypes: m.AttrType()}
 }

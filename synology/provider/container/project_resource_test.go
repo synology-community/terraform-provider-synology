@@ -13,50 +13,49 @@ const (
 	resource "synology_container_project" "foo" {
 		name = "foo"
 
-		network {
-			name   = "foo"
-			driver = "bridge"
-		}
-
-		network {
-			name   = "bar"
-			driver = "macvlan"
-			driver_opts = {
-				"parent" = "ovs_bond0"
+		networks = {
+			foo = {
+				driver = "bridge"
 			}
-			ipam {
+
+			bar = {
 				driver = "macvlan"
-				config {
-					subnet  = "10.0.0.0/16"
-					gateway = "10.0.0.1"
-					ip_range = "10.0.60.1/28"
-					aux_address = {
-						host = "10.0.60.2"
-					}
+				driver_opts = {
+					"parent" = "ovs_bond0"
+				}
+				ipam = {
+					driver = "macvlan"
+					config = [{
+						subnet  = "10.0.0.0/16"
+						gateway = "10.0.0.1"
+						ip_range = "10.0.60.1/28"
+						aux_address = {
+							host = "10.0.60.2"
+						}
+					}]
 				}
 			}
 		}
+		services = {
+			bar = {
+				name     = "bar"
+				replicas = 1
 
-		service {
-			name     = "bar"
-			replicas = 1
+				image = "nginx"
 
-			image {
-				name = "nginx"
-			}
+				logging = {
+					driver = "json-file"
+				}
 
-			logging {
-				driver = "json-file"
-			}
+				ports = [{
+					target    = 80
+					published = "8557"
+					protocol  = "tcp"
+				}]
 
-			port {
-				target    = 80
-				published = "8557"
-				protocol  = "tcp"
-			}
-
-			network {
-				name = "foo"
+				networks = {
+					foo = {}
+				}
 			}
 		}
 	}`
@@ -64,33 +63,34 @@ const (
 	resource "synology_container_project" "foo" {
 		name = "homebridge"
 
-		service {
-			name     = "homebridge"
-			replicas = 1
+		services = {
+			homebridge = {
+				name     = "homebridge"
+				replicas = 1
 
-			image {
-				name = "homebridge/homebridge"
-				tag  = "latest"
-			}
+				image = "homebridge/homebridge:latest"
 
-			network_mode = "host"
+				network_mode = "host"
 
-			health_check {
-				test         = [
-					"curl --fail localhost:8581 || exit 1"
-				]
-				interval     = "60s"
-				retries      = 5
-				start_period = "300s"
-				timeout      = "2s"
-			}
-
-			volume {
-				source = "/volume1/docker/homebridge"
-				target = "/homebridge"
-				bind {
-					create_host_path = true
+				healthcheck = {
+					test         = [
+						"curl --fail localhost:8581 || exit 1"
+					]
+					interval     = "60s"
+					retries      = 5
+					start_period = "300s"
+					timeout      = "2s"
 				}
+
+				volumes = [
+					{
+						source = "/volume1/docker/homebridge"
+						target = "/homebridge"
+						bind {
+							create_host_path = true
+						}
+					}
+				]
 			}
 		}
 	}`

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
+	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
@@ -31,6 +32,8 @@ import (
 	"github.com/synology-community/go-synology/pkg/api/docker"
 	"github.com/synology-community/go-synology/pkg/api/filestation"
 	"github.com/synology-community/go-synology/pkg/util/form"
+
+	composetypes "github.com/compose-spec/compose-go/v2/types"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -710,6 +713,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					UseDefaultSharePath(),
 				},
 				Computed: true,
 			},
@@ -852,23 +856,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"image": schema.SingleNestedAttribute{
+						"image": schema.StringAttribute{
 							MarkdownDescription: "The image of the service.",
 							Optional:            true,
-							Attributes: map[string]schema.Attribute{
-								"name": schema.StringAttribute{
-									MarkdownDescription: "The name of the image.",
-									Required:            true,
-								},
-								"repository": schema.StringAttribute{
-									MarkdownDescription: "The repository of the image. Default is `docker.io`.",
-									Optional:            true,
-								},
-								"tag": schema.StringAttribute{
-									MarkdownDescription: "The tag of the image. Default is `latest`.",
-									Optional:            true,
-								},
-							},
 						},
 						"ports": schema.ListNestedAttribute{
 							MarkdownDescription: "The ports of the service.",
@@ -1350,4 +1340,194 @@ func (f *ProjectResource) Configure(ctx context.Context, req resource.ConfigureR
 	f.client = client.DockerAPI()
 	f.fsClient = client.FileStationAPI()
 	f.coreClient = client.CoreAPI()
+}
+
+func (f *ProjectResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	res, err := f.client.ProjectGetByName(ctx, req.ID)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list package feeds", err.Error())
+		return
+	}
+
+	compProj := &composetypes.Project{
+		Name: res.Name,
+	}
+
+	services := map[string]models.Service{}
+	svcs := basetypes.NewMapNull(models.Service{}.ModelType())
+
+	if res.Content != "" {
+		model, err := loader.ParseYAML([]byte(res.Content))
+		if err == nil {
+			err := loader.Transform(model, compProj)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to transform project", err.Error())
+				return
+			}
+		}
+	}
+
+	if compProj.Services != nil {
+		for k, svc := range compProj.Services {
+			nSvc := models.Service{}
+			diags := nSvc.FromComposeConfig(ctx, &svc)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			} else {
+				services[k] = nSvc
+			}
+		}
+
+		svcValues, diags := types.MapValueFrom(ctx, models.Service{}.ModelType(), services)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+		} else {
+			svcs = svcValues
+		}
+	}
+
+	volumes := map[string]models.Volume{}
+	vols := basetypes.NewMapNull(models.Volume{}.ModelType())
+
+	if compProj.Volumes != nil {
+		for k, vol := range compProj.Volumes {
+			nVol := models.Volume{}
+			diags := nVol.FromComposeConfig(ctx, &vol)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			} else {
+				volumes[k] = nVol
+			}
+		}
+
+		volValues, diags := types.MapValueFrom(ctx, models.Volume{}.ModelType(), volumes)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+		} else {
+			vols = volValues
+		}
+	}
+
+	secrets := map[string]models.Secret{}
+	secretsMap := basetypes.NewMapNull(models.Secret{}.ModelType())
+
+	if compProj.Secrets != nil {
+		for k, sec := range compProj.Secrets {
+			nSec := models.Secret{}
+			diags := nSec.FromComposeConfig(ctx, &sec)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			} else {
+				secrets[k] = nSec
+			}
+
+			secValues, diags := types.MapValueFrom(ctx, models.Secret{}.ModelType(), secrets)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+			} else {
+				secretsMap = secValues
+			}
+		}
+	}
+
+	networks := map[string]models.Network{}
+	nets := basetypes.NewMapNull(models.Network{}.ModelType())
+
+	if compProj.Networks != nil {
+		for k, net := range compProj.Networks {
+			nNet := models.Network{}
+			diags := nNet.FromComposeConfig(ctx, &net)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			} else {
+				networks[k] = nNet
+			}
+		}
+
+		netValues, diags := types.MapValueFrom(ctx, models.Network{}.ModelType(), networks)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+		} else {
+			nets = netValues
+		}
+	}
+
+	configs := map[string]models.Config{}
+	configsMap := basetypes.NewMapNull(models.Config{}.ModelType())
+
+	if compProj.Configs != nil {
+
+		for k, cfg := range compProj.Configs {
+			nCfg := models.Config{}
+			diags := nCfg.FromComposeConfig(ctx, &cfg)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			} else {
+				configs[k] = nCfg
+			}
+
+			cfgValues, diags := types.MapValueFrom(ctx, models.Config{}.ModelType(), configs)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+			} else {
+				configsMap = cfgValues
+			}
+		}
+	}
+
+	servicePortalType := map[string]attr.Type{
+		"enable":   types.BoolType,
+		"name":     types.StringType,
+		"port":     types.Int64Type,
+		"protocol": types.StringType,
+	}
+
+	servicePortalValues := types.ObjectNull(servicePortalType)
+
+	if res.EnableServicePortal || res.ServicePortalName != "" || res.ServicePortalPort != 0 || res.ServicePortalProtocol != "" {
+		servicePortal := models.ServicePortal{
+			Enable:   types.BoolValue(res.EnableServicePortal),
+			Name:     types.StringValue(res.ServicePortalName),
+			Port:     types.Int64Value(int64(res.ServicePortalPort)),
+			Protocol: types.StringValue(res.ServicePortalProtocol),
+		}
+
+		svcPortalValues, diags := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+		} else {
+			servicePortalValues = svcPortalValues
+		}
+	}
+
+	project := ProjectResourceModel{
+		ID:        types.StringValue(res.ID),
+		Content:   types.StringValue(res.Content),
+		Status:    types.StringValue(res.Status),
+		CreatedAt: timetypes.NewRFC3339TimeValue(res.CreatedAt),
+		UpdatedAt: timetypes.NewRFC3339TimeValue(res.UpdatedAt),
+		Name:      types.StringValue(res.Name),
+		SharePath: types.StringValue(res.SharePath),
+		Services:  svcs,
+		Volumes:   vols,
+		Secrets:   secretsMap,
+		Configs:   configsMap,
+		Networks:  nets,
+		Extensions: types.MapNull(types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"name": types.StringType,
+			},
+		}),
+		Run:           types.BoolValue(false),
+		Metadata:      types.MapNull(types.StringType),
+		ServicePortal: servicePortalValues,
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, project)...)
 }
