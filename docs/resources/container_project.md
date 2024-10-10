@@ -25,25 +25,24 @@ resource "synology_container_project" "foo" {
         tag  = "latest"
       }
 
-      port = {
+      ports = [{
         target    = 80
         published = 80
-      }
+      }]
 
-      configs = {
-        "baz" = {
+      configs = [
+        {
           source = "baz"
           target = "/config/baz.txt"
           gid    = 0
           uid    = 0
           mode   = "0660"
-        }
-
-        "qux" = {
+        },
+        {
           source = "qux"
           target = "/config/qux.toml"
         }
-      }
+      ]
 
       logging = { driver = "json-file" }
     }
@@ -71,7 +70,9 @@ resource "synology_container_project" "foo" {
 ### Optional
 
 - `configs` (Attributes Map) Docker compose configs. (see [below for nested schema](#nestedatt--configs))
+- `content` (String) The content of the project.
 - `extensions` (Attributes Map) Docker compose extensions. (see [below for nested schema](#nestedatt--extensions))
+- `metadata` (Map of String) The metadata of the project.
 - `networks` (Attributes Map) Docker compose networks. (see [below for nested schema](#nestedatt--networks))
 - `run` (Boolean) Whether to run the project.
 - `secrets` (Attributes Map) Docker compose secrets. (see [below for nested schema](#nestedatt--secrets))
@@ -128,7 +129,7 @@ Optional:
 
 Optional:
 
-- `config` (Attributes Map) The config of the IPAM. (see [below for nested schema](#nestedatt--networks--ipam--config))
+- `config` (Attributes List) The config of the IPAM. (see [below for nested schema](#nestedatt--networks--ipam--config))
 - `driver` (String) The driver of the IPAM.
 
 <a id="nestedatt--networks--ipam--config"></a>

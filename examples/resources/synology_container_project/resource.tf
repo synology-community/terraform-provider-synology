@@ -8,25 +8,24 @@ resource "synology_container_project" "foo" {
         tag  = "latest"
       }
 
-      port = {
+      ports = [{
         target    = 80
         published = 80
-      }
+      }]
 
-      configs = {
-        "baz" = {
+      configs = [
+        {
           source = "baz"
           target = "/config/baz.txt"
           gid    = 0
           uid    = 0
           mode   = "0660"
-        }
-
-        "qux" = {
+        },
+        {
           source = "qux"
           target = "/config/qux.toml"
         }
-      }
+      ]
 
       logging = { driver = "json-file" }
     }

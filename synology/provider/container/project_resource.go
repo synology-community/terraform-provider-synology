@@ -9,6 +9,7 @@ import (
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -18,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -49,15 +51,17 @@ type ProjectResourceModel struct {
 	ID            types.String `tfsdk:"id"`
 	Name          types.String `tfsdk:"name"`
 	SharePath     types.String `tfsdk:"share_path"`
-	Services      types.Map    `tfsdk:"service"`
-	Networks      types.Map    `tfsdk:"network"`
-	Volumes       types.Map    `tfsdk:"volume"`
-	Secrets       types.Map    `tfsdk:"secret"`
-	Configs       types.Map    `tfsdk:"config"`
-	Extensions    types.Map    `tfsdk:"extension"`
+	Services      types.Map    `tfsdk:"services"`
+	Networks      types.Map    `tfsdk:"networks"`
+	Volumes       types.Map    `tfsdk:"volumes"`
+	Secrets       types.Map    `tfsdk:"secrets"`
+	Configs       types.Map    `tfsdk:"configs"`
+	Extensions    types.Map    `tfsdk:"extensions"`
 	Run           types.Bool   `tfsdk:"run"`
 	Status        types.String `tfsdk:"status"`
 	ServicePortal types.Object `tfsdk:"service_portal"`
+	Content       types.String `tfsdk:"content"`
+	Metadata      types.Map    `tfsdk:"metadata"`
 	// ComposeFiles types.ListType `tfsdk:"compose_files"`
 	// Environment  types.MapType  `tfsdk:"environment"`
 	CreatedAt timetypes.RFC3339 `tfsdk:"created_at"`
@@ -179,8 +183,14 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	projectYAML := ""
+
 	if data.SharePath.IsNull() || data.SharePath.IsUnknown() {
 		data.SharePath = types.StringValue(fmt.Sprintf("/projects/%s", data.Name.ValueString()))
+	}
+
+	if data.Metadata.IsNull() || data.Metadata.IsUnknown() {
+		data.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}
 
 	err := f.ensureProjectShare(ctx, data.SharePath.ValueString())
@@ -190,50 +200,54 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Set the file values where content is specified
-	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
-		elements := map[string]models.Config{}
-		resp.Diagnostics.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
+	if !data.Content.IsNull() && !data.Content.IsUnknown() {
+		projectYAML = data.Content.ValueString()
+	} else {
+
+		// Set the file values where content is specified
+		if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
+			elements := map[string]models.Config{}
+			resp.Diagnostics.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			changed := false
+			for k, v := range elements {
+				if !v.Content.IsNull() || !v.Content.IsUnknown() {
+					fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
+					fileContent := v.Content.ValueString()
+					v.File = types.StringValue(fileName)
+					elements[k] = v
+					changed = true
+
+					// Upload the file
+					_, err := f.fsClient.Upload(
+						ctx,
+						data.SharePath.ValueString(),
+						form.File{
+							Name:    fileName,
+							Content: fileContent,
+						}, false,
+						true)
+					if err != nil {
+						resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+						return
+					}
+				}
+			}
+			if changed {
+				elementValues := map[string]attr.Value{}
+				for k, v := range elements {
+					elementValues[k] = v.Value()
+				}
+				data.Configs = types.MapValueMust(models.Config{}.ModelType(), elementValues)
+			}
+		}
+
+		resp.Diagnostics.Append(getProjectYaml(ctx, data, &projectYAML)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		changed := false
-		for k, v := range elements {
-			if !v.Content.IsNull() || !v.Content.IsUnknown() {
-				fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
-				fileContent := v.Content.ValueString()
-				v.File = types.StringValue(fileName)
-				elements[k] = v
-				changed = true
-
-				// Upload the file
-				_, err := f.fsClient.Upload(
-					ctx,
-					data.SharePath.ValueString(),
-					form.File{
-						Name:    fileName,
-						Content: fileContent,
-					}, false,
-					true)
-				if err != nil {
-					resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
-					return
-				}
-			}
-		}
-		if changed {
-			elementValues := map[string]attr.Value{}
-			for k, v := range elements {
-				elementValues[k] = v.Value()
-			}
-			data.Configs = types.MapValueMust(models.Config{}.ModelType(), elementValues)
-		}
-	}
-
-	projectYAML := ""
-	resp.Diagnostics.Append(getProjectYaml(ctx, data, &projectYAML)...)
-	if resp.Diagnostics.HasError() {
-		return
 	}
 
 	servicePortal := models.ServicePortal{}
@@ -346,6 +360,10 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	data.Status = types.StringValue(proj.Status)
 	data.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
+	data.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
+
+	data.Content = types.StringValue(proj.Content)
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -425,11 +443,25 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
 			if proj.ID != "" {
 				data.ID = types.StringValue(proj.ID)
+				data.Content = types.StringValue(proj.Content)
 			}
 		}
 	}
 
-	// if !proj.IsRunning() && data.Run.ValueBool() {
+	if !proj.IsRunning() && data.Run.ValueBool() {
+		id, err := uuid.GenerateUUID()
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to generate UUID", err.Error())
+			return
+		}
+
+		data.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{"drift-detected": types.StringValue(id)})
+
+		// drift := map[string]string{
+		// 	"drift-detected": id,
+		// }
+		// resp.Diagnostics.Append(req.State.SetAttribute(ctx, path.Root("metadata"), drift)...)
+	}
 	// 	_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 	// 		ID: data.ID.String(),
 	// 	})
@@ -454,6 +486,14 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 // Update implements resource.Resource.
 func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state ProjectResourceModel
+
+	if plan.Metadata.IsNull() || plan.Metadata.IsUnknown() {
+		plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
+
+	if state.Metadata.IsNull() || state.Metadata.IsUnknown() {
+		state.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -616,6 +656,12 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
+	if plan.Content.IsNull() || plan.Content.IsUnknown() {
+		plan.Content = types.StringValue(proj.Content)
+	}
+
+	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -642,6 +688,23 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "The name of the project.",
 				Required:            true,
 			},
+			"content": schema.StringAttribute{
+				MarkdownDescription: "The content of the project.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"metadata": schema.MapAttribute{
+				MarkdownDescription: "The metadata of the project.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"share_path": schema.StringAttribute{
 				MarkdownDescription: "The share path of the project.",
 				Optional:            true,
@@ -662,6 +725,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"status": schema.StringAttribute{
 				MarkdownDescription: "The status of the project.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					UseRunningStatus(),
+				},
 			},
 			"created_at": schema.StringAttribute{
 				MarkdownDescription: "The time the project was created.",
@@ -1132,7 +1198,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 									MarkdownDescription: "The driver of the IPAM.",
 									Optional:            true,
 								},
-								"config": schema.MapNestedAttribute{
+								"config": schema.ListNestedAttribute{
 									MarkdownDescription: "The config of the IPAM.",
 									Optional:            true,
 									NestedObject: schema.NestedAttributeObject{

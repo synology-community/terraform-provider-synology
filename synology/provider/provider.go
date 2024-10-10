@@ -205,10 +205,12 @@ func (p *SynologyProvider) ValidateConfig(ctx context.Context, req provider.Vali
 	}
 
 	if _, err := url.Parse(data.Host.ValueString()); err != nil {
-		resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
-			path.Root("host"),
-			"invalid provider configuration",
-			"host is not a valid URL"))
+		resp.Diagnostics.Append(
+			diag.NewAttributeErrorDiagnostic(
+				path.Root("host"),
+				"invalid provider configuration",
+				"host is not a valid URL"),
+		)
 		return
 	}
 }

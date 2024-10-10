@@ -18,7 +18,7 @@ type IPAMPool struct {
 
 type IPAMConfig struct {
 	Driver  types.String `tfsdk:"driver"`
-	Configs types.Set    `tfsdk:"config"`
+	Configs types.List   `tfsdk:"config"`
 }
 
 type Network struct {

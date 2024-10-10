@@ -107,19 +107,20 @@ type Service struct {
 	Command       types.List   `tfsdk:"command"`
 	Replicas      types.Int64  `tfsdk:"replicas"`
 	Logging       types.Object `tfsdk:"logging"`
-	Ports         types.List   `tfsdk:"port"`
+	Ports         types.List   `tfsdk:"ports"`
 	Networks      types.Map    `tfsdk:"networks"`
 	NetworkMode   types.String `tfsdk:"network_mode"`
 	HealthCheck   types.Object `tfsdk:"healthcheck"`
 	SecurityOpt   types.List   `tfsdk:"security_opt"`
-	Volumes       types.Map    `tfsdk:"volumes"`
+	Volumes       types.List   `tfsdk:"volumes"`
 	Dependencies  types.Map    `tfsdk:"depends_on"`
 	Privileged    types.Bool   `tfsdk:"privileged"`
 	Tmpfs         types.List   `tfsdk:"tmpfs"`
 	Ulimits       types.Map    `tfsdk:"ulimits"`
 	Environment   types.Map    `tfsdk:"environment"`
 	Restart       types.String `tfsdk:"restart"`
-	Configs       types.Map    `tfsdk:"configs"`
+	Configs       types.List   `tfsdk:"configs"`
+	Secrets       types.List   `tfsdk:"secrets"`
 	Labels        types.Map    `tfsdk:"labels"`
 	DNS           types.List   `tfsdk:"dns"`
 	User          types.String `tfsdk:"user"`
@@ -246,11 +247,12 @@ func (m Service) Value() attr.Value {
 	var networks basetypes.MapValue
 	var health_check basetypes.ObjectValue
 	var dependencies basetypes.MapValue
-	var volumes basetypes.MapValue
+	var volumes basetypes.ListValue
 	var tmpfs basetypes.ListValue
 	var ulimits basetypes.MapValue
 	var environment basetypes.MapValue
-	var configs basetypes.MapValue
+	var configs basetypes.ListValue
+	var secrets basetypes.ListValue
 	var labels basetypes.MapValue
 	var dns basetypes.ListValue
 	var securityOpt basetypes.ListValue
@@ -288,7 +290,7 @@ func (m Service) Value() attr.Value {
 		health_check = hc
 	}
 
-	if v, diag := m.Volumes.ToMapValue(context.Background()); !diag.HasError() {
+	if v, diag := m.Volumes.ToListValue(context.Background()); !diag.HasError() {
 		volumes = v
 	}
 
@@ -308,8 +310,12 @@ func (m Service) Value() attr.Value {
 		labels = l
 	}
 
-	if c, diag := m.Configs.ToMapValue(context.Background()); !diag.HasError() {
+	if c, diag := m.Configs.ToListValue(context.Background()); !diag.HasError() {
 		configs = c
+	}
+
+	if s, diag := m.Secrets.ToListValue(context.Background()); !diag.HasError() {
+		secrets = s
 	}
 
 	if d, diag := m.DNS.ToListValue(context.Background()); !diag.HasError() {
@@ -327,7 +333,7 @@ func (m Service) Value() attr.Value {
 		"entrypoint":     entrypoints,
 		"command":        commands,
 		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
-		"port":           ports,
+		"ports":          ports,
 		"network":        networks,
 		"logging":        logging,
 		"network_mode":   types.StringValue(m.NetworkMode.ValueString()),
@@ -340,7 +346,8 @@ func (m Service) Value() attr.Value {
 		"ulimit":         ulimits,
 		"environment":    environment,
 		"restart":        types.StringValue(m.Restart.ValueString()),
-		"config":         configs,
+		"configs":        configs,
+		"secrets":        secrets,
 		"labels":         labels,
 		"dns":            dns,
 		"user":           types.StringValue(m.User.ValueString()),
@@ -468,6 +475,34 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		}
 	}
 
+	if !m.Secrets.IsNull() && !m.Secrets.IsUnknown() {
+		secrets := []ServiceConfig{}
+		if diag := m.Secrets.ElementsAs(ctx, &secrets, true); !diag.HasError() {
+			service.Secrets = []composetypes.ServiceSecretConfig{}
+			for _, c := range secrets {
+				cfg := composetypes.ServiceSecretConfig{
+					Source: c.Source.ValueString(),
+					Target: c.Target.ValueString(),
+					UID:    c.UID.ValueString(),
+					GID:    c.GID.ValueString(),
+				}
+				if !c.Mode.IsNull() && !c.Mode.IsUnknown() {
+					mode, err := strconv.ParseUint(c.Mode.ValueString(), 10, 32)
+
+					if err != nil {
+						log.Printf("error parsing mode: %v", err)
+					} else {
+						mode32 := uint32(mode)
+						cfg.Mode = &mode32
+					}
+				}
+				service.Secrets = append(service.Secrets, cfg)
+			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
 	if !m.HealthCheck.IsNull() && !m.HealthCheck.IsUnknown() {
 		service.HealthCheck = &composetypes.HealthCheckConfig{}
 		healthCheck := []HealthCheck{}
@@ -584,7 +619,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 	}
 
 	if !m.Networks.IsNull() && !m.Networks.IsUnknown() {
-		networks := []ServiceNetwork{}
+		networks := map[string]ServiceNetwork{}
 		if diag := m.Networks.ElementsAs(ctx, &networks, true); !diag.HasError() {
 			service.Networks = map[string]*composetypes.ServiceNetworkConfig{}
 			for _, n := range networks {
