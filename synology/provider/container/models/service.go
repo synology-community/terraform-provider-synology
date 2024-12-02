@@ -60,6 +60,20 @@ type ServiceNetwork struct {
 	Priority     types.Int64  `tfsdk:"priority"`
 }
 
+func (m ServiceNetwork) Value() attr.Value {
+	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
+		// "id":          types.StringValue(m.ID.ValueString()),
+		"name":           types.StringValue(m.Name.ValueString()),
+		"aliases":        types.SetValueMust(types.StringType, []attr.Value{}),
+		"ipv4_address":   types.StringValue(m.Ipv4Address.ValueString()),
+		"ipv6_address":   types.StringValue(m.Ipv6Address.ValueString()),
+		"link_local_ips": types.SetValueMust(types.StringType, []attr.Value{}),
+		"mac_address":    types.StringValue(m.MacAddress.ValueString()),
+		"driver_opts":    types.MapValueMust(types.StringType, map[string]attr.Value{}),
+		"priority":       types.Int64Value(m.Priority.ValueInt64()),
+	})
+}
+
 func (m ServiceNetwork) ModelType() attr.Type {
 	return types.ObjectType{AttrTypes: m.AttrType()}
 }
@@ -208,10 +222,8 @@ func (m Ulimit) AttrType() map[string]attr.Type {
 }
 
 type ServiceDependency struct {
-	Name      types.String `tfsdk:"name"`
 	Condition types.String `tfsdk:"condition"`
 	Restart   types.Bool   `tfsdk:"restart"`
-	Required  types.Bool   `tfsdk:"required"`
 }
 
 func (m ServiceDependency) ModelType() attr.Type {
@@ -220,10 +232,8 @@ func (m ServiceDependency) ModelType() attr.Type {
 
 func (m ServiceDependency) AttrType() map[string]attr.Type {
 	return map[string]attr.Type{
-		"name":      types.StringType,
 		"condition": types.StringType,
 		"restart":   types.BoolType,
-		"required":  types.BoolType,
 	}
 }
 
@@ -256,6 +266,38 @@ type Service struct {
 	Capabilities  types.Object `tfsdk:"capabilities"`
 	// Extensions    types.Map    `tfsdk:"extensions"`
 }
+
+// func (m Service) Value() attr.Value {
+// 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
+// 		"name":           types.StringValue(m.Name.ValueString()),
+// 		"image":          types.StringValue(m.Image.ValueString()),
+// 		"container_name": types.StringValue(m.ContainerName.ValueString()),
+// 		"configs":        types.ListValueMust(ServiceConfig{}.ModelType(), []attr.Value{}),
+// 		"entrypoint":     types.ListValueMust(types.StringType, []attr.Value{}),
+// 		"command":        types.ListValueMust(types.StringType, []attr.Value{}),
+// 		"restart":        types.StringValue(m.Restart.ValueString()), // "no", "always", "on-failure", "unless-stopped", "always", "unless-stopped", "on-failure", "no
+// 		"network_mode":   types.StringValue(m.NetworkMode.ValueString()),
+// 		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
+// 		"user":           types.StringValue(m.User.ValueString()),
+// 		"ports":          types.ListValueMust(Port{}.ModelType(), []attr.Value{}),
+// 		"mem_limit":      types.StringValue(m.MemLimit.ValueString()),
+// 		// "extensions":     types.MapType{ElemType: types.StringType},
+// 		"depends_on":   types.MapValueMust(ServiceDependency{}.ModelType(), map[string]attr.Value{}),
+// 		"healthcheck":  types.ObjectValueMust(HealthCheck{}.AttrType(), map[string]attr.Value{}),
+// 		"privileged":   types.BoolValue(m.Privileged.ValueBool()),
+// 		"security_opt": types.ListValueMust(types.StringType, []attr.Value{}),
+// 		"tmpfs":        types.ListValueMust(types.StringType, []attr.Value{}),
+// 		"networks":     types.MapValueMust(ServiceNetwork{}.ModelType(), map[string]attr.Value{}),
+// 		"labels":       types.MapValueMust(types.StringType, map[string]attr.Value{}),
+// 		"secrets":      types.ListValueMust(ServiceConfig{}.ModelType(), []attr.Value{}),
+// 		"ulimits":      types.MapValueMust(Ulimit{}.ModelType(), map[string]attr.Value{}),
+// 		"logging":      types.ObjectValueMust(Logging{}.AttrType(), map[string]attr.Value{}),
+// 		"volumes":      types.ListValueMust(ServiceVolume{}.ModelType(), []attr.Value{}),
+// 		"environment":  types.MapValueMust(types.StringType, map[string]attr.Value{}),
+// 		"dns":          types.ListValueMust(types.StringType, []attr.Value{}),
+// 		"capabilities": types.ObjectValueMust(Capabilities{}.AttrType(), map[string]attr.Value{}),
+// 	})
+// }
 
 func (m Service) ModelType() attr.Type {
 	return types.ObjectType{AttrTypes: m.AttrType()}
@@ -501,16 +543,15 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 	}
 
 	if !m.Dependencies.IsNull() && !m.Dependencies.IsUnknown() {
-		dependencies := []ServiceDependency{}
+		dependencies := map[string]ServiceDependency{}
 		if diag := m.Dependencies.ElementsAs(ctx, &dependencies, true); !diag.HasError() {
 			service.DependsOn = map[string]composetypes.ServiceDependency{}
-			for _, d := range dependencies {
+			for dk, d := range dependencies {
 				dependency := composetypes.ServiceDependency{
 					Condition: d.Condition.ValueString(),
 					Restart:   d.Restart.ValueBool(),
-					Required:  d.Required.ValueBool(),
 				}
-				service.DependsOn[d.Name.ValueString()] = dependency
+				service.DependsOn[dk] = dependency
 			}
 		} else {
 			d = append(d, diag...)
@@ -575,9 +616,8 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 
 	if !m.HealthCheck.IsNull() && !m.HealthCheck.IsUnknown() {
 		service.HealthCheck = &composetypes.HealthCheckConfig{}
-		healthCheck := []HealthCheck{}
-		if diag := m.HealthCheck.As(ctx, &healthCheck, basetypes.ObjectAsOptions{}); !diag.HasError() {
-			hc := healthCheck[0]
+		hc := HealthCheck{}
+		if diag := m.HealthCheck.As(ctx, &hc, basetypes.ObjectAsOptions{}); !diag.HasError() {
 			if !hc.Test.IsNull() || !hc.Test.IsUnknown() {
 				test := []string{}
 				if diag := hc.Test.ElementsAs(ctx, &test, true); !diag.HasError() {
@@ -672,7 +712,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		networks := map[string]ServiceNetwork{}
 		if diag := m.Networks.ElementsAs(ctx, &networks, true); !diag.HasError() {
 			service.Networks = map[string]*composetypes.ServiceNetworkConfig{}
-			for _, n := range networks {
+			for k, n := range networks {
 				network := composetypes.ServiceNetworkConfig{
 					Aliases:      []string{},
 					Ipv4Address:  n.Ipv4Address.ValueString(),
@@ -708,7 +748,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 					}
 				}
 
-				service.Networks[n.Name.ValueString()] = &network
+				service.Networks[k] = &network
 			}
 		} else {
 			d = append(d, diag...)
@@ -879,22 +919,26 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 	}
 
 	if len(service.Ulimits) > 0 {
-		ulimits := map[string]Ulimit{}
+		ulimits := map[string]attr.Value{}
 		for k, v := range service.Ulimits {
-			ulimit := Ulimit{
-				Value: types.Int64Value(int64(v.Single)),
-				Soft:  types.Int64Value(int64(v.Soft)),
-				Hard:  types.Int64Value(int64(v.Hard)),
-			}
+			ulimit := types.ObjectValueMust(Ulimit{}.AttrType(), map[string]attr.Value{
+				"value": types.Int64Value(int64(v.Single)),
+				"soft":  types.Int64Value(int64(v.Soft)),
+				"hard":  types.Int64Value(int64(v.Hard)),
+			})
 			ulimits[k] = ulimit
 		}
 
-		ulimitsValue, diags := types.MapValueFrom(ctx, Ulimit{}.ModelType(), ulimits)
-		if diags.HasError() {
-			d = append(d, diags...)
-		} else {
-			m.Ulimits = ulimitsValue
-		}
+		ulimitsValues := types.MapValueMust(Ulimit{}.ModelType(), ulimits)
+
+		m.Ulimits = ulimitsValues
+
+		// ulimitsValue, diags := types.MapValueFrom(ctx, Ulimit{}.ModelType(), ulimits)
+		// if diags.HasError() {
+		// 	d = append(d, diags...)
+		// } else {
+		// 	m.Ulimits = ulimitsValue
+		// }
 	}
 
 	if len(service.Volumes) > 0 {
@@ -951,15 +995,13 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 	// }
 
 	if len(service.DependsOn) > 0 {
-		dependencies := []ServiceDependency{}
+		dependencies := map[string]ServiceDependency{}
 		for k, v := range service.DependsOn {
 			dependency := ServiceDependency{
-				Name:      types.StringValue(k),
 				Condition: types.StringValue(v.Condition),
 				Restart:   types.BoolValue(v.Restart),
-				Required:  types.BoolValue(v.Required),
 			}
-			dependencies = append(dependencies, dependency)
+			dependencies[k] = dependency
 		}
 		dependenciesValue, diags := types.MapValueFrom(ctx, ServiceDependency{}.ModelType(), dependencies)
 		if diags.HasError() {

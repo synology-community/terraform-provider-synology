@@ -60,7 +60,7 @@ const (
 		}
 	}`
 	homebridgeProject = `
-	resource "synology_container_project" "foo" {
+	resource "synology_container_project" "default" {
 		name = "homebridge"
 
 		services = {
@@ -94,6 +94,29 @@ const (
 			}
 		}
 	}`
+
+	traefikProject = `
+resource "synology_container_project" "default" {
+	name = "traefik"
+
+	services = {
+		traefik = {
+			name     = "traefik"
+			replicas = 1
+
+			image = "traefik:v2.4"
+
+			network_mode = "host"
+
+		}
+	}
+}
+
+import {
+	to = synology_container_project.default
+	id = "traefik"
+}`
+
 	k3sProject = `
 	resource "synology_container_project" "foo" {
 		name = "k3s"
@@ -170,6 +193,10 @@ func TestAccProjectResource_basic(t *testing.T) {
 		ResourceBlock string
 	}{
 		{
+			"traefik",
+			traefikProject,
+		},
+		{
 			"foo",
 			testProject,
 		},
@@ -225,7 +252,7 @@ func TestAccProjectResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_container_project.foo", "name", func(attr string) error {
+							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
 								if attr != tt.Name {
 									return fmt.Errorf("expected project name to be 'homebridge', got %s", attr)
 								}

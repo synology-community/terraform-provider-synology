@@ -68,16 +68,23 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	files, err := f.client.List(ctx, path)
+	file, err := f.client.Get(ctx, path)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
-		return
-	}
-	for _, file := range files.Files {
-		if file.IsDir && file.Path == path {
-			data.RealPath = types.StringValue(file.Additional.RealPath)
+		if _, ok := err.(filestation.FileNotFoundError); ok {
+			resp.Diagnostics.AddError("Error finding file after create", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
+		} else {
+			resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
 		}
 	}
+
+	if file == nil {
+		resp.Diagnostics.AddError("Error finding file after create", fmt.Sprintf("Unable to get file, got error: %s", err))
+		return
+	}
+
+	data.RealPath = types.StringValue(file.Additional.RealPath)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -113,25 +120,33 @@ func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	name := data.Name.ValueString()
 	path := data.Path.ValueString()
 
-	files, err := f.client.List(ctx, path)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+	parts := filepath.SplitList(path)
+	if len(parts) == 0 {
+		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", "path is empty"))
 		return
 	}
-	found := false
-	for _, file := range files.Files {
-		if file.IsDir && file.Name == name {
-			found = true
-			data.RealPath = types.StringValue(file.Additional.RealPath)
+
+	file, err := f.client.Get(ctx, path)
+	if err != nil {
+		if _, ok := err.(filestation.FileNotFoundError); ok {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
+			resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
 		}
 	}
-	if found {
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	} else {
+
+	if file == nil {
 		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	if file.Additional.RealPath != data.RealPath.ValueString() {
+		data.RealPath = types.StringValue(file.Additional.RealPath)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	}
 }
 

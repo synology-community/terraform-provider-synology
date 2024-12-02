@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"regexp"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -38,7 +39,7 @@ func (c *ComposeContentBuilder) SetNetworks(networks *types.Map) *ComposeContent
 
 		c.project.Networks = map[string]composetypes.NetworkConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			n := composetypes.NetworkConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &n)...)
@@ -46,7 +47,7 @@ func (c *ComposeContentBuilder) SetNetworks(networks *types.Map) *ComposeContent
 				return c
 			}
 
-			c.project.Networks[n.Name] = n
+			c.project.Networks[k] = n
 		}
 	}
 	return c
@@ -64,7 +65,7 @@ func (c *ComposeContentBuilder) SetServices(services *types.Map) *ComposeContent
 
 		c.project.Services = map[string]composetypes.ServiceConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			s := composetypes.ServiceConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &s)...)
@@ -72,7 +73,7 @@ func (c *ComposeContentBuilder) SetServices(services *types.Map) *ComposeContent
 				return c
 			}
 
-			c.project.Services[s.Name] = s
+			c.project.Services[k] = s
 		}
 	}
 	return c
@@ -90,7 +91,7 @@ func (c *ComposeContentBuilder) SetVolumes(volumes *types.Map) *ComposeContentBu
 
 		c.project.Volumes = map[string]composetypes.VolumeConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			vol := composetypes.VolumeConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &vol)...)
@@ -98,7 +99,7 @@ func (c *ComposeContentBuilder) SetVolumes(volumes *types.Map) *ComposeContentBu
 				return c
 			}
 
-			c.project.Volumes[vol.Name] = vol
+			c.project.Volumes[k] = vol
 		}
 	}
 	return c
@@ -116,7 +117,7 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBu
 
 		c.project.Configs = map[string]composetypes.ConfigObjConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			cfg := composetypes.ConfigObjConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &cfg)...)
@@ -124,7 +125,7 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBu
 				return c
 			}
 
-			c.project.Configs[cfg.Name] = cfg
+			c.project.Configs[k] = cfg
 		}
 	}
 	return c
@@ -142,7 +143,7 @@ func (c *ComposeContentBuilder) SetSecrets(secrets *types.Map) *ComposeContentBu
 
 		c.project.Secrets = map[string]composetypes.SecretConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			sec := composetypes.SecretConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &sec)...)
@@ -150,7 +151,7 @@ func (c *ComposeContentBuilder) SetSecrets(secrets *types.Map) *ComposeContentBu
 				return c
 			}
 
-			c.project.Secrets[sec.Name] = sec
+			c.project.Secrets[k] = sec
 		}
 	}
 	return c
@@ -163,8 +164,13 @@ func (c *ComposeContentBuilder) Build(content *string) diag.Diagnostics {
 		c.diags.Append(diag.NewErrorDiagnostic("Failed to marshal docker-compose.yml", err.Error()))
 		return c.diags
 	}
+
 	pyaml := string(projectYAML)
-	*content = pyaml
+
+	re := regexp.MustCompile("\n[ ]+required: (true|false)\n")
+	pycp := re.ReplaceAllString(pyaml, "\n")
+
+	*content = pycp
 
 	return c.diags
 }
