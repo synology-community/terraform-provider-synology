@@ -770,10 +770,6 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							MarkdownDescription: "The name of the service.",
-							Optional:            true,
-						},
 						"container_name": schema.StringAttribute{
 							MarkdownDescription: "The container name.",
 							Optional:            true,
