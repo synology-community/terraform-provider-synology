@@ -84,7 +84,9 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	data.RealPath = types.StringValue(file.Additional.RealPath)
+	real_path := filepath.Join(file.Additional.RealPath, file.Name)
+
+	data.RealPath = types.StringValue(real_path)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -120,21 +122,13 @@ func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	path := data.Path.ValueString()
-
-	parts := filepath.SplitList(path)
-	if len(parts) == 0 {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", "path is empty"))
-		return
-	}
-
-	file, err := f.client.Get(ctx, path)
+	file, err := f.client.Get(ctx, data.Path.ValueString())
 	if err != nil {
 		if _, ok := err.(filestation.FileNotFoundError); ok {
 			resp.State.RemoveResource(ctx)
 			return
 		} else {
-			resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
+			resp.Diagnostics.AddError("Failed to get file during read", fmt.Sprintf("Unable to get file, got error: %s", err))
 			return
 		}
 	}
@@ -144,8 +138,15 @@ func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	if file.Additional.RealPath != data.RealPath.ValueString() {
-		data.RealPath = types.StringValue(file.Additional.RealPath)
+	if file.Additional.RealPath == "" {
+		resp.Diagnostics.AddError("Failed while getting the folder's additional properties", fmt.Sprintf("Unable to get additional file properties, got error: %s", err))
+		return
+	}
+
+	real_path := filepath.Join(file.Additional.RealPath, file.Name)
+
+	if real_path != data.RealPath.ValueString() {
+		data.RealPath = types.StringValue(real_path)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	}
 }

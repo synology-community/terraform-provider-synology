@@ -854,6 +854,10 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 	service.ContainerName = m.ContainerName.ValueString()
 	replicas := m.Replicas.ValueInt64()
 	intReplicas := int(replicas)
+	if m.Replicas.IsNull() || m.Replicas.IsUnknown() {
+		intReplicas = 1
+	}
+
 	service.Deploy = &composetypes.DeployConfig{
 		Replicas: &intReplicas,
 	}

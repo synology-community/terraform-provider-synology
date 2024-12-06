@@ -9,7 +9,6 @@ import (
 
 	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -446,21 +445,6 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				data.Content = types.StringValue(proj.Content)
 			}
 		}
-	}
-
-	if !proj.IsRunning() && data.Run.ValueBool() {
-		id, err := uuid.GenerateUUID()
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to generate UUID", err.Error())
-			return
-		}
-
-		data.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{"drift-detected": types.StringValue(id)})
-
-		// drift := map[string]string{
-		// 	"drift-detected": id,
-		// }
-		// resp.Diagnostics.Append(req.State.SetAttribute(ctx, path.Root("metadata"), drift)...)
 	}
 	// 	_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 	// 		ID: data.ID.String(),
