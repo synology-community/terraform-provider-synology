@@ -263,6 +263,7 @@ type Service struct {
 	DNS           types.List   `tfsdk:"dns"`
 	User          types.String `tfsdk:"user"`
 	Capabilities  types.Object `tfsdk:"capabilities"`
+	Sysctls       types.Map    `tfsdk:"sysctls"`
 	// Extensions    types.Map    `tfsdk:"extensions"`
 }
 
@@ -343,6 +344,7 @@ func (m Service) AttrType() map[string]attr.Type {
 		"environment":  types.MapType{ElemType: types.StringType},
 		"dns":          types.ListType{ElemType: types.StringType},
 		"capabilities": Capabilities{}.ModelType(),
+		"sysctls":      types.MapType{ElemType: types.StringType},
 	}
 }
 
@@ -365,6 +367,7 @@ func (m Service) Value() attr.Value {
 	var dns basetypes.ListValue
 	var securityOpt basetypes.ListValue
 	var capabilities basetypes.ObjectValue
+	var sysctls basetypes.MapValue
 	// var extensions basetypes.MapValue
 
 	// if e, diag := m.Extensions.ToMapValue(context.Background()); !diag.HasError() {
@@ -435,6 +438,10 @@ func (m Service) Value() attr.Value {
 		capabilities = c
 	}
 
+	if s, diag := m.Sysctls.ToMapValue(context.Background()); !diag.HasError() {
+		sysctls = s
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"container_name": types.StringValue(m.ContainerName.ValueString()),
 		"image":          types.StringValue(m.Image.ValueString()),
@@ -462,6 +469,7 @@ func (m Service) Value() attr.Value {
 		"dns":          dns,
 		"user":         types.StringValue(m.User.ValueString()),
 		"capabilities": capabilities,
+		"sysctls":      sysctls,
 	})
 }
 
@@ -846,6 +854,15 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 					d = append(d, diag...)
 				}
 			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	if !m.Sysctls.IsNull() && !m.Sysctls.IsUnknown() {
+		sysctls := map[string]string{}
+		if diag := m.Sysctls.ElementsAs(ctx, &sysctls, true); !diag.HasError() {
+			service.Sysctls = sysctls
 		} else {
 			d = append(d, diag...)
 		}
@@ -1319,6 +1336,13 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 
 	if m.Capabilities.IsNull() || m.Capabilities.IsUnknown() {
 		m.Capabilities = types.ObjectNull(Capabilities{}.AttrType())
+	}
+
+	if service.Sysctls != nil {
+		sysctls := map[string]types.String{}
+		for k, v := range service.Sysctls {
+			sysctls[k] = types.StringValue(v)
+		}
 	}
 
 	return d

@@ -130,14 +130,14 @@ Optional:
 Optional:
 
 - `config` (Attributes List) The config of the IPAM. (see [below for nested schema](#nestedatt--networks--ipam--config))
-- `driver` (String) The driver of the IPAM.
+- `driver` (String) Custom IPAM driver, instead of the default.
 
 <a id="nestedatt--networks--ipam--config"></a>
 ### Nested Schema for `networks.ipam.config`
 
 Optional:
 
-- `aux_address` (Map of String) The aux addresses of the config.
+- `aux_addresses` (Map of String) The aux addresses of the config.
 - `gateway` (String) The gateway of the config.
 - `ip_range` (String) The IP range of the config.
 - `subnet` (String) The subnet of the config.
@@ -180,11 +180,10 @@ Optional:
 - `entrypoint` (List of String) The entrypoint of the service.
 - `environment` (Map of String) The environment of the service.
 - `healthcheck` (Attributes) Health check configuration. (see [below for nested schema](#nestedatt--services--healthcheck))
-- `image` (Attributes) The image of the service. (see [below for nested schema](#nestedatt--services--image))
+- `image` (String) The image of the service.
 - `labels` (Map of String) The labels of the network.
 - `logging` (Attributes) Logging configuration for the docker service. (see [below for nested schema](#nestedatt--services--logging))
 - `mem_limit` (String) The memory limit.
-- `name` (String) The name of the service.
 - `network_mode` (String) The network mode.
 - `networks` (Attributes Map) The networks of the service. (see [below for nested schema](#nestedatt--services--networks))
 - `ports` (Attributes List) The ports of the service. (see [below for nested schema](#nestedatt--services--ports))
@@ -193,6 +192,7 @@ Optional:
 - `restart` (String) The restart policy.
 - `secrets` (Attributes List) The secrets of the service. (see [below for nested schema](#nestedatt--services--secrets))
 - `security_opt` (List of String) The security options of the service.
+- `sysctls` (Map of String) The sysctls of the service.
 - `tmpfs` (List of String) The tmpfs of the service.
 - `ulimits` (Attributes Map) The ulimits of the service. (see [below for nested schema](#nestedatt--services--ulimits))
 - `user` (String) The user of the service.
@@ -222,14 +222,9 @@ Optional:
 <a id="nestedatt--services--depends_on"></a>
 ### Nested Schema for `services.depends_on`
 
-Required:
-
-- `name` (String) The name of the dependency.
-
 Optional:
 
 - `condition` (String) The condition of the dependency.
-- `required` (Boolean) Whether the dependency is required.
 - `restart` (Boolean) Whether to restart.
 
 
@@ -244,19 +239,6 @@ Optional:
 - `start_period` (String) Start period.
 - `test` (List of String) Test command to run.
 - `timeout` (String) Timeout to run the test.
-
-
-<a id="nestedatt--services--image"></a>
-### Nested Schema for `services.image`
-
-Required:
-
-- `name` (String) The name of the image.
-
-Optional:
-
-- `repository` (String) The repository of the image. Default is `docker.io`.
-- `tag` (String) The tag of the image. Default is `latest`.
 
 
 <a id="nestedatt--services--logging"></a>
@@ -352,13 +334,10 @@ Optional:
 <a id="nestedatt--volumes"></a>
 ### Nested Schema for `volumes`
 
-Required:
-
-- `name` (String) The name of the volume.
-
 Optional:
 
 - `driver` (String) The driver of the volume.
 - `driver_opts` (Map of String) The driver options of the volume.
 - `external` (Boolean) Whether the volume is external.
 - `labels` (Map of String) The labels of the volume.
+- `name` (String) The name of the volume.

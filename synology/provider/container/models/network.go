@@ -14,7 +14,7 @@ type IPAMPool struct {
 	Subnet     types.String `tfsdk:"subnet"`
 	Gateway    types.String `tfsdk:"gateway"`
 	IPRange    types.String `tfsdk:"ip_range"`
-	AuxAddress types.Map    `tfsdk:"aux_address"`
+	AuxAddress types.Map    `tfsdk:"aux_addresses"`
 }
 
 func (m IPAMPool) ModelType() attr.Type {

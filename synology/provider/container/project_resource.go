@@ -833,6 +833,11 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
+						"sysctls": schema.MapAttribute{
+							MarkdownDescription: "The sysctls of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
 						"image": schema.StringAttribute{
 							MarkdownDescription: "The image of the service.",
 							Optional:            true,
@@ -1154,7 +1159,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							Optional:            true,
 							Attributes: map[string]schema.Attribute{
 								"driver": schema.StringAttribute{
-									MarkdownDescription: "The driver of the IPAM.",
+									MarkdownDescription: "Custom IPAM driver, instead of the default.",
 									Optional:            true,
 								},
 								"config": schema.ListNestedAttribute{
@@ -1174,7 +1179,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 												MarkdownDescription: "The gateway of the config.",
 												Optional:            true,
 											},
-											"aux_address": schema.MapAttribute{
+											"aux_addresses": schema.MapAttribute{
 												MarkdownDescription: "The aux addresses of the config.",
 												Optional:            true,
 												ElementType:         types.StringType,
