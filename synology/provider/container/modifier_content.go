@@ -3,9 +3,9 @@ package container
 import (
 	"context"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 )
 
 // UseArgumentsForUnknownContent returns a plan modifier that copies a known prior state

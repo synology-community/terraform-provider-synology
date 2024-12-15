@@ -5,8 +5,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/synology-community/terraform-provider-synology/synology/provider"
 )
 
 //go:generate terraform fmt -recursive ./examples/

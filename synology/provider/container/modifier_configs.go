@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"

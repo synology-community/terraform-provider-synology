@@ -7,10 +7,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider/container"
-	"github.com/appkins/terraform-provider-synology/synology/provider/core"
-	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
-	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/core"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/filestation"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"

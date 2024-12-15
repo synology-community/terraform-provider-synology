@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider/container/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -30,6 +29,7 @@ import (
 	"github.com/synology-community/go-synology/pkg/api/docker"
 	"github.com/synology-community/go-synology/pkg/api/filestation"
 	"github.com/synology-community/go-synology/pkg/util/form"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

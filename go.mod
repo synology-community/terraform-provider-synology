@@ -1,4 +1,4 @@
-module github.com/appkins/terraform-provider-synology
+module github.com/synology-community/terraform-provider-synology
 
 go 1.22.4
 
