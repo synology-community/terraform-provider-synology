@@ -3,7 +3,7 @@ page_title: "Container: synology_container_project"
 subcategory: "Container"
 description: |-
   A Docker Compose project for the Container Manager Synology API.
-  Note: Synology creates a shared folder for each project. The shared folder is created in the /projects directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the /volume1/projects directory on the Synology NAS.
+  **Note:** Synology creates a shared folder for each project. The shared folder is created in the `/projects` directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the `/volume1/projects` directory on the Synology NAS.
 ---
 
 # Container: Project (Resource)
@@ -171,6 +171,8 @@ Optional:
 
 Optional:
 
+- `cap_add` (List of String) The capabilities to add.
+- `cap_drop` (List of String) The capabilities to drop.
 - `capabilities` (Attributes) The capabilities of the service. (see [below for nested schema](#nestedatt--services--capabilities))
 - `command` (List of String) The command of the service.
 - `configs` (Attributes List) The configs of the service. (see [below for nested schema](#nestedatt--services--configs))

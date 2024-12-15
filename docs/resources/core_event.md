@@ -37,7 +37,3 @@ resource "synology_core_event" "test" {
 - `run` (Boolean) Whether to run the event after creation.
 - `user` (String) The user that will execute the event.
 - `when` (String) When to run the event. Valid values are `apply` and `destroy`.
-
-### Read-Only
-
-- `id` (Number) The ID of the event to install.
