@@ -7,10 +7,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider/container"
-	"github.com/appkins/terraform-provider-synology/synology/provider/core"
-	"github.com/appkins/terraform-provider-synology/synology/provider/filestation"
-	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/core"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/filestation"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -86,6 +86,8 @@ func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaReques
 func (p *SynologyProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data SynologyProviderModel
 
+	tflog.Info(ctx, "Configuring Synology provider")
+
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -115,7 +117,13 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		}
 	}
 
-	skipCertificateCheck := data.SkipCertCheck.ValueBool()
+	var skipCertificateCheck bool
+
+	if data.SkipCertCheck.IsNull() || data.SkipCertCheck.IsUnknown() {
+		skipCertificateCheck = true
+	} else {
+		skipCertificateCheck = data.SkipCertCheck.ValueBool()
+	}
 	if vString := os.Getenv(SYNOLOGY_SKIP_CERT_CHECK_ENV_VAR); vString != "" {
 		if v, err := strconv.ParseBool(vString); err == nil {
 			skipCertificateCheck = v
@@ -155,8 +163,14 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
 	}
 
-	if _, err := c.Login(ctx, user, password, otp_secret); err != nil {
-		resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
+	if _, err := c.Login(ctx, api.LoginOptions{
+		Username:  user,
+		Password:  password,
+		OTPSecret: otp_secret,
+	}); err != nil {
+		if c.Credentials().Token == "" {
+			resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
+		}
 	}
 
 	resp.DataSourceData = c
@@ -205,10 +219,12 @@ func (p *SynologyProvider) ValidateConfig(ctx context.Context, req provider.Vali
 	}
 
 	if _, err := url.Parse(data.Host.ValueString()); err != nil {
-		resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
-			path.Root("host"),
-			"invalid provider configuration",
-			"host is not a valid URL"))
+		resp.Diagnostics.Append(
+			diag.NewAttributeErrorDiagnostic(
+				path.Root("host"),
+				"invalid provider configuration",
+				"host is not a valid URL"),
+		)
 		return
 	}
 }

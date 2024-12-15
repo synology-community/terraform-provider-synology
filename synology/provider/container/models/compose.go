@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"regexp"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -26,10 +27,10 @@ func NewComposeContentBuilder(ctx context.Context) *ComposeContentBuilder {
 	}
 }
 
-func (c *ComposeContentBuilder) SetNetworks(networks *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetNetworks(networks *types.Map) *ComposeContentBuilder {
 	if !networks.IsNull() && !networks.IsUnknown() {
 
-		elements := []Network{}
+		elements := map[string]Network{}
 		c.diags.Append(networks.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -38,7 +39,7 @@ func (c *ComposeContentBuilder) SetNetworks(networks *types.Set) *ComposeContent
 
 		c.project.Networks = map[string]composetypes.NetworkConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			n := composetypes.NetworkConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &n)...)
@@ -46,16 +47,16 @@ func (c *ComposeContentBuilder) SetNetworks(networks *types.Set) *ComposeContent
 				return c
 			}
 
-			c.project.Networks[n.Name] = n
+			c.project.Networks[k] = n
 		}
 	}
 	return c
 }
 
-func (c *ComposeContentBuilder) SetServices(services *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetServices(services *types.Map) *ComposeContentBuilder {
 	if !services.IsNull() && !services.IsUnknown() {
 
-		elements := []Service{}
+		elements := map[string]Service{}
 		c.diags.Append(services.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -64,7 +65,7 @@ func (c *ComposeContentBuilder) SetServices(services *types.Set) *ComposeContent
 
 		c.project.Services = map[string]composetypes.ServiceConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			s := composetypes.ServiceConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &s)...)
@@ -72,16 +73,16 @@ func (c *ComposeContentBuilder) SetServices(services *types.Set) *ComposeContent
 				return c
 			}
 
-			c.project.Services[s.Name] = s
+			c.project.Services[k] = s
 		}
 	}
 	return c
 }
 
-func (c *ComposeContentBuilder) SetVolumes(volumes *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetVolumes(volumes *types.Map) *ComposeContentBuilder {
 	if !volumes.IsNull() && !volumes.IsUnknown() {
 
-		elements := []Volume{}
+		elements := map[string]Volume{}
 		c.diags.Append(volumes.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -90,7 +91,7 @@ func (c *ComposeContentBuilder) SetVolumes(volumes *types.Set) *ComposeContentBu
 
 		c.project.Volumes = map[string]composetypes.VolumeConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			vol := composetypes.VolumeConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &vol)...)
@@ -98,16 +99,16 @@ func (c *ComposeContentBuilder) SetVolumes(volumes *types.Set) *ComposeContentBu
 				return c
 			}
 
-			c.project.Volumes[vol.Name] = vol
+			c.project.Volumes[k] = vol
 		}
 	}
 	return c
 }
 
-func (c *ComposeContentBuilder) SetConfigs(configs *types.Set) *ComposeContentBuilder {
+func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBuilder {
 	if !configs.IsNull() && !configs.IsUnknown() {
 
-		elements := []Config{}
+		elements := map[string]Config{}
 		c.diags.Append(configs.ElementsAs(c.ctx, &elements, true)...)
 
 		if c.diags.HasError() {
@@ -116,7 +117,7 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Set) *ComposeContentBu
 
 		c.project.Configs = map[string]composetypes.ConfigObjConfig{}
 
-		for _, v := range elements {
+		for k, v := range elements {
 			cfg := composetypes.ConfigObjConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &cfg)...)
@@ -124,7 +125,33 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Set) *ComposeContentBu
 				return c
 			}
 
-			c.project.Configs[cfg.Name] = cfg
+			c.project.Configs[k] = cfg
+		}
+	}
+	return c
+}
+
+func (c *ComposeContentBuilder) SetSecrets(secrets *types.Map) *ComposeContentBuilder {
+	if !secrets.IsNull() && !secrets.IsUnknown() {
+
+		elements := map[string]Secret{}
+		c.diags.Append(secrets.ElementsAs(c.ctx, &elements, true)...)
+
+		if c.diags.HasError() {
+			return c
+		}
+
+		c.project.Secrets = map[string]composetypes.SecretConfig{}
+
+		for k, v := range elements {
+			sec := composetypes.SecretConfig{}
+
+			c.diags.Append(v.AsComposeConfig(c.ctx, &sec)...)
+			if c.diags.HasError() {
+				return c
+			}
+
+			c.project.Secrets[k] = sec
 		}
 	}
 	return c
@@ -137,8 +164,13 @@ func (c *ComposeContentBuilder) Build(content *string) diag.Diagnostics {
 		c.diags.Append(diag.NewErrorDiagnostic("Failed to marshal docker-compose.yml", err.Error()))
 		return c.diags
 	}
+
 	pyaml := string(projectYAML)
-	*content = pyaml
+
+	re := regexp.MustCompile("\n[ ]+required: (true|false)\n")
+	pycp := re.ReplaceAllString(pyaml, "\n")
+
+	*content = pycp
 
 	return c.diags
 }

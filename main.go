@@ -5,8 +5,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/synology-community/terraform-provider-synology/synology/provider"
 )
 
 //go:generate terraform fmt -recursive ./examples/
@@ -19,7 +19,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/appkins/synology",
+		Address: "registry.terraform.io/synology-community/synology",
 		Debug:   debug,
 	}
 

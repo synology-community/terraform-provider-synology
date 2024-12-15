@@ -4,6 +4,7 @@ import (
 	"context"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -14,6 +15,20 @@ type Volume struct {
 	DriverOpts types.Map    `tfsdk:"driver_opts"`
 	External   types.Bool   `tfsdk:"external"`
 	Labels     types.Map    `tfsdk:"labels"`
+}
+
+func (m Volume) ModelType() attr.Type {
+	return types.ObjectType{AttrTypes: m.AttrType()}
+}
+
+func (m Volume) AttrType() map[string]attr.Type {
+	return map[string]attr.Type{
+		"name":        types.StringType,
+		"driver":      types.StringType,
+		"driver_opts": types.MapType{ElemType: types.StringType},
+		"external":    types.BoolType,
+		"labels":      types.MapType{ElemType: types.StringType},
+	}
 }
 
 func (m Volume) AsComposeConfig(ctx context.Context, network *composetypes.VolumeConfig) (d diag.Diagnostics) {
@@ -42,7 +57,36 @@ func (m Volume) AsComposeConfig(ctx context.Context, network *composetypes.Volum
 			network.Labels = labels
 		}
 	}
-
 	return
+}
 
+func (m *Volume) FromComposeConfig(ctx context.Context, volume *composetypes.VolumeConfig) (d diag.Diagnostics) {
+	m.Name = types.StringValue(volume.Name)
+	m.Driver = types.StringValue(volume.Driver)
+	m.External = types.BoolValue(bool(volume.External))
+	m.DriverOpts = types.MapNull(types.StringType)
+	m.Labels = types.MapNull(types.StringType)
+
+	driverOpts := map[string]types.String{}
+	for k, v := range volume.DriverOpts {
+		driverOpts[k] = types.StringValue(v)
+	}
+	driverOptsValue, diags := types.MapValueFrom(ctx, types.StringType, driverOpts)
+	if diags.HasError() {
+		d.Append(diags...)
+	} else {
+		m.DriverOpts = driverOptsValue
+	}
+
+	labels := map[string]types.String{}
+	for k, v := range volume.Labels {
+		labels[k] = types.StringValue(v)
+	}
+	labelsValue, diags := types.MapValueFrom(ctx, types.StringType, labels)
+	if diags.HasError() {
+		d.Append(diags...)
+	} else {
+		m.Labels = labelsValue
+	}
+	return
 }

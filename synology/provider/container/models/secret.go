@@ -9,34 +9,25 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type Config struct {
+type Secret struct {
 	Name    types.String `tfsdk:"name"`
 	Content types.String `tfsdk:"content"`
 	File    types.String `tfsdk:"file"`
 }
 
-func (m Config) AsComposeConfig(ctx context.Context, config *composetypes.ConfigObjConfig) (d diag.Diagnostics) {
-	config.Name = m.Name.ValueString()
-
+func (m Secret) AsComposeConfig(ctx context.Context, secret *composetypes.SecretConfig) (d diag.Diagnostics) {
+	secret.Name = m.Name.ValueString()
 	if !m.File.IsNull() && !m.File.IsUnknown() {
-		config.File = m.File.ValueString()
+		secret.File = m.File.ValueString()
 	}
-
 	return
 }
 
-func (m *Config) FromComposeConfig(ctx context.Context, config *composetypes.ConfigObjConfig) (d diag.Diagnostics) {
-	m.Name = types.StringValue(config.Name)
-	m.File = types.StringValue(config.File)
-	m.Content = types.StringValue(config.Content)
-	return
-}
-
-func (m Config) ModelType() attr.Type {
+func (m Secret) ModelType() attr.Type {
 	return types.ObjectType{AttrTypes: m.AttrType()}
 }
 
-func (m Config) AttrType() map[string]attr.Type {
+func (m Secret) AttrType() map[string]attr.Type {
 	return map[string]attr.Type{
 		"name":    types.StringType,
 		"content": types.StringType,
@@ -44,10 +35,17 @@ func (m Config) AttrType() map[string]attr.Type {
 	}
 }
 
-func (m Config) Value() attr.Value {
+func (m Secret) Value() attr.Value {
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"name":    types.StringValue(m.Name.ValueString()),
 		"content": types.StringValue(m.Content.ValueString()),
 		"file":    types.StringValue(m.File.ValueString()),
 	})
+}
+
+func (m *Secret) FromComposeConfig(ctx context.Context, volume *composetypes.SecretConfig) (d diag.Diagnostics) {
+	m.Name = types.StringValue(volume.Name)
+	m.Content = types.StringValue(volume.Content)
+	m.File = types.StringValue(volume.File)
+	return
 }

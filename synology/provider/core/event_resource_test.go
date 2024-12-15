@@ -8,9 +8,9 @@ import (
 	"github.com/synology-community/terraform-provider-synology/synology/acctest"
 )
 
-type TaskResource struct{}
+type EventResource struct{}
 
-func TestAccTaskResource_basic(t *testing.T) {
+func TestAccEventResource_basic(t *testing.T) {
 	testCases := []struct {
 		Name          string
 		ResourceBlock string
@@ -18,13 +18,11 @@ func TestAccTaskResource_basic(t *testing.T) {
 		{
 			"test",
 			`
-			resource "synology_core_task" "test" {
-				name = "Test Test"
+			resource "synology_core_event" "test" {
+				name = "Test"
 
 				script = "echo 'Hello, World!'"
-				user = "terraform"
-
-				schedule = "0 0 1 * *"
+				user = "root"
 
 				run = true
 				when = "apply"
@@ -39,9 +37,9 @@ func TestAccTaskResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_core_task.test", "id", func(attr string) error {
+							r.TestCheckResourceAttrWith("synology_core_event.test", "id", func(attr string) error {
 								if attr == "" {
-									return fmt.Errorf("expected task id to be set")
+									return fmt.Errorf("expected event id to be set")
 								}
 								return nil
 							}),

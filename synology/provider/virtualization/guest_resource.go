@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/appkins/terraform-provider-synology/synology/provider/virtualization/models"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"

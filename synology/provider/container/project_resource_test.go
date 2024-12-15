@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/appkins/terraform-provider-synology/synology/acctest"
 	r "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/synology-community/terraform-provider-synology/synology/acctest"
 )
 
 const (
@@ -13,87 +13,110 @@ const (
 	resource "synology_container_project" "foo" {
 		name = "foo"
 
-		network {
-			name   = "foo"
-			driver = "bridge"
-		}
-
-		network {
-			name   = "bar"
-			driver = "macvlan"
-			driver_opts = {
-				"parent" = "ovs_bond0"
+		networks = {
+			foo = {
+				driver = "bridge"
 			}
-			ipam {
+
+			bar = {
 				driver = "macvlan"
-				config {
-					subnet  = "10.0.0.0/16"
-					gateway = "10.0.0.1"
-					ip_range = "10.0.60.1/28"
-					aux_address = {
-						host = "10.0.60.2"
-					}
+				driver_opts = {
+					"parent" = "ovs_bond0"
+				}
+				ipam = {
+					driver = "macvlan"
+					config = [{
+						subnet  = "10.0.0.0/16"
+						gateway = "10.0.0.1"
+						ip_range = "10.0.60.1/28"
+						aux_address = {
+							host = "10.0.60.2"
+						}
+					}]
 				}
 			}
 		}
+		services = {
+			bar = {
+				name     = "bar"
+				replicas = 1
 
-		service {
-			name     = "bar"
-			replicas = 1
+				image = "nginx"
 
-			image {
-				name = "nginx"
-			}
+				logging = {
+					driver = "json-file"
+				}
 
-			logging {
-				driver = "json-file"
-			}
+				ports = [{
+					target    = 80
+					published = "8557"
+					protocol  = "tcp"
+				}]
 
-			port {
-				target    = 80
-				published = "8557"
-				protocol  = "tcp"
-			}
-
-			network {
-				name = "foo"
+				networks = {
+					foo = {}
+				}
 			}
 		}
 	}`
 	homebridgeProject = `
-	resource "synology_container_project" "foo" {
+	resource "synology_container_project" "default" {
 		name = "homebridge"
 
-		service {
-			name     = "homebridge"
-			replicas = 1
+		services = {
+			homebridge = {
+				name     = "homebridge"
+				replicas = 1
 
-			image {
-				name = "homebridge/homebridge"
-				tag  = "latest"
-			}
+				image = "homebridge/homebridge:latest"
 
-			network_mode = "host"
+				network_mode = "host"
 
-			health_check {
-				test         = [
-					"curl --fail localhost:8581 || exit 1"
-				]
-				interval     = "60s"
-				retries      = 5
-				start_period = "300s"
-				timeout      = "2s"
-			}
-
-			volume {
-				source = "/volume1/docker/homebridge"
-				target = "/homebridge"
-				bind {
-					create_host_path = true
+				healthcheck = {
+					test         = [
+						"curl --fail localhost:8581 || exit 1"
+					]
+					interval     = "60s"
+					retries      = 5
+					start_period = "300s"
+					timeout      = "2s"
 				}
+
+				volumes = [
+					{
+						source = "/volume1/docker/homebridge"
+						target = "/homebridge"
+						bind {
+							create_host_path = true
+						}
+					}
+				]
 			}
 		}
 	}`
+
+	traefikProject = `
+resource "synology_container_project" "default" {
+	name = "traefik"
+
+	services = {
+		traefik = {
+			name     = "traefik"
+			replicas = 1
+
+			image = "traefik:v2.4"
+
+			network_mode = "host"
+
+		}
+	}
+}
+
+import {
+	to = synology_container_project.default
+	id = "traefik"
+}`
+
 	k3sProject = `
 	resource "synology_container_project" "foo" {
 		name = "k3s"
@@ -170,6 +193,10 @@ func TestAccProjectResource_basic(t *testing.T) {
 		ResourceBlock string
 	}{
 		{
+			"traefik",
+			traefikProject,
+		},
+		{
 			"foo",
 			testProject,
 		},
@@ -225,7 +252,24 @@ func TestAccProjectResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_container_project.foo", "name", func(attr string) error {
+							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
+								if attr != tt.Name {
+									return fmt.Errorf("expected project name to be '%s', got %s", tt.Name, attr)
+								}
+								return nil
+							}),
+							r.TestCheckResourceAttrWith("synology_container_project.default", "content", func(attr string) error {
+								if len(attr) < 1 {
+									return fmt.Errorf("expected resource to contain content, got %s", attr)
+								}
+								return nil
+							}),
+						),
+					},
+					{
+						Config: tt.ResourceBlock,
+						Check: r.ComposeTestCheckFunc(
+							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
 								if attr != tt.Name {
 									return fmt.Errorf("expected project name to be 'homebridge', got %s", attr)
 								}

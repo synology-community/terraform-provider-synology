@@ -68,16 +68,25 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	files, err := f.client.List(ctx, path)
+	file, err := f.client.Get(ctx, path)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
-		return
-	}
-	for _, file := range files.Files {
-		if file.IsDir && file.Path == path {
-			data.RealPath = types.StringValue(file.Additional.RealPath)
+		if _, ok := err.(filestation.FileNotFoundError); ok {
+			resp.Diagnostics.AddError("Error finding file after create", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
+		} else {
+			resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
 		}
 	}
+
+	if file == nil {
+		resp.Diagnostics.AddError("Error finding file after create", fmt.Sprintf("Unable to get file, got error: %s", err))
+		return
+	}
+
+	real_path := filepath.Join(file.Additional.RealPath, file.Name)
+
+	data.RealPath = types.StringValue(real_path)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -113,25 +122,32 @@ func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	name := data.Name.ValueString()
-	path := data.Path.ValueString()
-
-	files, err := f.client.List(ctx, path)
+	file, err := f.client.Get(ctx, data.Path.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
-		return
-	}
-	found := false
-	for _, file := range files.Files {
-		if file.IsDir && file.Name == name {
-			found = true
-			data.RealPath = types.StringValue(file.Additional.RealPath)
+		if _, ok := err.(filestation.FileNotFoundError); ok {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
+			resp.Diagnostics.AddError("Failed to get file during read", fmt.Sprintf("Unable to get file, got error: %s", err))
+			return
 		}
 	}
-	if found {
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	} else {
+
+	if file == nil {
 		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	if file.Additional.RealPath == "" {
+		resp.Diagnostics.AddError("Failed while getting the folder's additional properties", fmt.Sprintf("Unable to get additional file properties, got error: %s", err))
+		return
+	}
+
+	real_path := filepath.Join(file.Additional.RealPath, file.Name)
+
+	if real_path != data.RealPath.ValueString() {
+		data.RealPath = types.StringValue(real_path)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	}
 }
 

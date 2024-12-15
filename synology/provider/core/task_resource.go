@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/appkins/terraform-provider-synology/synology/util"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -18,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
+	"github.com/synology-community/terraform-provider-synology/synology/util"
 )
 
 type TaskResourceModel struct {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/appkins/terraform-provider-synology/synology/util"
 	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/synology-community/terraform-provider-synology/synology/util"
 )
 
 var (
