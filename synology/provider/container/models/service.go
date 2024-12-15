@@ -263,6 +263,8 @@ type Service struct {
 	DNS           types.List   `tfsdk:"dns"`
 	User          types.String `tfsdk:"user"`
 	Capabilities  types.Object `tfsdk:"capabilities"`
+	CapAdd        types.List   `tfsdk:"cap_add"`
+	CapDrop       types.List   `tfsdk:"cap_drop"`
 	Sysctls       types.Map    `tfsdk:"sysctls"`
 	// Extensions    types.Map    `tfsdk:"extensions"`
 }
@@ -344,6 +346,8 @@ func (m Service) AttrType() map[string]attr.Type {
 		"environment":  types.MapType{ElemType: types.StringType},
 		"dns":          types.ListType{ElemType: types.StringType},
 		"capabilities": Capabilities{}.ModelType(),
+		"cap_add":      types.ListType{ElemType: types.StringType},
+		"cap_drop":     types.ListType{ElemType: types.StringType},
 		"sysctls":      types.MapType{ElemType: types.StringType},
 	}
 }
@@ -854,6 +858,24 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 					d = append(d, diag...)
 				}
 			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	if !m.CapAdd.IsNull() && !m.CapAdd.IsUnknown() {
+		capAdd := []string{}
+		if diag := m.CapAdd.ElementsAs(ctx, &capAdd, true); !diag.HasError() {
+			service.CapAdd = capAdd
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	if !m.CapDrop.IsNull() && !m.CapDrop.IsUnknown() {
+		capDrop := []string{}
+		if diag := m.CapDrop.ElementsAs(ctx, &capDrop, true); !diag.HasError() {
+			service.CapDrop = capDrop
 		} else {
 			d = append(d, diag...)
 		}

@@ -254,6 +254,23 @@ func TestAccProjectResource_basic(t *testing.T) {
 						Check: r.ComposeTestCheckFunc(
 							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
 								if attr != tt.Name {
+									return fmt.Errorf("expected project name to be '%s', got %s", tt.Name, attr)
+								}
+								return nil
+							}),
+							r.TestCheckResourceAttrWith("synology_container_project.default", "content", func(attr string) error {
+								if len(attr) < 1 {
+									return fmt.Errorf("expected resource to contain content, got %s", attr)
+								}
+								return nil
+							}),
+						),
+					},
+					{
+						Config: tt.ResourceBlock,
+						Check: r.ComposeTestCheckFunc(
+							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
+								if attr != tt.Name {
 									return fmt.Errorf("expected project name to be 'homebridge', got %s", attr)
 								}
 								return nil

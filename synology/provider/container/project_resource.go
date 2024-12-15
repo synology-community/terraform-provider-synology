@@ -114,6 +114,38 @@ func projectExists(err error) bool {
 	return false
 }
 
+func (f *ProjectResource) handleConfigs(ctx context.Context, data ProjectResourceModel) (diags diag.Diagnostics) {
+	if data.Configs.IsNull() || data.Configs.IsUnknown() {
+		return
+	}
+
+	elements := map[string]models.Config{}
+	diags = data.Configs.ElementsAs(ctx, &elements, true)
+	if diags.HasError() {
+		return
+	}
+
+	for _, v := range elements {
+		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+			// Upload the file
+			_, err := f.fsClient.Upload(
+				ctx,
+				data.SharePath.ValueString(),
+				form.File{
+					Name:    v.File.ValueString(),
+					Content: v.Content.ValueString(),
+				}, false,
+				true)
+			if err != nil {
+				diags.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+				return
+			}
+		}
+	}
+
+	return
+}
+
 func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath string) error {
 	folderParts := strings.Split(sharePath, "/")
 	plen := len(folderParts)
@@ -199,51 +231,8 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	if !data.Content.IsNull() && !data.Content.IsUnknown() {
-		projectYAML = data.Content.ValueString()
-	} else {
-
-		// Set the file values where content is specified
-		if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
-			elements := map[string]models.Config{}
-			resp.Diagnostics.Append(data.Configs.ElementsAs(ctx, &elements, true)...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			changed := false
-			for k, v := range elements {
-				if !v.Content.IsNull() || !v.Content.IsUnknown() {
-					fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
-					fileContent := v.Content.ValueString()
-					v.File = types.StringValue(fileName)
-					elements[k] = v
-					changed = true
-
-					// Upload the file
-					_, err := f.fsClient.Upload(
-						ctx,
-						data.SharePath.ValueString(),
-						form.File{
-							Name:    fileName,
-							Content: fileContent,
-						}, false,
-						true)
-					if err != nil {
-						resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
-						return
-					}
-				}
-			}
-			if changed {
-				elementValues := map[string]attr.Value{}
-				for k, v := range elements {
-					elementValues[k] = v.Value()
-				}
-				data.Configs = types.MapValueMust(models.Config{}.ModelType(), elementValues)
-			}
-		}
-
-		resp.Diagnostics.Append(getProjectYaml(ctx, data, &projectYAML)...)
+	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
+		resp.Diagnostics.Append(f.handleConfigs(ctx, data)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -361,7 +350,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	data.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
-	data.Content = types.StringValue(proj.Content)
+	// data.Content = types.StringValue(proj.Content)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -422,7 +411,6 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -439,12 +427,14 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				resp.Diagnostics.AddError("Failed to read project", err.Error())
 				return
 			}
-		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
-			if proj.ID != "" {
-				data.ID = types.StringValue(proj.ID)
-				data.Content = types.StringValue(proj.Content)
-			}
+		} else if proj.ID != "" && (data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID) {
+			data.ID = types.StringValue(proj.ID)
+			data.Content = types.StringValue(proj.Content)
+		} else {
+			data.Content = types.StringValue(proj.Content)
 		}
+	} else {
+		data.Content = types.StringValue(proj.Content)
 	}
 	// 	_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 	// 		ID: data.ID.String(),
@@ -512,64 +502,12 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	if configChanged {
-		// Set the file values where content is specified
-		if !plan.Configs.IsNull() && !plan.Configs.IsUnknown() {
-			elements := map[string]models.Config{}
-			stateElements := map[string]models.Config{}
-			resp.Diagnostics.Append(plan.Configs.ElementsAs(ctx, &elements, true)...)
-			resp.Diagnostics.Append(state.Configs.ElementsAs(ctx, &stateElements, true)...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			changed := false
-			for k, v := range elements {
-				if !(v.Content.IsNull() || v.Content.IsUnknown()) {
-					fileName := fmt.Sprintf("config_%s", v.Name.ValueString())
-					fileContent := v.Content.ValueString()
-					v.File = types.StringValue(fileName)
-					elements[k] = v
-					changed = true
-
-					// Upload the file
-					_, err := f.fsClient.Upload(
-						ctx,
-						plan.SharePath.ValueString(),
-						form.File{
-							Name:    fileName,
-							Content: fileContent,
-						}, false,
-						true)
-					if err != nil {
-						resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
-						return
-					}
-				} else {
-					if len(stateElements) != len(elements) {
-						servicesChanged = true
-					} else {
-						sv := stateElements[k]
-						if sv.File.ValueString() != v.File.ValueString() {
-							servicesChanged = true
-						}
-					}
-				}
-			}
-			if changed {
-				elementValues := map[string]attr.Value{}
-				for k, v := range elements {
-					elementValues[k] = v.Value()
-				}
-				plan.Configs = types.MapValueMust(models.Config{}.ModelType(), elementValues)
-			}
-		}
+		f.handleConfigs(ctx, plan)
 	}
 
+	content := plan.Content.ValueString()
+
 	if servicesChanged {
-		projectYAML := ""
-		resp.Diagnostics.Append(getProjectYaml(ctx, plan, &projectYAML)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
 
 		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 
@@ -578,7 +516,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 
-		if proj.Content == projectYAML {
+		if proj.Content == content {
 			tflog.Info(ctx, "No changes detected in project, skipping update")
 			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), types.StringValue(proj.Status))...)
 			return
@@ -605,7 +543,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:                    plan.ID.ValueString(),
-			Content:               projectYAML,
+			Content:               content,
 			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
 			ServicePortalName:     servicePortal.Name.ValueString(),
 			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
@@ -640,10 +578,6 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
-	if plan.Content.IsNull() || plan.Content.IsUnknown() {
-		plan.Content = types.StringValue(proj.Content)
-	}
-
 	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
 	// Save data into Terraform state
@@ -677,7 +611,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					UseArgumentsForUnknownContent(),
 				},
 			},
 			"metadata": schema.MapAttribute{
@@ -832,6 +766,16 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 									ElementType:         types.StringType,
 								},
 							},
+						},
+						"cap_add": schema.ListAttribute{
+							MarkdownDescription: "The capabilities to add.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"cap_drop": schema.ListAttribute{
+							MarkdownDescription: "The capabilities to drop.",
+							Optional:            true,
+							ElementType:         types.StringType,
 						},
 						"sysctls": schema.MapAttribute{
 							MarkdownDescription: "The sysctls of the service.",
@@ -1253,6 +1197,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"configs": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose configs.",
 				Optional:            true,
+				PlanModifiers: []planmodifier.Map{
+					SetConfigPathsFromContent(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{

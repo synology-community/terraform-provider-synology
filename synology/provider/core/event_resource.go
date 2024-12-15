@@ -17,14 +17,12 @@ import (
 )
 
 type EventResourceModel struct {
-	ID   types.Int64  `tfsdk:"id"`
 	Name types.String `tfsdk:"name"`
 
-	Service types.String `tfsdk:"service"`
-	Script  types.String `tfsdk:"script"`
+	Script types.String `tfsdk:"script"`
 
-	Schedule types.String `tfsdk:"schedule"`
-	User     types.String `tfsdk:"user"`
+	User  types.String `tfsdk:"user"`
+	Event types.String `tfsdk:"event"`
 
 	Run  types.Bool   `tfsdk:"run"`
 	When types.String `tfsdk:"when"`
@@ -81,13 +79,12 @@ func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	task, err := p.client.EventGet(ctx, data.Name.ValueString())
+	_, err = p.client.EventGet(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to find event", err.Error())
 		return
 	}
 
-	data.ID = types.Int64PointerValue(task.ID)
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -154,10 +151,6 @@ func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), plan.Name)...)
 	}
 
-	if (!plan.Service.IsNull() && !plan.Service.IsUnknown()) && (plan.Service.ValueString() != state.Service.ValueString()) {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("service"), plan.Service)...)
-	}
-
 	if plan.Run.ValueBool() && plan.When.ValueString() == "upgrade" {
 		err := p.client.EventRun(ctx, plan.Name.ValueString())
 		if err != nil {
@@ -212,10 +205,16 @@ func (p *EventResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	_, err := p.client.EventGet(ctx, data.Name.ValueString())
+	event, err := p.client.EventGet(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.State.RemoveResource(ctx)
 	}
+
+	data.Name = types.StringValue(event.Name)
+	data.Script = types.StringValue(event.Operation)
+	data.User = types.StringValue(event.Owner["0"])
+	data.Event = types.StringValue(event.Event)
+	data.When = types.StringValue("apply")
 
 	//resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -226,10 +225,6 @@ func (p *EventResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
 
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{
-				MarkdownDescription: "The ID of the event to install.",
-				Computed:            true,
-			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of the event to install.",
 				Required:            true,
@@ -301,7 +296,16 @@ func (p *EventResource) ImportState(ctx context.Context, req resource.ImportStat
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), event.ID)...)
+	result := EventResourceModel{
+		Name:   types.StringValue(event.Name),
+		Script: types.StringValue(event.Operation),
+		User:   types.StringValue(event.Owner["0"]),
+		Event:  types.StringValue(event.Event),
+		Run:    types.BoolValue(false),
+		When:   types.StringValue("apply"),
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
 }
 
 func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err error) {

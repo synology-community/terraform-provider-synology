@@ -117,7 +117,13 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		}
 	}
 
-	skipCertificateCheck := data.SkipCertCheck.ValueBool()
+	var skipCertificateCheck bool
+
+	if data.SkipCertCheck.IsNull() || data.SkipCertCheck.IsUnknown() {
+		skipCertificateCheck = true
+	} else {
+		skipCertificateCheck = data.SkipCertCheck.ValueBool()
+	}
 	if vString := os.Getenv(SYNOLOGY_SKIP_CERT_CHECK_ENV_VAR); vString != "" {
 		if v, err := strconv.ParseBool(vString); err == nil {
 			skipCertificateCheck = v
@@ -162,7 +168,6 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		Password:  password,
 		OTPSecret: otp_secret,
 	}); err != nil {
-
 		if c.Credentials().Token == "" {
 			resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
 		}
