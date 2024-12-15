@@ -19,7 +19,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/appkins/synology",
+		Address: "registry.terraform.io/synology-community/synology",
 		Debug:   debug,
 	}
 
