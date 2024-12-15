@@ -1,7 +1,8 @@
 module github.com/synology-community/terraform-provider-synology
 
-go 1.22.4
-toolchain go1.22.9
+go 1.22.7
+
+toolchain go1.23.4
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.4.6
@@ -14,7 +15,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.25.0
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
 	github.com/kdomanski/iso9660 v0.4.0
-	github.com/synology-community/go-synology v0.1.5
+	github.com/synology-community/go-synology v0.1.6
 	github.com/tredoe/osutil v1.5.0
 )
 
@@ -100,12 +101,12 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/zclconf/go-cty v1.15.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/mod v0.22.0 // indirect
+	golang.org/x/net v0.32.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/tools v0.25.0 // indirect; indirect	google.golang.org/genproto/googleapis/rpc v0.0.0-20240506185236-b8a5c65736ae // indirect
+	golang.org/x/tools v0.28.0 // indirect; indirect	google.golang.org/genproto/googleapis/rpc v0.0.0-20240506185236-b8a5c65736ae // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
