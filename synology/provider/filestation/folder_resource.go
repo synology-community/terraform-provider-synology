@@ -28,7 +28,6 @@ type FolderResource struct {
 
 // FolderResourceModel describes the resource data model.
 type FolderResourceModel struct {
-	Name          types.String `tfsdk:"name"`
 	Path          types.String `tfsdk:"path"`
 	CreateParents types.Bool   `tfsdk:"create_parents"`
 	RealPath      types.String `tfsdk:"real_path"`
@@ -54,9 +53,7 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 	data.CreateParents = types.BoolValue(createParents)
 
 	path := data.Path.ValueString()
-	name := data.Name.ValueString()
-
-	flist, err := f.client.CreateFolder(ctx, []string{path}, []string{name}, createParents)
+	flist, err := f.client.CreateFolder(ctx, []string{filepath.Dir(path)}, []string{filepath.Base(path)}, createParents)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create folder", fmt.Sprintf("Failed to create folder, got error: %s", err))
@@ -84,9 +81,7 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	real_path := filepath.Join(file.Additional.RealPath, file.Name)
-
-	data.RealPath = types.StringValue(real_path)
+	data.RealPath = types.StringValue(file.Additional.RealPath)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -143,10 +138,8 @@ func (f *FolderResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	real_path := filepath.Join(file.Additional.RealPath, file.Name)
-
-	if real_path != data.RealPath.ValueString() {
-		data.RealPath = types.StringValue(real_path)
+	if file.Additional.RealPath != data.RealPath.ValueString() {
+		data.RealPath = types.StringValue(file.Additional.RealPath)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	}
 }
@@ -177,10 +170,6 @@ func (f *FolderResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 		MarkdownDescription: "A file on the Synology NAS Folderstation.",
 
 		Attributes: map[string]schema.Attribute{
-			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the folder to be created.",
-				Required:            true,
-			},
 			"path": schema.StringAttribute{
 				MarkdownDescription: "A destination folder path starting with a shared folder to which files can be uploaded.",
 				Required:            true,

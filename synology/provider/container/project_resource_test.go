@@ -44,6 +44,12 @@ const (
 				}
 			}
 		}
+		configs = {
+			foo = {
+				name    = "foo.txt"
+				content = "Hello World"
+			}
+		}
 		services = {
 			bar = {
 				name     = "bar"
@@ -54,6 +60,14 @@ const (
 				logging = {
 					driver = "json-file"
 				}
+
+				configs = [
+					{
+						source = "foo"
+						target = "/etc/foo.txt"
+						mode   = "777"
+					}
+				]
 
 				ports = [{
 					target    = 80

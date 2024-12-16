@@ -54,12 +54,10 @@ func (m setConfigPathsFromContent) PlanModifyMap(ctx context.Context, req planmo
 	if !req.PlanValue.IsUnknown() && !req.PlanValue.IsNull() {
 		var planMap types.Map
 		resp.Diagnostics.Append(populateConfigPathsInMap(ctx, req.Path, req.PlanValue, &planMap)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		if reflect.DeepEqual(configMap, planMap) {
-			return
+		if !resp.Diagnostics.HasError() {
+			if reflect.DeepEqual(configMap, planMap) {
+				return
+			}
 		}
 	}
 

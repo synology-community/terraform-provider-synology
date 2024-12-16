@@ -118,6 +118,11 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBu
 		c.project.Configs = map[string]composetypes.ConfigObjConfig{}
 
 		for k, v := range elements {
+
+			if v.File.ValueString() == "" {
+				v.File = types.StringValue(v.Name.ValueString())
+			}
+
 			cfg := composetypes.ConfigObjConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &cfg)...)
