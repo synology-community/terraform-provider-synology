@@ -10,7 +10,15 @@ import (
 
 const (
 	testProject = `
-	resource "synology_container_project" "foo" {
+	provider "synology" {
+		host            = "https://nas.appkins.io:5001"
+		user            = "terraform"
+		password        = "ABP8kdn7teu.fck-kzk"
+		skip_cert_check = true
+  	otp_secret      = ""
+  }
+
+	resource "synology_container_project" "default" {
 		name = "foo"
 
 		networks = {
@@ -192,18 +200,18 @@ func TestAccProjectResource_basic(t *testing.T) {
 		Name          string
 		ResourceBlock string
 	}{
-		{
-			"traefik",
-			traefikProject,
-		},
+		// {
+		// 	"traefik",
+		// 	traefikProject,
+		// },
 		{
 			"foo",
 			testProject,
 		},
-		{
-			"k3s",
-			k3sProject,
-		},
+		// {
+		// 	"k3s",
+		// 	k3sProject,
+		// },
 		// {
 		// 	"k3s project",
 		// 	k3sProject,

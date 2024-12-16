@@ -196,8 +196,6 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	projectYAML := ""
-
 	if data.SharePath.IsNull() || data.SharePath.IsUnknown() {
 		data.SharePath = types.StringValue(fmt.Sprintf("/projects/%s", data.Name.ValueString()))
 	}
@@ -233,7 +231,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
 		Name:                  data.Name.ValueString(),
-		Content:               projectYAML,
+		Content:               data.Content.ValueString(),
 		SharePath:             data.SharePath.ValueString(),
 		EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
 		ServicePortalName:     servicePortal.Name.ValueString(),
@@ -293,7 +291,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:                    data.ID.ValueString(),
-			Content:               projectYAML,
+			Content:               data.Content.ValueString(),
 			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
 			ServicePortalName:     servicePortal.Name.ValueString(),
 			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
@@ -389,18 +387,18 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 // Read implements resource.Resource.
 func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ProjectResourceModel
+	var state ProjectResourceModel
 
 	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
+	proj, err := f.client.ProjectGet(ctx, state.ID.ValueString())
 
 	if err != nil {
-		if proj, err = f.client.ProjectGetByName(ctx, data.Name.ValueString()); err != nil {
+		if proj, err = f.client.ProjectGetByName(ctx, state.Name.ValueString()); err != nil {
 			switch err.(type) {
 			case docker.ProjectNotFoundError:
 				resp.State.RemoveResource(ctx)
@@ -409,19 +407,24 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				resp.Diagnostics.AddError("Failed to get project on read", err.Error())
 				return
 			}
-		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
+		} else if state.ID.IsNull() || state.ID.IsUnknown() || state.ID.ValueString() != proj.ID {
 			if proj.ID != "" {
-				data.ID = types.StringValue(proj.ID)
+				state.ID = types.StringValue(proj.ID)
 			}
 		}
 	}
 
-	data.Status = types.StringValue(proj.Status)
-	data.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
-	data.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
-	data.Content = types.StringValue(proj.Content)
+	state.Status = types.StringValue(proj.Status)
+	state.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
+	state.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	if proj.Content != "" {
+		state.Content = types.StringValue(proj.Content)
+	} else {
+		state.Content = types.StringNull()
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 // Update implements resource.Resource.
@@ -472,7 +475,32 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		f.handleConfigs(ctx, plan)
 	}
 
-	content := plan.Content.ValueString()
+	var content string
+	if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
+		content = plan.Content.ValueString()
+	} else {
+		resp.Diagnostics.Append(
+			models.NewComposeContentBuilder(
+				ctx,
+			).SetServices(
+				&plan.Services,
+			).SetNetworks(
+				&plan.Networks,
+			).SetVolumes(
+				&plan.Volumes,
+			).SetConfigs(
+				&plan.Configs,
+			).SetSecrets(
+				&plan.Secrets,
+			).Build(
+				&content,
+			)...)
+
+		if resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Failed to build project content", "")
+			return
+		}
+	}
 
 	if servicesChanged {
 
@@ -487,7 +515,6 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 			tflog.Info(ctx, "No changes detected in project, skipping update")
 			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), types.StringValue(proj.Status))...)
 			return
-
 		}
 
 		if proj.IsRunning() {
@@ -500,13 +527,13 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 			}
 		}
 
-		_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
-			ID: plan.ID.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to clean project", err.Error())
-			return
-		}
+		// _, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
+		// 	ID: plan.ID.ValueString(),
+		// })
+		// if err != nil {
+		// 	resp.Diagnostics.AddError("Failed to clean project", err.Error())
+		// 	return
+		// }
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:                    plan.ID.ValueString(),
@@ -545,6 +572,13 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("content"), plan.Content)...)
+	if resp.Diagnostics.HasError() {
+		resp.Diagnostics.AddError("Failed to set content", "")
+		return
+	}
+	// plan.Content = types.StringValue(proj.Content)
+
 	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
 	// Save data into Terraform state
@@ -579,6 +613,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					UseArgumentsForUnknownContent(),
+					// stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"metadata": schema.MapAttribute{
