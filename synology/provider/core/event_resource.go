@@ -51,11 +51,7 @@ func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	eventReq, err := getEventRequest(data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create event", err.Error())
-		return
-	}
+	eventReq := getEventRequest(data)
 
 	var eventCreate func(ctx context.Context, req core.EventRequest) (*core.EventResult, error)
 
@@ -73,7 +69,7 @@ func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, 
 		eventCreate = p.client.EventCreate
 	}
 
-	_, err = eventCreate(ctx, eventReq)
+	_, err := eventCreate(ctx, eventReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Event install failed", err.Error())
 		return
@@ -111,11 +107,7 @@ func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	eventReq, err := getEventRequest(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create event", err.Error())
-		return
-	}
+	eventReq := getEventRequest(plan)
 
 	var eventUpdate func(ctx context.Context, req core.EventRequest) (*core.EventResult, error)
 
@@ -133,7 +125,7 @@ func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		eventUpdate = p.client.EventUpdate
 	}
 
-	_, err = eventUpdate(ctx, eventReq)
+	_, err := eventUpdate(ctx, eventReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Event install failed", err.Error())
 		return
@@ -308,7 +300,7 @@ func (p *EventResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
 }
 
-func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err error) {
+func getEventRequest(data EventResourceModel) core.EventRequest {
 	event := "bootup"
 
 	if !data.Script.IsNull() && !data.Script.IsUnknown() && data.Script.ValueString() != "" {
@@ -317,7 +309,7 @@ func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err e
 
 	user := data.User.ValueString()
 
-	eventReq = core.EventRequest{
+	return core.EventRequest{
 		Name:               data.Name.ValueString(),
 		Owner:              map[string]string{"0": user},
 		Operation:          data.Script.ValueString(),
@@ -329,6 +321,4 @@ func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err e
 		NotifyMail:         "",
 		SynoConfirmPWToken: "",
 	}
-
-	return eventReq, nil
 }

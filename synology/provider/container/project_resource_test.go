@@ -200,6 +200,10 @@ func TestAccProjectResource_basic(t *testing.T) {
 			"foo",
 			testProject,
 		},
+		{
+			"k3s",
+			k3sProject,
+		},
 		// {
 		// 	"k3s project",
 		// 	k3sProject,

@@ -134,23 +134,23 @@ func (p Parser) Parse(spec string) (*Schedule, error) {
 	}
 
 	// Figure out how many fields we need
-	max := 0
+	upperLimit := 0
 	for _, place := range places {
 		if p.options&place > 0 {
-			max++
+			upperLimit++
 		}
 	}
-	min := max - p.optionals
+	lowerLimit := upperLimit - p.optionals
 
 	// Split fields on whitespace
 	fields := strings.Fields(spec)
 
 	// Validate number of fields
-	if count := len(fields); count < min || count > max {
-		if min == max {
-			return nil, fmt.Errorf("Expected exactly %d fields, found %d: %s", min, count, spec)
+	if count := len(fields); count < lowerLimit || count > upperLimit {
+		if lowerLimit == upperLimit {
+			return nil, fmt.Errorf("Expected exactly %d fields, found %d: %s", lowerLimit, count, spec)
 		}
-		return nil, fmt.Errorf("Expected %d to %d fields, found %d: %s", min, max, count, spec)
+		return nil, fmt.Errorf("Expected %d to %d fields, found %d: %s", lowerLimit, upperLimit, count, spec)
 	}
 
 	// Fill in missing fields
@@ -346,16 +346,16 @@ func mustParseInt(expr string) (int64, error) {
 }
 
 // getBits sets all bits in the range [min, max], modulo the given step size.
-func getBits(min, max, step int64) int64 {
+func getBits(lowerLimit, upperLimit, step int64) int64 {
 	var bits int64
 
 	// If step is 1, use shifts.
 	if step == 1 {
-		return ^(toInt64(math.MaxUint64) << (max + 1)) & (toInt64(math.MaxUint64) << min)
+		return ^(toInt64(math.MaxUint64) << (upperLimit + 1)) & (toInt64(math.MaxUint64) << lowerLimit)
 	}
 
 	// Else, use a simple loop.
-	for i := min; i <= max; i += step {
+	for i := lowerLimit; i <= upperLimit; i += step {
 		bits |= 1 << i
 	}
 	return bits
@@ -365,7 +365,7 @@ func toInt64(starBit uint64) int64 {
 	return int64(starBit)
 }
 
-// all returns all bits within the given bounds.  (plus the star bit)
+// all returns all bits within the given bounds.  (plus the star bit).
 func all(r bounds) int64 {
 	return getBits(r.min, r.max, 1) | toInt64(starBit)
 }
