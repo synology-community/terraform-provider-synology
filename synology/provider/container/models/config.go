@@ -10,9 +10,10 @@ import (
 )
 
 type Config struct {
-	Name    types.String `tfsdk:"name"`
-	Content types.String `tfsdk:"content"`
-	File    types.String `tfsdk:"file"`
+	Name     types.String `tfsdk:"name"`
+	Content  types.String `tfsdk:"content"`
+	File     types.String `tfsdk:"file"`
+	External types.Bool   `tfsdk:"external"`
 }
 
 func (m Config) AsComposeConfig(ctx context.Context, config *composetypes.ConfigObjConfig) (d diag.Diagnostics) {
@@ -22,6 +23,10 @@ func (m Config) AsComposeConfig(ctx context.Context, config *composetypes.Config
 		config.File = m.File.ValueString()
 	}
 
+	if !m.External.IsNull() && !m.External.IsUnknown() {
+		config.External = composetypes.External(m.External.ValueBool())
+	}
+
 	return
 }
 
@@ -29,6 +34,9 @@ func (m *Config) FromComposeConfig(ctx context.Context, config *composetypes.Con
 	m.Name = types.StringValue(config.Name)
 	m.File = types.StringValue(config.File)
 	m.Content = types.StringValue(config.Content)
+	if config.External {
+		m.External = types.BoolValue(true)
+	}
 	return
 }
 
@@ -38,16 +46,18 @@ func (m Config) ModelType() attr.Type {
 
 func (m Config) AttrType() map[string]attr.Type {
 	return map[string]attr.Type{
-		"name":    types.StringType,
-		"content": types.StringType,
-		"file":    types.StringType,
+		"name":     types.StringType,
+		"content":  types.StringType,
+		"file":     types.StringType,
+		"external": types.BoolType,
 	}
 }
 
 func (m Config) Value() attr.Value {
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"name":    m.Name,
-		"content": m.Content,
-		"file":    m.File,
+		"name":     m.Name,
+		"content":  m.Content,
+		"file":     m.File,
+		"external": m.External,
 	})
 }

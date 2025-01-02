@@ -1224,6 +1224,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								stringplanmodifier.UseStateForUnknown(),
 							},
 						},
+						"external": schema.BoolAttribute{
+							MarkdownDescription: "Whether the config is external.",
+							Optional:            true,
+						},
 					},
 				},
 			},
