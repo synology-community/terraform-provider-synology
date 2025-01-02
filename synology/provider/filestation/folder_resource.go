@@ -46,7 +46,7 @@ func (f *FolderResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	createParents := true
 
-	if !data.CreateParents.IsNull() || !data.CreateParents.IsUnknown() {
+	if !data.CreateParents.IsNull() {
 		createParents = data.CreateParents.ValueBool()
 	}
 
@@ -151,7 +151,7 @@ func (f *FolderResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	if data.CreateParents.IsNull() || data.CreateParents.IsUnknown() {
+	if data.CreateParents.IsNull() {
 		data.CreateParents = types.BoolValue(true)
 	}
 
@@ -210,13 +210,11 @@ func (f *FolderResource) Configure(ctx context.Context, req resource.ConfigureRe
 
 func (f *FolderResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	p := req.ID
-	basedir := filepath.Dir(p)
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("path"), basedir)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), filepath.Base(p))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("path"), p)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("create_parents"), true)...)
 
-	files, err := f.client.List(ctx, basedir)
+	files, err := f.client.List(ctx, p)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
 		return

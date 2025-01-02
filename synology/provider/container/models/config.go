@@ -46,8 +46,8 @@ func (m Config) AttrType() map[string]attr.Type {
 
 func (m Config) Value() attr.Value {
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"name":    types.StringValue(m.Name.ValueString()),
-		"content": types.StringValue(m.Content.ValueString()),
-		"file":    types.StringValue(m.File.ValueString()),
+		"name":    m.Name,
+		"content": m.Content,
+		"file":    m.File,
 	})
 }

@@ -76,7 +76,7 @@ func populateConfigPathsInMap(ctx context.Context, reqPath path.Path, src types.
 		if v.File.IsNull() {
 			if v.Content.IsNull() {
 				diags.AddAttributeError(reqPath, "Project Configs Error", "Configs must contain either file content or file path")
-			} else {
+			} else if !v.Content.IsUnknown() {
 				v.File = types.StringValue(v.Name.ValueString())
 			}
 		}
