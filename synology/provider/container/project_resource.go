@@ -917,7 +917,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 									Optional:            true,
 									CustomType:          timetypes.GoDurationType{},
 								},
-								"retries": schema.NumberAttribute{
+								"retries": schema.Int64Attribute{
 									MarkdownDescription: "Number of retries.",
 									Optional:            true,
 								},
@@ -1054,6 +1054,11 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 									},
 								},
 							},
+						},
+						"extra_hosts": schema.MapAttribute{
+							MarkdownDescription: "The extra hosts of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
 						},
 					},
 				},

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 	"strconv"
+	"strings"
+	"unsafe"
 
 	"github.com/docker/go-units"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
@@ -31,6 +32,14 @@ func (m Capabilities) AttrType() map[string]attr.Type {
 		"add":  types.ListType{ElemType: types.StringType},
 		"drop": types.ListType{ElemType: types.StringType},
 	}
+}
+
+func convertToInt64Ptr(p *uint64) *int64 {
+	return (*int64)(unsafe.Pointer(p))
+}
+
+func convertToUint64Ptr(p *int64) *uint64 {
+	return (*uint64)(unsafe.Pointer(p))
 }
 
 type Logging struct {
@@ -123,7 +132,7 @@ type HealthCheck struct {
 	Timeout       timetypes.GoDuration `tfsdk:"timeout"`
 	StartInterval timetypes.GoDuration `tfsdk:"start_interval"`
 	StartPeriod   timetypes.GoDuration `tfsdk:"start_period"`
-	Retries       types.Number         `tfsdk:"retries"`
+	Retries       types.Int64          `tfsdk:"retries"`
 }
 
 func (m HealthCheck) ModelType() attr.Type {
@@ -137,7 +146,7 @@ func (m HealthCheck) AttrType() map[string]attr.Type {
 		"timeout":        timetypes.GoDurationType{},
 		"start_interval": timetypes.GoDurationType{},
 		"start_period":   timetypes.GoDurationType{},
-		"retries":        types.NumberType,
+		"retries":        types.Int64Type,
 	}
 }
 
@@ -266,6 +275,7 @@ type Service struct {
 	CapAdd        types.List   `tfsdk:"cap_add"`
 	CapDrop       types.List   `tfsdk:"cap_drop"`
 	Sysctls       types.Map    `tfsdk:"sysctls"`
+	ExtraHosts    types.Map    `tfsdk:"extra_hosts"`
 	// Extensions    types.Map    `tfsdk:"extensions"`
 }
 
@@ -349,6 +359,7 @@ func (m Service) AttrType() map[string]attr.Type {
 		"cap_add":      types.ListType{ElemType: types.StringType},
 		"cap_drop":     types.ListType{ElemType: types.StringType},
 		"sysctls":      types.MapType{ElemType: types.StringType},
+		"extra_hosts":  types.MapType{ElemType: types.StringType},
 	}
 }
 
@@ -372,6 +383,7 @@ func (m Service) Value() attr.Value {
 	var securityOpt basetypes.ListValue
 	var capabilities basetypes.ObjectValue
 	var sysctls basetypes.MapValue
+	var extraHosts basetypes.MapValue
 	// var extensions basetypes.MapValue
 
 	// if e, diag := m.Extensions.ToMapValue(context.Background()); !diag.HasError() {
@@ -446,6 +458,10 @@ func (m Service) Value() attr.Value {
 		sysctls = s
 	}
 
+	if e, diag := m.ExtraHosts.ToMapValue(context.Background()); !diag.HasError() {
+		extraHosts = e
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"container_name": types.StringValue(m.ContainerName.ValueString()),
 		"image":          types.StringValue(m.Image.ValueString()),
@@ -474,6 +490,7 @@ func (m Service) Value() attr.Value {
 		"user":         types.StringValue(m.User.ValueString()),
 		"capabilities": capabilities,
 		"sysctls":      sysctls,
+		"extra_hosts":  extraHosts,
 	})
 }
 
@@ -661,8 +678,9 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 				}
 			}
 			if !hc.Retries.IsNull() || !hc.Retries.IsUnknown() {
-				retries, _ := hc.Retries.ValueBigFloat().Uint64()
-				service.HealthCheck.Retries = &retries
+				if retries := hc.Retries.ValueInt64Pointer(); retries != nil {
+					service.HealthCheck.Retries = convertToUint64Ptr(retries)
+				}
 			}
 		} else {
 			d = append(d, diag...)
@@ -890,6 +908,22 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		}
 	}
 
+	if !m.ExtraHosts.IsNull() && !m.ExtraHosts.IsUnknown() {
+		extraHosts := map[string]string{}
+
+		if service.ExtraHosts == nil {
+			service.ExtraHosts = composetypes.HostsList{}
+		}
+
+		if diag := m.ExtraHosts.ElementsAs(ctx, &extraHosts, true); !diag.HasError() {
+			for k, v := range extraHosts {
+				service.ExtraHosts[k] = []string{v}
+			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
 	service.ContainerName = m.ContainerName.ValueString()
 	replicas := m.Replicas.ValueInt64()
 	intReplicas := int(replicas)
@@ -1099,7 +1133,7 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 		Timeout:       timetypes.NewGoDurationNull(),
 		StartInterval: timetypes.NewGoDurationNull(),
 		StartPeriod:   timetypes.NewGoDurationNull(),
-		Retries:       types.NumberNull(),
+		Retries:       types.Int64Null(),
 	}
 	if service.HealthCheck != nil {
 		if service.HealthCheck.Timeout != nil {
@@ -1119,7 +1153,7 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 		}
 
 		if service.HealthCheck.Retries != nil {
-			healthCheck.Retries = types.NumberValue(big.NewFloat(float64(*service.HealthCheck.Retries)))
+			healthCheck.Retries = types.Int64PointerValue(convertToInt64Ptr(service.HealthCheck.Retries))
 		}
 
 		if len(service.HealthCheck.Test) > 0 {
@@ -1361,10 +1395,20 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 	}
 
 	if service.Sysctls != nil {
-		sysctls := map[string]types.String{}
+		sysctls := map[string]attr.Value{}
 		for k, v := range service.Sysctls {
 			sysctls[k] = types.StringValue(v)
 		}
+		m.Sysctls = types.MapValueMust(types.StringType, sysctls)
+	}
+
+	if service.ExtraHosts != nil {
+		extraHosts := map[string]attr.Value{}
+		for k, v := range service.ExtraHosts {
+			extraHosts[k] = types.StringValue(strings.Join(v, ","))
+		}
+
+		m.ExtraHosts = types.MapValueMust(types.StringType, extraHosts)
 	}
 
 	return d
