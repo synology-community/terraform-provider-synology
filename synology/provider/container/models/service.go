@@ -15,7 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type Capabilities struct {

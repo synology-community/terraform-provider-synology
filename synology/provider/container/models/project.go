@@ -6,7 +6,7 @@ package models
 // 	"slices"
 
 // 	"github.com/compose-spec/compose-go/v2/loader"
-// 	composetypes "github.com/compose-spec/compose-go/v2/types"
+// 	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 // 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 // 	"github.com/hashicorp/terraform-plugin-framework/types"
 

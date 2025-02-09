@@ -3,11 +3,11 @@ package models
 import (
 	"context"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type IPAMPool struct {
