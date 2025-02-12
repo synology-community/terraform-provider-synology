@@ -6,7 +6,10 @@ toolchain go1.23.4
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.4.6
+	github.com/distribution/reference v0.5.0
+	github.com/docker/go-connections v0.5.0
 	github.com/docker/go-units v0.5.0
+	github.com/go-viper/mapstructure/v2 v2.0.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/terraform-plugin-docs v0.20.1
 	github.com/hashicorp/terraform-plugin-framework v1.13.0
@@ -15,8 +18,13 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.25.0
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
 	github.com/kdomanski/iso9660 v0.4.0
+	github.com/mattn/go-shellwords v1.0.12
+	github.com/opencontainers/go-digest v1.0.0
 	github.com/synology-community/go-synology v0.1.6
 	github.com/tredoe/osutil v1.5.0
+	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
+	gopkg.in/yaml.v3 v3.0.1
+	gotest.tools/v3 v3.5.1
 )
 
 replace github.com/synology-community/go-synology v0.1.5-0.20240729234156-51ea47a113ba => /Users/atkini01/src/synology-community/go-synology
@@ -32,16 +40,11 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/distribution/reference v0.5.0 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/cli v1.1.6 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
-	github.com/mattn/go-shellwords v1.0.12 // indirect
-	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/posener/complete v1.2.3 // indirect
 	github.com/pquerna/otp v1.4.0 // indirect
@@ -52,12 +55,9 @@ require (
 	github.com/yuin/goldmark v1.7.7 // indirect
 	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	go.abhg.dev/goldmark/frontmatter v0.2.0 // indirect
-	golang.org/x/exp v0.0.0-20240707233637-46b078467d37 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gotest.tools/v3 v3.5.1 // indirect
 )
 
 require (
@@ -103,7 +103,7 @@ require (
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.32.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect; indirect	google.golang.org/genproto/googleapis/rpc v0.0.0-20240506185236-b8a5c65736ae // indirect

@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api"
 	"github.com/synology-community/go-synology/pkg/api/core"
 )
 
@@ -161,14 +162,14 @@ func (p *PackageResource) Delete(ctx context.Context, req resource.DeleteRequest
 	_, err := p.client.PackageUninstall(ctx, core.PackageUninstallRequest{
 		ID: packageName,
 	})
-	if err != nil {
 
-		pkg, err := p.client.PackageGet(ctx, packageName)
-		// Success, package not found
-		if err != nil && pkg == nil {
+	if err != nil {
+		_, err := p.client.PackageGet(ctx, packageName)
+		switch err.(type) {
+		case api.NotFoundError:
 			resp.State.RemoveResource(ctx)
 			return
-		} else {
+		default:
 			resp.Diagnostics.AddError("Failed to uninstall package", err.Error())
 			return
 		}

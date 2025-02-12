@@ -24,7 +24,7 @@ type CloudInit struct {
 	NetworkConfig string `yaml:"network_config"`
 }
 
-func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) (string, error) {
+func IsoFromFiles(ctx context.Context, volumeIdentifier string, files map[string]string) (string, error) {
 	writer, err := iso9660.NewWriter()
 
 	if err != nil {
@@ -43,7 +43,7 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 	}
 
 	var b bytes.Buffer
-	err = writer.WriteTo(&b, isoName)
+	err = writer.WriteTo(&b, volumeIdentifier)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("failed to write ISO image: %s", err))
 		return "", err

@@ -14,6 +14,7 @@ func Resources() []func() resource.Resource {
 		NewFileResource,
 		NewCloudInitResource,
 		NewFolderResource,
+		NewIsoResource,
 	}
 }
 

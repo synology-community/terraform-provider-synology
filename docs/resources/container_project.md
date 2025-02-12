@@ -98,6 +98,7 @@ Required:
 Optional:
 
 - `content` (String) The content of the config.
+- `external` (Boolean) Whether the config is external.
 - `file` (String) The file of the config.
 
 
@@ -181,6 +182,7 @@ Optional:
 - `dns` (List of String) The DNS of the service.
 - `entrypoint` (List of String) The entrypoint of the service.
 - `environment` (Map of String) The environment of the service.
+- `extra_hosts` (Map of String) The extra hosts of the service.
 - `healthcheck` (Attributes) Health check configuration. (see [below for nested schema](#nestedatt--services--healthcheck))
 - `image` (String) The image of the service.
 - `labels` (Map of String) The labels of the network.

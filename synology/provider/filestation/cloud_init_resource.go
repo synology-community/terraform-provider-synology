@@ -20,8 +20,8 @@ import (
 )
 
 type File struct {
-	Path    string
-	Content string
+	Path    string `tfsdk:"path"`
+	Content string `tfsdk:"content"`
 }
 
 // Ensure provider defined types fully satisfy framework interfaces.
