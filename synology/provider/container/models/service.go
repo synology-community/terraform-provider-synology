@@ -248,6 +248,7 @@ func (m ServiceDependency) AttrType() map[string]attr.Type {
 
 type Service struct {
 	ContainerName types.String `tfsdk:"container_name"`
+	HostName      types.String `tfsdk:"hostname"`
 	Image         types.String `tfsdk:"image"`
 	MemLimit      types.String `tfsdk:"mem_limit"`
 	Entrypoint    types.List   `tfsdk:"entrypoint"`
@@ -320,6 +321,7 @@ func (m Service) AttrType() map[string]attr.Type {
 		"name":           types.StringType,
 		"image":          types.StringType,
 		"container_name": types.StringType,
+		"hostname":       types.StringType,
 		"configs":        types.ListType{ElemType: ServiceConfig{}.ModelType()},
 		"entrypoint":     types.ListType{ElemType: types.StringType},
 		"command":        types.ListType{ElemType: types.StringType},
@@ -464,6 +466,7 @@ func (m Service) Value() attr.Value {
 
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
 		"container_name": types.StringValue(m.ContainerName.ValueString()),
+		"hostname":       types.StringValue(m.HostName.ValueString()),
 		"image":          types.StringValue(m.Image.ValueString()),
 		"entrypoint":     entrypoints,
 		"command":        commands,
@@ -924,6 +927,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		}
 	}
 
+	service.Hostname = m.HostName.ValueString()
 	service.ContainerName = m.ContainerName.ValueString()
 	replicas := m.Replicas.ValueInt64()
 	intReplicas := int(replicas)
@@ -943,6 +947,7 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 	d = []diag.Diagnostic{}
 
 	m.ContainerName = types.StringValue(service.ContainerName)
+	m.HostName = types.StringValue(service.Hostname)
 	m.MemLimit = types.StringValue(fmt.Sprintf("%d", service.MemLimit))
 
 	if service.Image != "" {

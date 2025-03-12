@@ -694,6 +694,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The container name.",
 							Optional:            true,
 						},
+						"hostname": schema.StringAttribute{
+							MarkdownDescription: "The hostname.",
+							Optional:            true,
+						},
 						"replicas": schema.Int64Attribute{
 							MarkdownDescription: "The number of replicas.",
 							Optional:            true,
