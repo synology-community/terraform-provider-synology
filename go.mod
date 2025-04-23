@@ -4,7 +4,7 @@ go 1.22.7
 toolchain go1.24.1
 
 require (
-	github.com/compose-spec/compose-go/v2 v2.6.0
+	github.com/compose-spec/compose-go/v2 v2.6.1
 	github.com/docker/go-units v0.5.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/terraform-plugin-docs v0.21.0
