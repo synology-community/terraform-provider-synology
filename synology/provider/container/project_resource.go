@@ -737,70 +737,13 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"container_name": schema.StringAttribute{
-							MarkdownDescription: "The container name.",
-							Optional:            true,
-						},
-						"hostname": schema.StringAttribute{
-							MarkdownDescription: "The hostname.",
-							Optional:            true,
-						},
-						"replicas": schema.Int64Attribute{
-							MarkdownDescription: "The number of replicas.",
-							Optional:            true,
-						},
-						"mem_limit": schema.StringAttribute{
-							MarkdownDescription: "The memory limit.",
-							Optional:            true,
-						},
-						"entrypoint": schema.ListAttribute{
-							MarkdownDescription: "The entrypoint of the service.",
+						"cap_add": schema.ListAttribute{
+							MarkdownDescription: "The capabilities to add.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
-						"command": schema.ListAttribute{
-							MarkdownDescription: "The command of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"user": schema.StringAttribute{
-							MarkdownDescription: "The user of the service.",
-							Optional:            true,
-						},
-						"restart": schema.StringAttribute{
-							MarkdownDescription: "The restart policy.",
-							Optional:            true,
-						},
-						"network_mode": schema.StringAttribute{
-							MarkdownDescription: "The network mode.",
-							Optional:            true,
-						},
-						"privileged": schema.BoolAttribute{
-							MarkdownDescription: "Whether the service is privileged.",
-							Optional:            true,
-						},
-						"tmpfs": schema.ListAttribute{
-							MarkdownDescription: "The tmpfs of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"security_opt": schema.ListAttribute{
-							MarkdownDescription: "The security options of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"environment": schema.MapAttribute{
-							MarkdownDescription: "The environment of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"labels": schema.MapAttribute{
-							MarkdownDescription: "The labels of the network.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"dns": schema.ListAttribute{
-							MarkdownDescription: "The DNS of the service.",
+						"cap_drop": schema.ListAttribute{
+							MarkdownDescription: "The capabilities to drop.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
@@ -820,60 +763,42 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"cap_add": schema.ListAttribute{
-							MarkdownDescription: "The capabilities to add.",
+						"command": schema.ListAttribute{
+							MarkdownDescription: "The command of the service.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
-						"cap_drop": schema.ListAttribute{
-							MarkdownDescription: "The capabilities to drop.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"sysctls": schema.MapAttribute{
-							MarkdownDescription: "The sysctls of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"image": schema.StringAttribute{
-							MarkdownDescription: "The image of the service.",
-							Optional:            true,
-						},
-						"ports": schema.ListNestedAttribute{
-							MarkdownDescription: "The ports of the service.",
+						"configs": schema.ListNestedAttribute{
+							MarkdownDescription: "The configs of the service.",
 							Optional:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the port.",
-										Optional:            true,
-									},
-									"target": schema.Int64Attribute{
-										MarkdownDescription: "The target of the port.",
-										Optional:            true,
-									},
-									"published": schema.StringAttribute{
-										MarkdownDescription: "The published of the port.",
-										Optional:            true,
-									},
-									"protocol": schema.StringAttribute{
-										MarkdownDescription: "The protocol of the port.",
-										Optional:            true,
-									},
-									"app_protocol": schema.StringAttribute{
-										MarkdownDescription: "The app protocol of the port.",
+									"gid": schema.StringAttribute{
+										MarkdownDescription: "The GID of the config.",
 										Optional:            true,
 									},
 									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the port.",
+										MarkdownDescription: "The mode of the config.",
 										Optional:            true,
 									},
-									"host_ip": schema.StringAttribute{
-										MarkdownDescription: "The host IP of the port.",
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the config.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the config.",
+										Optional:            true,
+									},
+									"uid": schema.StringAttribute{
+										MarkdownDescription: "The UID of the config.",
 										Optional:            true,
 									},
 								},
 							},
+						},
+						"container_name": schema.StringAttribute{
+							MarkdownDescription: "The container name.",
+							Optional:            true,
 						},
 						"depends_on": schema.MapNestedAttribute{
 							MarkdownDescription: "The dependencies of the service.",
@@ -891,17 +816,113 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
+						"dns": schema.ListAttribute{
+							MarkdownDescription: "The DNS of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"entrypoint": schema.ListAttribute{
+							MarkdownDescription: "The entrypoint of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"environment": schema.MapAttribute{
+							MarkdownDescription: "The environment of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"extra_hosts": schema.MapAttribute{
+							MarkdownDescription: "The extra hosts of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"healthcheck": schema.SingleNestedAttribute{
+							MarkdownDescription: "Health check configuration.",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"interval": schema.StringAttribute{
+									MarkdownDescription: "Interval to run the test.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"retries": schema.Int64Attribute{
+									MarkdownDescription: "Number of retries.",
+									Optional:            true,
+								},
+								"start_interval": schema.StringAttribute{
+									MarkdownDescription: "Start interval.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"start_period": schema.StringAttribute{
+									MarkdownDescription: "Start period.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"test": schema.ListAttribute{
+									MarkdownDescription: "Test command to run.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+								"timeout": schema.StringAttribute{
+									MarkdownDescription: "Timeout to run the test.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+							},
+						},
+						"hostname": schema.StringAttribute{
+							MarkdownDescription: "The hostname.",
+							Optional:            true,
+						},
+						"image": schema.StringAttribute{
+							MarkdownDescription: "The image of the service.",
+							Optional:            true,
+						},
+						"init": schema.BoolAttribute{
+							MarkdownDescription: "Runs an init process (PID 1) inside the container that forwards signals and reaps processes. Set this option to true to enable this feature for the service.",
+							Optional:            true,
+						},
+						"labels": schema.MapAttribute{
+							MarkdownDescription: "The labels of the network.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"logging": schema.SingleNestedAttribute{
+							MarkdownDescription: "Logging configuration for the docker service.",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"driver": schema.StringAttribute{
+									MarkdownDescription: "The driver of the logging.",
+									Optional:            true,
+								},
+								"options": schema.MapAttribute{
+									MarkdownDescription: "The options of the logging.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+							},
+						},
+						"mem_limit": schema.StringAttribute{
+							MarkdownDescription: "The memory limit.",
+							Optional:            true,
+						},
+						"network_mode": schema.StringAttribute{
+							MarkdownDescription: "The network mode.",
+							Optional:            true,
+						},
 						"networks": schema.MapNestedAttribute{
 							MarkdownDescription: "The networks of the service.",
 							Optional:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the network.",
-										Optional:            true,
-									},
 									"aliases": schema.SetAttribute{
 										MarkdownDescription: "The aliases of the network.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"driver_opts": schema.MapAttribute{
+										MarkdownDescription: "The driver options of the network.",
 										Optional:            true,
 										ElementType:         types.StringType,
 									},
@@ -922,10 +943,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 										MarkdownDescription: "The MAC address of the network.",
 										Optional:            true,
 									},
-									"driver_opts": schema.MapAttribute{
-										MarkdownDescription: "The driver options of the network.",
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the network.",
 										Optional:            true,
-										ElementType:         types.StringType,
 									},
 									"priority": schema.Int64Attribute{
 										MarkdownDescription: "The priority of the network.",
@@ -934,87 +954,140 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"logging": schema.SingleNestedAttribute{
-							MarkdownDescription: "Logging configuration for the docker service.",
+						"ports": schema.ListNestedAttribute{
+							MarkdownDescription: "The ports of the service.",
 							Optional:            true,
-							Attributes: map[string]schema.Attribute{
-								"driver": schema.StringAttribute{
-									MarkdownDescription: "The driver of the logging.",
-									Optional:            true,
-								},
-								"options": schema.MapAttribute{
-									MarkdownDescription: "The options of the logging.",
-									Optional:            true,
-									ElementType:         types.StringType,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"app_protocol": schema.StringAttribute{
+										MarkdownDescription: "The app protocol of the port.",
+										Optional:            true,
+									},
+									"host_ip": schema.StringAttribute{
+										MarkdownDescription: "The host IP of the port.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the port.",
+										Optional:            true,
+									},
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the port.",
+										Optional:            true,
+									},
+									"protocol": schema.StringAttribute{
+										MarkdownDescription: "The protocol of the port.",
+										Optional:            true,
+									},
+									"published": schema.StringAttribute{
+										MarkdownDescription: "The published of the port.",
+										Optional:            true,
+									},
+									"target": schema.Int64Attribute{
+										MarkdownDescription: "The target of the port.",
+										Optional:            true,
+									},
 								},
 							},
 						},
-						"healthcheck": schema.SingleNestedAttribute{
-							MarkdownDescription: "Health check configuration.",
+						"privileged": schema.BoolAttribute{
+							MarkdownDescription: "Whether the service is privileged.",
 							Optional:            true,
-							Attributes: map[string]schema.Attribute{
-								"test": schema.ListAttribute{
-									MarkdownDescription: "Test command to run.",
-									Optional:            true,
-									ElementType:         types.StringType,
-								},
-								"interval": schema.StringAttribute{
-									MarkdownDescription: "Interval to run the test.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
-								},
-								"timeout": schema.StringAttribute{
-									MarkdownDescription: "Timeout to run the test.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
-								},
-								"retries": schema.Int64Attribute{
-									MarkdownDescription: "Number of retries.",
-									Optional:            true,
-								},
-								"start_period": schema.StringAttribute{
-									MarkdownDescription: "Start period.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
-								},
-								"start_interval": schema.StringAttribute{
-									MarkdownDescription: "Start interval.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
+						},
+						"replicas": schema.Int64Attribute{
+							MarkdownDescription: "The number of replicas.",
+							Optional:            true,
+						},
+						"restart": schema.StringAttribute{
+							MarkdownDescription: "The restart policy.",
+							Optional:            true,
+						},
+						"secrets": schema.ListNestedAttribute{
+							MarkdownDescription: "The secrets of the service.",
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"gid": schema.StringAttribute{
+										MarkdownDescription: "The GID of the config.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the config.",
+										Optional:            true,
+									},
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the config.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the config.",
+										Optional:            true,
+									},
+									"uid": schema.StringAttribute{
+										MarkdownDescription: "The UID of the config.",
+										Optional:            true,
+									},
 								},
 							},
+						},
+						"security_opt": schema.ListAttribute{
+							MarkdownDescription: "The security options of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"sysctls": schema.MapAttribute{
+							MarkdownDescription: "The sysctls of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"tmpfs": schema.ListAttribute{
+							MarkdownDescription: "The tmpfs of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"ulimits": schema.MapNestedAttribute{
+							MarkdownDescription: "The ulimits of the service.",
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"hard": schema.Int64Attribute{
+										MarkdownDescription: "The hard of the ulimit.",
+										Optional:            true,
+									},
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the ulimit.",
+										Required:            true,
+									},
+									"soft": schema.Int64Attribute{
+										MarkdownDescription: "The soft of the ulimit.",
+										Optional:            true,
+									},
+									"value": schema.Int64Attribute{
+										MarkdownDescription: "The value of the ulimit.",
+										Optional:            true,
+									},
+								},
+							},
+						},
+						"user": schema.StringAttribute{
+							MarkdownDescription: "The user of the service.",
+							Optional:            true,
 						},
 						"volumes": schema.ListNestedAttribute{
 							MarkdownDescription: "The volumes of the service.",
 							Optional:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
-									"source": schema.StringAttribute{
-										MarkdownDescription: "The source of the volume.",
-										Optional:            true,
-									},
-									"target": schema.StringAttribute{
-										MarkdownDescription: "The target of the volume.",
-										Optional:            true,
-									},
-									"read_only": schema.BoolAttribute{
-										MarkdownDescription: "Whether the volume is read only.",
-										Optional:            true,
-									},
-									"type": schema.StringAttribute{
-										MarkdownDescription: "The type of the volume.",
-										Required:            true,
-									},
 									"bind": schema.SingleNestedAttribute{
 										MarkdownDescription: "The bind of the volume.",
 										Optional:            true,
 										Attributes: map[string]schema.Attribute{
-											"propagation": schema.StringAttribute{
-												MarkdownDescription: "The propagation of the bind.",
-												Optional:            true,
-											},
 											"create_host_path": schema.BoolAttribute{
 												MarkdownDescription: "Whether to create the host path.",
+												Optional:            true,
+											},
+											"propagation": schema.StringAttribute{
+												MarkdownDescription: "The propagation of the bind.",
 												Optional:            true,
 											},
 											"selinux": schema.StringAttribute{
@@ -1023,93 +1096,24 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 											},
 										},
 									},
-								},
-							},
-						},
-						"ulimits": schema.MapNestedAttribute{
-							MarkdownDescription: "The ulimits of the service.",
-							Optional:            true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the ulimit.",
+									"read_only": schema.BoolAttribute{
+										MarkdownDescription: "Whether the volume is read only.",
+										Optional:            true,
+									},
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the volume.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the volume.",
+										Optional:            true,
+									},
+									"type": schema.StringAttribute{
+										MarkdownDescription: "The type of the volume.",
 										Required:            true,
 									},
-									"value": schema.Int64Attribute{
-										MarkdownDescription: "The value of the ulimit.",
-										Optional:            true,
-									},
-									"soft": schema.Int64Attribute{
-										MarkdownDescription: "The soft of the ulimit.",
-										Optional:            true,
-									},
-									"hard": schema.Int64Attribute{
-										MarkdownDescription: "The hard of the ulimit.",
-										Optional:            true,
-									},
 								},
 							},
-						},
-						"configs": schema.ListNestedAttribute{
-							MarkdownDescription: "The configs of the service.",
-							Optional:            true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"source": schema.StringAttribute{
-										MarkdownDescription: "The source of the config.",
-										Optional:            true,
-									},
-									"target": schema.StringAttribute{
-										MarkdownDescription: "The target of the config.",
-										Optional:            true,
-									},
-									"uid": schema.StringAttribute{
-										MarkdownDescription: "The UID of the config.",
-										Optional:            true,
-									},
-									"gid": schema.StringAttribute{
-										MarkdownDescription: "The GID of the config.",
-										Optional:            true,
-									},
-									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
-										Optional:            true,
-									},
-								},
-							},
-						},
-						"secrets": schema.ListNestedAttribute{
-							MarkdownDescription: "The secrets of the service.",
-							Optional:            true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"source": schema.StringAttribute{
-										MarkdownDescription: "The source of the config.",
-										Optional:            true,
-									},
-									"target": schema.StringAttribute{
-										MarkdownDescription: "The target of the config.",
-										Optional:            true,
-									},
-									"uid": schema.StringAttribute{
-										MarkdownDescription: "The UID of the config.",
-										Optional:            true,
-									},
-									"gid": schema.StringAttribute{
-										MarkdownDescription: "The GID of the config.",
-										Optional:            true,
-									},
-									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
-										Optional:            true,
-									},
-								},
-							},
-						},
-						"extra_hosts": schema.MapAttribute{
-							MarkdownDescription: "The extra hosts of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
 						},
 					},
 				},

@@ -247,36 +247,37 @@ func (m ServiceDependency) AttrType() map[string]attr.Type {
 }
 
 type Service struct {
-	ContainerName types.String `tfsdk:"container_name"`
-	HostName      types.String `tfsdk:"hostname"`
-	Image         types.String `tfsdk:"image"`
-	MemLimit      types.String `tfsdk:"mem_limit"`
-	Entrypoint    types.List   `tfsdk:"entrypoint"`
-	Command       types.List   `tfsdk:"command"`
-	Replicas      types.Int64  `tfsdk:"replicas"`
-	Logging       types.Object `tfsdk:"logging"`
-	Ports         types.List   `tfsdk:"ports"`
-	Networks      types.Map    `tfsdk:"networks"`
-	NetworkMode   types.String `tfsdk:"network_mode"`
-	HealthCheck   types.Object `tfsdk:"healthcheck"`
-	SecurityOpt   types.List   `tfsdk:"security_opt"`
-	Volumes       types.List   `tfsdk:"volumes"`
-	Dependencies  types.Map    `tfsdk:"depends_on"`
-	Privileged    types.Bool   `tfsdk:"privileged"`
-	Tmpfs         types.List   `tfsdk:"tmpfs"`
-	Ulimits       types.Map    `tfsdk:"ulimits"`
-	Environment   types.Map    `tfsdk:"environment"`
-	Restart       types.String `tfsdk:"restart"`
-	Configs       types.List   `tfsdk:"configs"`
-	Secrets       types.List   `tfsdk:"secrets"`
-	Labels        types.Map    `tfsdk:"labels"`
-	DNS           types.List   `tfsdk:"dns"`
-	User          types.String `tfsdk:"user"`
 	Capabilities  types.Object `tfsdk:"capabilities"`
 	CapAdd        types.List   `tfsdk:"cap_add"`
 	CapDrop       types.List   `tfsdk:"cap_drop"`
-	Sysctls       types.Map    `tfsdk:"sysctls"`
+	Command       types.List   `tfsdk:"command"`
+	Configs       types.List   `tfsdk:"configs"`
+	ContainerName types.String `tfsdk:"container_name"`
+	Dependencies  types.Map    `tfsdk:"depends_on"`
+	DNS           types.List   `tfsdk:"dns"`
+	Entrypoint    types.List   `tfsdk:"entrypoint"`
+	Environment   types.Map    `tfsdk:"environment"`
 	ExtraHosts    types.Map    `tfsdk:"extra_hosts"`
+	HealthCheck   types.Object `tfsdk:"healthcheck"`
+	HostName      types.String `tfsdk:"hostname"`
+	Image         types.String `tfsdk:"image"`
+	Init          types.Bool   `tfsdk:"init"`
+	Labels        types.Map    `tfsdk:"labels"`
+	Logging       types.Object `tfsdk:"logging"`
+	MemLimit      types.String `tfsdk:"mem_limit"`
+	NetworkMode   types.String `tfsdk:"network_mode"`
+	Networks      types.Map    `tfsdk:"networks"`
+	Ports         types.List   `tfsdk:"ports"`
+	Privileged    types.Bool   `tfsdk:"privileged"`
+	Replicas      types.Int64  `tfsdk:"replicas"`
+	Restart       types.String `tfsdk:"restart"`
+	Secrets       types.List   `tfsdk:"secrets"`
+	SecurityOpt   types.List   `tfsdk:"security_opt"`
+	Sysctls       types.Map    `tfsdk:"sysctls"`
+	Tmpfs         types.List   `tfsdk:"tmpfs"`
+	Ulimits       types.Map    `tfsdk:"ulimits"`
+	User          types.String `tfsdk:"user"`
+	Volumes       types.List   `tfsdk:"volumes"`
 	// Extensions    types.Map    `tfsdk:"extensions"`
 }
 
@@ -329,6 +330,7 @@ func (m Service) AttrType() map[string]attr.Type {
 		"network_mode":   types.StringType,
 		"replicas":       types.Int64Type,
 		"user":           types.StringType,
+		"init":           types.BoolType,
 		"ports":          Port{}.ModelType(),
 		"mem_limit":      types.StringType,
 		// "extensions":     types.MapType{ElemType: types.StringType},
@@ -465,35 +467,35 @@ func (m Service) Value() attr.Value {
 	}
 
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
+		"capabilities":   capabilities,
+		"command":        commands,
+		"configs":        configs,
 		"container_name": types.StringValue(m.ContainerName.ValueString()),
+		"depends_on":     dependencies,
+		"dns":            dns,
+		"entrypoint":     entrypoints,
+		"environment":    environment,
+		"extra_hosts":    extraHosts,
+		"healthcheck":    healthcheck,
 		"hostname":       types.StringValue(m.HostName.ValueString()),
 		"image":          types.StringValue(m.Image.ValueString()),
-		"entrypoint":     entrypoints,
-		"command":        commands,
-		"mem_limit":      types.StringValue(m.MemLimit.ValueString()),
-		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
-		"ports":          ports,
-		"network":        networks,
+		"init":           types.BoolValue(m.Init.ValueBool()),
+		"labels":         labels,
 		"logging":        logging,
+		"mem_limit":      types.StringValue(m.MemLimit.ValueString()),
 		"network_mode":   types.StringValue(m.NetworkMode.ValueString()),
-		"healthcheck":    healthcheck,
-		"security_opt":   securityOpt,
-		"depends_on":     dependencies,
-		"volume":         volumes,
+		"network":        networks,
+		"ports":          ports,
 		"privileged":     types.BoolValue(m.Privileged.ValueBool()),
+		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
+		"restart":        types.StringValue(m.Restart.ValueString()),
+		"secrets":        secrets,
+		"security_opt":   securityOpt,
+		"sysctls":        sysctls,
 		"tmpfs":          tmpfs,
 		"ulimit":         ulimits,
-		"environment":    environment,
-		"restart":        types.StringValue(m.Restart.ValueString()),
-		"configs":        configs,
-		"secrets":        secrets,
-		"labels":         labels,
-		// "extensions":     extensions,
-		"dns":          dns,
-		"user":         types.StringValue(m.User.ValueString()),
-		"capabilities": capabilities,
-		"sysctls":      sysctls,
-		"extra_hosts":  extraHosts,
+		"user":           types.StringValue(m.User.ValueString()),
+		"volume":         volumes,
 	})
 }
 
@@ -927,6 +929,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		}
 	}
 
+	service.Init = m.Init.ValueBoolPointer()
 	service.Hostname = m.HostName.ValueString()
 	service.ContainerName = m.ContainerName.ValueString()
 	replicas := m.Replicas.ValueInt64()
@@ -949,6 +952,7 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 	m.ContainerName = types.StringValue(service.ContainerName)
 	m.HostName = types.StringValue(service.Hostname)
 	m.MemLimit = types.StringValue(fmt.Sprintf("%d", service.MemLimit))
+	m.Init = types.BoolPointerValue(service.Init)
 
 	if service.Image != "" {
 		m.Image = types.StringValue(service.Image)
