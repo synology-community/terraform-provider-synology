@@ -217,7 +217,7 @@ type foo struct {
 
 func TestExtension(t *testing.T) {
 	x := Extensions{
-		"foo": map[string]interface{}{
+		"foo": map[string]any{
 			"bar": "zot",
 		},
 	}
@@ -359,8 +359,8 @@ dockerfile_inline: |
 	assert.Check(t, equalTrimSpace(b.DockerfileInline, b2.DockerfileInline))
 }
 
-func equalTrimSpace(x interface{}, y interface{}) is.Comparison {
-	trim := func(v interface{}) interface{} {
+func equalTrimSpace(x any, y any) is.Comparison {
+	trim := func(v any) any {
 		switch vv := v.(type) {
 		case string:
 			return strings.TrimSpace(vv)

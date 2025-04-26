@@ -13,7 +13,7 @@ import (
 
 // }
 
-func GetType(r interface{}) (attr.Type, error) {
+func GetType(r any) (attr.Type, error) {
 	var v reflect.Value
 
 	if reflect.TypeOf(r).Kind() == reflect.Ptr {
@@ -328,7 +328,7 @@ func structValue(v reflect.Value) (attr.Value, error) {
 	return types.ObjectValueMust(objectType.AttributeTypes(), attrValues), nil
 }
 
-func GetValue(r interface{}) (attr.Value, error) {
+func GetValue(r any) (attr.Value, error) {
 	var v reflect.Value
 
 	if reflect.TypeOf(r).Kind() == reflect.Ptr {
@@ -356,7 +356,7 @@ func GetValue(r interface{}) (attr.Value, error) {
 	return nil, fmt.Errorf("unsupported type %s", vk)
 }
 
-// func GetValue(r interface{}) (attr.Value, error) {
+// func GetValue(r any) (attr.Value, error) {
 // 	var result attr.Value
 // 	var valueResult attr.Value
 

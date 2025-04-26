@@ -60,14 +60,14 @@ func (s ShellCommand) IsZero() bool {
 // A similar MarshalJSON() implementation is not needed because the Go stdlib
 // already serializes nil slices to `null`, whereas gopkg.in/yaml.v3 by default
 // serializes nil slices to `[]`.
-func (s ShellCommand) MarshalYAML() (interface{}, error) {
+func (s ShellCommand) MarshalYAML() (any, error) {
 	if s == nil {
 		return nil, nil
 	}
 	return []string(s), nil
 }
 
-func (s *ShellCommand) DecodeMapstructure(value interface{}) error {
+func (s *ShellCommand) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case string:
 		cmd, err := shellwords.Parse(v)
@@ -75,7 +75,7 @@ func (s *ShellCommand) DecodeMapstructure(value interface{}) error {
 			return err
 		}
 		*s = cmd
-	case []interface{}:
+	case []any:
 		cmd := make([]string, len(v))
 		for i, s := range v {
 			cmd[i] = s.(string)

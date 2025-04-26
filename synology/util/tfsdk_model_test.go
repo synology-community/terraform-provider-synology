@@ -39,7 +39,7 @@ var (
 
 func TestGetType(t *testing.T) {
 	type args struct {
-		r interface{}
+		r any
 	}
 	tests := []struct {
 		name    string
@@ -89,7 +89,7 @@ func TestGetType(t *testing.T) {
 
 func TestGetValue(t *testing.T) {
 	type args struct {
-		r interface{}
+		r any
 	}
 	tests := []struct {
 		name    string

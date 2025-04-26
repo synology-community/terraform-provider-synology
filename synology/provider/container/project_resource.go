@@ -128,6 +128,38 @@ func (f *ProjectResource) handleConfigs(ctx context.Context, data ProjectResourc
 	return
 }
 
+func (f *ProjectResource) handleSecrets(ctx context.Context, data ProjectResourceModel) (diags diag.Diagnostics) {
+	if data.Secrets.IsNull() || data.Secrets.IsUnknown() {
+		return
+	}
+
+	elements := map[string]models.Secret{}
+	diags = data.Secrets.ElementsAs(ctx, &elements, true)
+	if diags.HasError() {
+		return
+	}
+
+	for _, v := range elements {
+		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+			// Upload the file
+			_, err := f.fsClient.Upload(
+				ctx,
+				data.SharePath.ValueString(),
+				form.File{
+					Name:    v.File.ValueString(),
+					Content: v.Content.ValueString(),
+				}, false,
+				true)
+			if err != nil {
+				diags.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+				return
+			}
+		}
+	}
+
+	return
+}
+
 func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath string) error {
 	folderParts := strings.Split(sharePath, "/")
 	plen := len(folderParts)
@@ -213,6 +245,13 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	if !data.Configs.IsNull() && !data.Configs.IsUnknown() {
 		resp.Diagnostics.Append(f.handleConfigs(ctx, data)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	if !data.Secrets.IsNull() && !data.Secrets.IsUnknown() {
+		resp.Diagnostics.Append(f.handleSecrets(ctx, data)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -447,7 +486,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	var servicesChanged, configChanged bool
+	var servicesChanged, configChanged, secretChanged bool
 
 	if !reflect.DeepEqual(plan.Services, state.Services) {
 		servicesChanged = true
@@ -455,6 +494,10 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	if !reflect.DeepEqual(plan.Configs, state.Configs) {
 		configChanged = true
+	}
+
+	if !reflect.DeepEqual(plan.Secrets, state.Secrets) {
+		secretChanged = true
 	}
 
 	if !servicesChanged && !configChanged {
@@ -473,6 +516,10 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	if configChanged {
 		f.handleConfigs(ctx, plan)
+	}
+
+	if secretChanged {
+		f.handleSecrets(ctx, plan)
 	}
 
 	var content string
@@ -1180,6 +1227,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"secrets": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose secrets.",
 				Optional:            true,
+				PlanModifiers: []planmodifier.Map{
+					SetSecretPathsFromContent(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{

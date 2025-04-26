@@ -605,7 +605,7 @@ func (p *Project) MarshalYAML(options ...func(*marshallOptions)) ([]byte, error)
 // MarshalJSON marshal Project into a json document
 func (p *Project) MarshalJSON(options ...func(*marshallOptions)) ([]byte, error) {
 	src := applyMarshallOptions(p, options...)
-	m := map[string]interface{}{
+	m := map[string]any{
 		"name":     src.Name,
 		"services": src.Services,
 	}

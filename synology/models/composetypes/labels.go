@@ -62,7 +62,7 @@ func (l Labels) ToMappingWithEquals() MappingWithEquals {
 }
 
 // label value can be a string | number | boolean | null (empty)
-func labelValue(e interface{}) string {
+func labelValue(e any) string {
 	if e == nil {
 		return ""
 	}
@@ -74,15 +74,15 @@ func labelValue(e interface{}) string {
 	}
 }
 
-func (l *Labels) DecodeMapstructure(value interface{}) error {
+func (l *Labels) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		labels := make(map[string]string, len(v))
 		for k, e := range v {
 			labels[k] = labelValue(e)
 		}
 		*l = labels
-	case []interface{}:
+	case []any:
 		labels := make(map[string]string, len(v))
 		for _, s := range v {
 			k, e, _ := strings.Cut(fmt.Sprint(s), "=")

@@ -249,6 +249,8 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
 github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
+github.com/subpop/go-ini v0.1.5 h1:08hu8slz5c4KBXJWYOycyuDQ0E7xHr2vV2rH9x79FrY=
+github.com/subpop/go-ini v0.1.5/go.mod h1:mM5HCw/1+q92kIf4Btd7Oorioa8rAXb4NSBT2ldZNiU=
 github.com/synology-community/go-synology v0.1.6 h1:uuCNwe2YLxg3Tou7Y2atjDAxnq9BMlUwTGsbXKKRSRM=
 github.com/synology-community/go-synology v0.1.6/go.mod h1:dxYPWL/fdA3vQqcAC4SSAVEyayhf/NyGsrX5jLADa8o=
 github.com/tredoe/osutil v1.5.0 h1:UGVxbbHRoZi8xXVmbNZ2vgG6XoJ15ndE4LniiQ3rJKg=

@@ -20,6 +20,7 @@ require (
 	github.com/kdomanski/iso9660 v0.4.0
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/opencontainers/go-digest v1.0.0
+	github.com/subpop/go-ini v0.1.5
 	github.com/synology-community/go-synology v0.1.6
 	github.com/tredoe/osutil v1.5.0
 	golang.org/x/exp v0.0.0-20240707233637-46b078467d37

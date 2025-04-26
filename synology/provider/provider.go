@@ -206,6 +206,7 @@ func (p *SynologyProvider) Functions(ctx context.Context) []func() function.Func
 	return []func() function.Function{
 		NewISOFunction,
 		NewMkPasswdFunction,
+		NewIniEncodeFunction,
 	}
 }
 

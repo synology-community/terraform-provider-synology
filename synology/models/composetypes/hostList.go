@@ -67,7 +67,7 @@ func (h HostsList) AsList(sep string) []string {
 	return l
 }
 
-func (h HostsList) MarshalYAML() (interface{}, error) {
+func (h HostsList) MarshalYAML() (any, error) {
 	list := h.AsList(":")
 	sort.Strings(list)
 	return list, nil
@@ -81,9 +81,9 @@ func (h HostsList) MarshalJSON() ([]byte, error) {
 
 var hostListSerapators = []string{"=", ":"}
 
-func (h *HostsList) DecodeMapstructure(value interface{}) error {
+func (h *HostsList) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		list := make(HostsList, len(v))
 		for i, e := range v {
 			if e == nil {
@@ -108,7 +108,7 @@ func (h *HostsList) DecodeMapstructure(value interface{}) error {
 		}
 		*h = list
 		return nil
-	case []interface{}:
+	case []any:
 		s := make([]string, len(v))
 		for i, e := range v {
 			s[i] = fmt.Sprint(e)

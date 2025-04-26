@@ -82,15 +82,15 @@ func (m MappingWithEquals) ToMapping() Mapping {
 	return o
 }
 
-func (m *MappingWithEquals) DecodeMapstructure(value interface{}) error {
+func (m *MappingWithEquals) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		mapping := make(MappingWithEquals, len(v))
 		for k, e := range v {
 			mapping[k] = mappingValue(e)
 		}
 		*m = mapping
-	case []interface{}:
+	case []any:
 		mapping := make(MappingWithEquals, len(v))
 		for _, s := range v {
 			k, e, ok := strings.Cut(fmt.Sprint(s), "=")
@@ -108,7 +108,7 @@ func (m *MappingWithEquals) DecodeMapstructure(value interface{}) error {
 }
 
 // label value can be a string | number | boolean | null
-func mappingValue(e interface{}) *string {
+func mappingValue(e any) *string {
 	if e == nil {
 		return nil
 	}
@@ -186,9 +186,9 @@ func (m Mapping) Merge(o Mapping) Mapping {
 	return m
 }
 
-func (m *Mapping) DecodeMapstructure(value interface{}) error {
+func (m *Mapping) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		mapping := make(Mapping, len(v))
 		for k, e := range v {
 			if e == nil {
@@ -197,7 +197,7 @@ func (m *Mapping) DecodeMapstructure(value interface{}) error {
 			mapping[k] = fmt.Sprint(e)
 		}
 		*m = mapping
-	case []interface{}:
+	case []any:
 		*m = decodeMapping(v, "=")
 	default:
 		return fmt.Errorf("unexpected value type %T for mapping", value)
@@ -208,7 +208,7 @@ func (m *Mapping) DecodeMapstructure(value interface{}) error {
 // Generate a mapping by splitting strings at any of seps, which will be tried
 // in-order for each input string. (For example, to allow the preferred 'host=ip'
 // in 'extra_hosts', as well as 'host:ip' for backwards compatibility.)
-func decodeMapping(v []interface{}, seps ...string) map[string]string {
+func decodeMapping(v []any, seps ...string) map[string]string {
 	mapping := make(Mapping, len(v))
 	for _, s := range v {
 		for i, sep := range seps {

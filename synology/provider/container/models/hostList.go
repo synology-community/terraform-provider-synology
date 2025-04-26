@@ -7,7 +7,7 @@ import (
 // HostsList is a list of colon-separated host-ip mappings
 type HostsList composetypes.HostsList
 
-func (hl *HostsList) MarshalYAML() (interface{}, error) {
+func (hl *HostsList) MarshalYAML() (any, error) {
 	h := composetypes.HostsList(*hl)
 	return h.AsList(":"), nil
 }

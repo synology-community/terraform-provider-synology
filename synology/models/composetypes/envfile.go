@@ -27,7 +27,7 @@ type EnvFile struct {
 }
 
 // MarshalYAML makes EnvFile implement yaml.Marshaler
-func (e EnvFile) MarshalYAML() (interface{}, error) {
+func (e EnvFile) MarshalYAML() (any, error) {
 	if e.Required {
 		return e.Path, nil
 	}

@@ -21,11 +21,11 @@ import "fmt"
 // StringList is a type for fields that can be a string or list of strings
 type StringList []string
 
-func (l *StringList) DecodeMapstructure(value interface{}) error {
+func (l *StringList) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case string:
 		*l = []string{v}
-	case []interface{}:
+	case []any:
 		list := make([]string, len(v))
 		for i, e := range v {
 			val, ok := e.(string)
@@ -44,11 +44,11 @@ func (l *StringList) DecodeMapstructure(value interface{}) error {
 // StringOrNumberList is a type for fields that can be a list of strings or numbers
 type StringOrNumberList []string
 
-func (l *StringOrNumberList) DecodeMapstructure(value interface{}) error {
+func (l *StringOrNumberList) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case string:
 		*l = []string{v}
-	case []interface{}:
+	case []any:
 		list := make([]string, len(v))
 		for i, e := range v {
 			list[i] = fmt.Sprint(e)

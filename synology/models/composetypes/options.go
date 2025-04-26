@@ -21,9 +21,9 @@ import "fmt"
 // Options is a mapping type for options we pass as-is to container runtime
 type Options map[string]string
 
-func (d *Options) DecodeMapstructure(value interface{}) error {
+func (d *Options) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		m := make(map[string]string)
 		for key, e := range v {
 			if e == nil {

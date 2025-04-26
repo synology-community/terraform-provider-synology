@@ -37,7 +37,7 @@ type ApiResource struct {
 	client synology.Api
 }
 
-func getParams(params map[string]string) interface{} {
+func getParams(params map[string]string) any {
 	sf := []reflect.StructField{}
 	for k, v := range params {
 		sf = append(sf, reflect.StructField{

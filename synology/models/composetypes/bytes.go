@@ -26,7 +26,7 @@ import (
 type UnitBytes int64
 
 // MarshalYAML makes UnitBytes implement yaml.Marshaller
-func (u UnitBytes) MarshalYAML() (interface{}, error) {
+func (u UnitBytes) MarshalYAML() (any, error) {
 	return fmt.Sprintf("%d", u), nil
 }
 
@@ -35,7 +35,7 @@ func (u UnitBytes) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%d"`, u)), nil
 }
 
-func (u *UnitBytes) DecodeMapstructure(value interface{}) error {
+func (u *UnitBytes) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case int:
 		*u = UnitBytes(v)

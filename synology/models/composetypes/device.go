@@ -32,7 +32,7 @@ type DeviceRequest struct {
 
 type DeviceCount int64
 
-func (c *DeviceCount) DecodeMapstructure(value interface{}) error {
+func (c *DeviceCount) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case int:
 		*c = DeviceCount(v)

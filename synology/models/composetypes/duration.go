@@ -30,7 +30,7 @@ func (d Duration) String() string {
 	return time.Duration(d).String()
 }
 
-func (d *Duration) DecodeMapstructure(value interface{}) error {
+func (d *Duration) DecodeMapstructure(value any) error {
 	v, err := time.ParseDuration(fmt.Sprint(value))
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML makes Duration implement yaml.Marshaler
-func (d Duration) MarshalYAML() (interface{}, error) {
+func (d Duration) MarshalYAML() (any, error) {
 	return d.String(), nil
 }
 

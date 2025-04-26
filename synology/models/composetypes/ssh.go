@@ -38,7 +38,7 @@ func (s SSHConfig) Get(id string) (string, error) {
 }
 
 // MarshalYAML makes SSHKey implement yaml.Marshaller
-func (s SSHKey) MarshalYAML() (interface{}, error) {
+func (s SSHKey) MarshalYAML() (any, error) {
 	if s.Path == "" {
 		return s.ID, nil
 	}
@@ -53,7 +53,7 @@ func (s SSHKey) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`%q: %s`, s.ID, s.Path)), nil
 }
 
-func (s *SSHConfig) DecodeMapstructure(value interface{}) error {
+func (s *SSHConfig) DecodeMapstructure(value any) error {
 	v, ok := value.(map[string]any)
 	if !ok {
 		return fmt.Errorf("invalid ssh config type %T", value)

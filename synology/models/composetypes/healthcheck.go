@@ -36,11 +36,11 @@ type HealthCheckConfig struct {
 // HealthCheckTest is the command run to test the health of a service
 type HealthCheckTest []string
 
-func (l *HealthCheckTest) DecodeMapstructure(value interface{}) error {
+func (l *HealthCheckTest) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case string:
 		*l = []string{"CMD-SHELL", v}
-	case []interface{}:
+	case []any:
 		seq := make([]string, len(v))
 		for i, e := range v {
 			seq[i] = e.(string)

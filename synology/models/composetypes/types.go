@@ -140,7 +140,7 @@ type ServiceConfig struct {
 }
 
 // MarshalYAML makes ServiceConfig implement yaml.Marshaller
-func (s ServiceConfig) MarshalYAML() (interface{}, error) {
+func (s ServiceConfig) MarshalYAML() (any, error) {
 	type t ServiceConfig
 	value := t(s)
 	value.Name = "" // set during map to slice conversion, not part of the yaml representation
@@ -629,7 +629,7 @@ type UlimitsConfig struct {
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 
-func (u *UlimitsConfig) DecodeMapstructure(value interface{}) error {
+func (u *UlimitsConfig) DecodeMapstructure(value any) error {
 	switch v := value.(type) {
 	case *UlimitsConfig:
 		// this call to DecodeMapstructure is triggered after initial value conversion as we use a map[string]*UlimitsConfig
@@ -655,7 +655,7 @@ func (u *UlimitsConfig) DecodeMapstructure(value interface{}) error {
 }
 
 // MarshalYAML makes UlimitsConfig implement yaml.Marshaller
-func (u *UlimitsConfig) MarshalYAML() (interface{}, error) {
+func (u *UlimitsConfig) MarshalYAML() (any, error) {
 	if u.Single != 0 {
 		return u.Single, nil
 	}
@@ -776,7 +776,7 @@ type ExtendsConfig struct {
 type SecretConfig FileObjectConfig
 
 // MarshalYAML makes SecretConfig implement yaml.Marshaller
-func (s SecretConfig) MarshalYAML() (interface{}, error) {
+func (s SecretConfig) MarshalYAML() (any, error) {
 	// secret content is set while loading model. Never marshall it
 	if !s.marshallContent {
 		s.Content = ""
@@ -797,7 +797,7 @@ func (s SecretConfig) MarshalJSON() ([]byte, error) {
 type ConfigObjConfig FileObjectConfig
 
 // MarshalYAML makes ConfigObjConfig implement yaml.Marshaller
-func (s ConfigObjConfig) MarshalYAML() (interface{}, error) {
+func (s ConfigObjConfig) MarshalYAML() (any, error) {
 	// config content may have been set from environment while loading model. Marshall actual source
 	if s.Environment != "" {
 		s.Content = ""
