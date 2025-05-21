@@ -48,6 +48,7 @@ type FileResourceModel struct {
 	ChangeTime    timetypes.RFC3339 `tfsdk:"change_time"`
 	CreateTime    timetypes.RFC3339 `tfsdk:"create_time"`
 	RealPath      types.String      `tfsdk:"real_path"`
+	MD5           types.String      `tfsdk:"md5"`
 }
 
 // Create implements resource.Resource.
@@ -111,6 +112,10 @@ func (f *FileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	data.CreateTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Crtime.Time)
 	data.RealPath = types.StringValue(file.Additional.RealPath)
 
+	if md5, err := f.client.MD5(ctx, path); err == nil {
+		data.MD5 = types.StringValue(md5.MD5)
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -141,8 +146,8 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	path := data.Path.ValueString()
-	file, err := f.client.Get(ctx, path)
+	fPath := data.Path.ValueString()
+	file, err := f.client.Get(ctx, fPath)
 	if err != nil {
 		switch err.Error() {
 		case "Result is empty":
@@ -160,6 +165,13 @@ func (f *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	data.ChangeTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Ctime.Time)
 	data.CreateTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Crtime.Time)
 	data.RealPath = types.StringValue(file.Additional.RealPath)
+
+	if data.MD5.IsNull() || data.MD5.IsUnknown() || data.MD5.ValueString() == "" {
+		if md5, err := f.client.MD5(ctx, fPath); err == nil {
+			data.MD5 = types.StringValue(md5.MD5)
+			resp.State.SetAttribute(ctx, path.Root("md5"), data.MD5)
+		}
+	}
 }
 
 // Update implements resource.Resource.
@@ -220,6 +232,10 @@ func (f *FileResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	data.ChangeTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Ctime.Time)
 	data.CreateTime = timetypes.NewRFC3339TimeValue(file.Additional.Time.Crtime.Time)
 	data.RealPath = types.StringValue(file.Additional.RealPath)
+
+	if md5, err := f.client.MD5(ctx, path); err == nil {
+		data.MD5 = types.StringValue(md5.MD5)
+	}
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -298,6 +314,10 @@ func (f *FileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 			"real_path": schema.StringAttribute{
 				MarkdownDescription: "The real path of the folder.",
+				Computed:            true,
+			},
+			"md5": schema.StringAttribute{
+				MarkdownDescription: "The MD5 hash of the file.",
 				Computed:            true,
 			},
 		},

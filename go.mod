@@ -18,7 +18,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/subpop/go-ini v0.1.5
-	github.com/synology-community/go-synology v0.1.7-0.20250506210512-abdb9836fd6f
+	github.com/synology-community/go-synology v0.1.7-0.20250521195944-94f5f6b01dc7
 	github.com/tredoe/osutil v1.5.0
 	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
 	gopkg.in/yaml.v3 v3.0.1
@@ -42,7 +42,7 @@ require (
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/posener/complete v1.2.3 // indirect
-	github.com/pquerna/otp v1.4.0 // indirect
+	github.com/pquerna/otp v1.5.0 // indirect
 	github.com/rivo/uniseg v0.3.4 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect

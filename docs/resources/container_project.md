@@ -180,6 +180,7 @@ Optional:
 - `container_name` (String) The container name.
 - `depends_on` (Attributes Map) The dependencies of the service. (see [below for nested schema](#nestedatt--services--depends_on))
 - `dns` (List of String) The DNS of the service.
+- `domainname` (String) The domain name.
 - `entrypoint` (List of String) The entrypoint of the service.
 - `environment` (Map of String) The environment of the service.
 - `extra_hosts` (Map of String) The extra hosts of the service.
