@@ -184,7 +184,9 @@ Optional:
 - `environment` (Map of String) The environment of the service.
 - `extra_hosts` (Map of String) The extra hosts of the service.
 - `healthcheck` (Attributes) Health check configuration. (see [below for nested schema](#nestedatt--services--healthcheck))
+- `hostname` (String) The hostname.
 - `image` (String) The image of the service.
+- `init` (Boolean) Runs an init process (PID 1) inside the container that forwards signals and reaps processes. Set this option to true to enable this feature for the service.
 - `labels` (Map of String) The labels of the network.
 - `logging` (Attributes) Logging configuration for the docker service. (see [below for nested schema](#nestedatt--services--logging))
 - `mem_limit` (String) The memory limit.

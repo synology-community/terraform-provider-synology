@@ -260,6 +260,7 @@ type Service struct {
 	ExtraHosts    types.Map    `tfsdk:"extra_hosts"`
 	HealthCheck   types.Object `tfsdk:"healthcheck"`
 	HostName      types.String `tfsdk:"hostname"`
+	DomainName    types.String `tfsdk:"domainname"`
 	Image         types.String `tfsdk:"image"`
 	Init          types.Bool   `tfsdk:"init"`
 	Labels        types.Map    `tfsdk:"labels"`
@@ -323,6 +324,7 @@ func (m Service) AttrType() map[string]attr.Type {
 		"image":          types.StringType,
 		"container_name": types.StringType,
 		"hostname":       types.StringType,
+		"domainname":     types.StringType,
 		"configs":        types.ListType{ElemType: ServiceConfig{}.ModelType()},
 		"entrypoint":     types.ListType{ElemType: types.StringType},
 		"command":        types.ListType{ElemType: types.StringType},
@@ -478,6 +480,7 @@ func (m Service) Value() attr.Value {
 		"extra_hosts":    extraHosts,
 		"healthcheck":    healthcheck,
 		"hostname":       types.StringValue(m.HostName.ValueString()),
+		"domainname":     types.StringValue(m.DomainName.ValueString()),
 		"image":          types.StringValue(m.Image.ValueString()),
 		"init":           types.BoolValue(m.Init.ValueBool()),
 		"labels":         labels,
@@ -931,6 +934,7 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 
 	service.Init = m.Init.ValueBoolPointer()
 	service.Hostname = m.HostName.ValueString()
+	service.DomainName = m.DomainName.ValueString()
 	service.ContainerName = m.ContainerName.ValueString()
 	replicas := m.Replicas.ValueInt64()
 	intReplicas := int(replicas)
@@ -951,6 +955,7 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 
 	m.ContainerName = types.StringValue(service.ContainerName)
 	m.HostName = types.StringValue(service.Hostname)
+	m.DomainName = types.StringValue(service.DomainName)
 	m.MemLimit = types.StringValue(fmt.Sprintf("%d", service.MemLimit))
 	m.Init = types.BoolPointerValue(service.Init)
 

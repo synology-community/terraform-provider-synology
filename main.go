@@ -11,7 +11,7 @@ import (
 
 //go:generate terraform fmt -recursive ./examples/
 
-//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name synology
+//go:generate go tool github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name synology
 func main() {
 	var debug bool
 

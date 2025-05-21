@@ -875,6 +875,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The hostname.",
 							Optional:            true,
 						},
+						"domainname": schema.StringAttribute{
+							MarkdownDescription: "The domain name.",
+							Optional:            true,
+						},
 						"image": schema.StringAttribute{
 							MarkdownDescription: "The image of the service.",
 							Optional:            true,
