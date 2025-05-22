@@ -12,7 +12,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework v1.14.1
 	github.com/hashicorp/terraform-plugin-framework-timetypes v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.18.0
-	github.com/hashicorp/terraform-plugin-go v0.27.0
+	github.com/hashicorp/terraform-plugin-go v0.28.0
 	github.com/hashicorp/terraform-plugin-testing v1.13.1
 	github.com/kdomanski/iso9660 v0.4.0
 	github.com/synology-community/go-synology v0.1.6
