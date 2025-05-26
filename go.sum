@@ -64,6 +64,8 @@ github.com/compose-spec/compose-go/v2 v2.6.2 h1:31uZNNLeRrKjtUCc56CzPpPykW1Tm6Sx
 github.com/compose-spec/compose-go/v2 v2.6.2/go.mod h1:vPlkN0i+0LjLf9rv52lodNMUTJF5YHVfHVGLLIP67NA=
 github.com/compose-spec/compose-go/v2 v2.6.3 h1:zfW1Qp605ESySyth/zR+6yLr55XE0AiOAUlZLHKMoW0=
 github.com/compose-spec/compose-go/v2 v2.6.3/go.mod h1:vPlkN0i+0LjLf9rv52lodNMUTJF5YHVfHVGLLIP67NA=
+github.com/compose-spec/compose-go/v2 v2.6.4 h1:Gjv6x8eAhqwwWvoXIo0oZ4bDQBh0OMwdU7LUL9PDLiM=
+github.com/compose-spec/compose-go/v2 v2.6.4/go.mod h1:vPlkN0i+0LjLf9rv52lodNMUTJF5YHVfHVGLLIP67NA=
 github.com/containerd/continuity v0.4.3 h1:6HVkalIp+2u1ZLH1J/pYX2oBVXlJZvh1X1A7bEZ9Su8=
 github.com/containerd/continuity v0.4.3/go.mod h1:F6PTNCKepoxEaXLQp3wDAjygEnImnZ/7o4JzpodfroQ=
 github.com/cyphar/filepath-securejoin v0.2.4 h1:Ugdm7cg7i6ZK6x3xDF1oEu1nfkyfH53EtKeQYTC3kyg=
