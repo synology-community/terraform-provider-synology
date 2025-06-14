@@ -16,16 +16,21 @@ var (
 	}
 
 	testType = map[string]attr.Type{
-		"name":      types.StringType,
-		"age":       types.NumberType,
-		"states":    types.ListType{}.WithElementType(types.StringType),
-		"addresses": types.ListType{}.WithElementType(types.ObjectType{}.WithAttributeTypes(addressAttrType)),
+		"name":   types.StringType,
+		"age":    types.NumberType,
+		"states": types.ListType{}.WithElementType(types.StringType),
+		"addresses": types.ListType{}.WithElementType(
+			types.ObjectType{}.WithAttributeTypes(addressAttrType),
+		),
 	}
 
 	testValues = map[string]attr.Value{
-		"name":   types.StringValue("John"),
-		"age":    types.NumberValue(new(big.Float).SetInt64(30)),
-		"states": types.ListValueMust(types.StringType, []attr.Value{types.StringValue("CA"), types.StringValue("NY")}),
+		"name": types.StringValue("John"),
+		"age":  types.NumberValue(new(big.Float).SetInt64(30)),
+		"states": types.ListValueMust(
+			types.StringType,
+			[]attr.Value{types.StringValue("CA"), types.StringValue("NY")},
+		),
 		"addresses": types.ListValueMust(
 			types.ObjectType{}.WithAttributeTypes(addressAttrType),
 			[]attr.Value{
@@ -39,7 +44,7 @@ var (
 
 func TestGetType(t *testing.T) {
 	type args struct {
-		r interface{}
+		r any
 	}
 	tests := []struct {
 		name    string
@@ -64,11 +69,13 @@ func TestGetType(t *testing.T) {
 				"name":   types.StringType,
 				"age":    types.NumberType,
 				"states": types.ListType{}.WithElementType(types.StringType),
-				"addresses": types.ListType{}.WithElementType(types.ObjectType{}.WithAttributeTypes(map[string]attr.Type{
-					"street": types.StringType,
-					"city":   types.StringType,
-				},
-				)),
+				"addresses": types.ListType{}.WithElementType(
+					types.ObjectType{}.WithAttributeTypes(map[string]attr.Type{
+						"street": types.StringType,
+						"city":   types.StringType,
+					},
+					),
+				),
 			}),
 			wantErr: false,
 		},
@@ -89,7 +96,7 @@ func TestGetType(t *testing.T) {
 
 func TestGetValue(t *testing.T) {
 	type args struct {
-		r interface{}
+		r any
 	}
 	tests := []struct {
 		name    string

@@ -4,9 +4,9 @@ import (
 	"context"
 	"regexp"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type ComposeContent struct {
@@ -118,6 +118,11 @@ func (c *ComposeContentBuilder) SetConfigs(configs *types.Map) *ComposeContentBu
 		c.project.Configs = map[string]composetypes.ConfigObjConfig{}
 
 		for k, v := range elements {
+
+			if v.File.ValueString() == "" {
+				v.File = types.StringValue(v.Name.ValueString())
+			}
+
 			cfg := composetypes.ConfigObjConfig{}
 
 			c.diags.Append(v.AsComposeConfig(c.ctx, &cfg)...)
@@ -158,7 +163,6 @@ func (c *ComposeContentBuilder) SetSecrets(secrets *types.Map) *ComposeContentBu
 }
 
 func (c *ComposeContentBuilder) Build(content *string) diag.Diagnostics {
-
 	projectYAML, err := c.project.MarshalYAML()
 	if err != nil {
 		c.diags.Append(diag.NewErrorDiagnostic("Failed to marshal docker-compose.yml", err.Error()))

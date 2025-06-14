@@ -10,7 +10,15 @@ import (
 
 const (
 	testProject = `
-	resource "synology_container_project" "foo" {
+	provider "synology" {
+		host            = "https://nas.appkins.io:5001"
+		user            = "terraform"
+		password        = "ABP8kdn7teu.fck-kzk"
+		skip_cert_check = true
+  	otp_secret      = ""
+  }
+
+	resource "synology_container_project" "default" {
 		name = "foo"
 
 		networks = {
@@ -36,6 +44,12 @@ const (
 				}
 			}
 		}
+		configs = {
+			foo = {
+				name    = "foo.txt"
+				content = "Hello World"
+			}
+		}
 		services = {
 			bar = {
 				name     = "bar"
@@ -46,6 +60,14 @@ const (
 				logging = {
 					driver = "json-file"
 				}
+
+				configs = [
+					{
+						source = "foo"
+						target = "/etc/foo.txt"
+						mode   = "777"
+					}
+				]
 
 				ports = [{
 					target    = 80
@@ -200,10 +222,10 @@ func TestAccProjectResource_basic(t *testing.T) {
 			"foo",
 			testProject,
 		},
-		// {
-		// 	"k3s project",
-		// 	k3sProject,
-		// },
+		{
+			"k3s",
+			k3sProject,
+		},
 		// {
 		// 	"homebridge project",
 		// 	homebridgeProject,
@@ -252,29 +274,51 @@ func TestAccProjectResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
-								if attr != tt.Name {
-									return fmt.Errorf("expected project name to be '%s', got %s", tt.Name, attr)
-								}
-								return nil
-							}),
-							r.TestCheckResourceAttrWith("synology_container_project.default", "content", func(attr string) error {
-								if len(attr) < 1 {
-									return fmt.Errorf("expected resource to contain content, got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_container_project.default",
+								"name",
+								func(attr string) error {
+									if attr != tt.Name {
+										return fmt.Errorf(
+											"expected project name to be '%s', got %s",
+											tt.Name,
+											attr,
+										)
+									}
+									return nil
+								},
+							),
+							r.TestCheckResourceAttrWith(
+								"synology_container_project.default",
+								"content",
+								func(attr string) error {
+									if len(attr) < 1 {
+										return fmt.Errorf(
+											"expected resource to contain content, got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_container_project.default", "name", func(attr string) error {
-								if attr != tt.Name {
-									return fmt.Errorf("expected project name to be 'homebridge', got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_container_project.default",
+								"name",
+								func(attr string) error {
+									if attr != tt.Name {
+										return fmt.Errorf(
+											"expected project name to be 'homebridge', got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},

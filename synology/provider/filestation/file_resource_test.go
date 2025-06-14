@@ -34,12 +34,19 @@ func TestAccFileResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_filestation_file.foo", "path", func(attr string) error {
-								if attr != "/data/foo/bar/file.txt" {
-									return fmt.Errorf("expected file path to be '/data/foo/bar/file.txt', got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_filestation_file.foo",
+								"path",
+								func(attr string) error {
+									if attr != "/data/foo/bar/file.txt" {
+										return fmt.Errorf(
+											"expected file path to be '/data/foo/bar/file.txt', got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},
@@ -70,12 +77,19 @@ func TestAccFileResource_url(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_filestation_file.noble", "url", func(attr string) error {
-								if attr != "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" {
-									return fmt.Errorf("expected file url to be 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img', got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_filestation_file.noble",
+								"url",
+								func(attr string) error {
+									if attr != "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" {
+										return fmt.Errorf(
+											"expected file url to be 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img', got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},

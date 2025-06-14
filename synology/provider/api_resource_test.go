@@ -36,16 +36,19 @@ func TestAccApiResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_api.foo", "result.cpu_vendor", func(attr string) error {
-								if attr == "\"AMD\"" {
+							r.TestCheckResourceAttrWith(
+								"synology_api.foo",
+								"result.cpu_vendor",
+								func(attr string) error {
+									if attr == "\"AMD\"" {
+										return nil
+									}
+									if len(attr) == 0 {
+										return fmt.Errorf("expected result to be populated")
+									}
 									return nil
-
-								}
-								if len(attr) == 0 {
-									return fmt.Errorf("expected result to be populated")
-								}
-								return nil
-							}),
+								},
+							),
 						),
 					},
 				},

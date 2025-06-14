@@ -45,7 +45,11 @@ type TaskResource struct {
 }
 
 // Create implements resource.Resource.
-func (p *TaskResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (p *TaskResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data TaskResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -93,7 +97,11 @@ func (p *TaskResource) Create(ctx context.Context, req resource.CreateRequest, r
 }
 
 // Update implements resource.Resource.
-func (p *TaskResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (p *TaskResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	var plan, state TaskResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -136,7 +144,8 @@ func (p *TaskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), plan.Name)...)
 	}
 
-	if (!plan.Service.IsNull() && !plan.Service.IsUnknown()) && (plan.Service.ValueString() != state.Service.ValueString()) {
+	if (!plan.Service.IsNull() && !plan.Service.IsUnknown()) &&
+		(plan.Service.ValueString() != state.Service.ValueString()) {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("service"), plan.Service)...)
 	}
 
@@ -150,7 +159,11 @@ func (p *TaskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 }
 
 // Delete implements resource.Resource.
-func (p *TaskResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (p *TaskResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data TaskResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -183,12 +196,20 @@ func (p *TaskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 // Metadata implements resource.Resource.
-func (p *TaskResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (p *TaskResource) Metadata(
+	ctx context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "task")
 }
 
 // Read implements resource.Resource.
-func (p *TaskResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (p *TaskResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data TaskResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -201,11 +222,15 @@ func (p *TaskResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		resp.State.RemoveResource(ctx)
 	}
 
-	//resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Schema implements resource.Resource.
-func (p *TaskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (p *TaskResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
 
@@ -223,7 +248,9 @@ func (p *TaskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
-						regexp.MustCompile(`(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|s|m|h))+)|((((\d+,)+\d+|(\d+(\/|-)\d+)|\d+|\*) ?){5,7})`),
+						regexp.MustCompile(
+							`(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|s|m|h))+)|((((\d+,)+\d+|(\d+(\/|-)\d+)|\d+|\*) ?){5,7})`,
+						),
 						"value must contain a valid cron expression",
 					),
 				},
@@ -259,7 +286,11 @@ func (p *TaskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 	}
 }
 
-func (f *TaskResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *TaskResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -270,7 +301,10 @@ func (f *TaskResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -279,7 +313,11 @@ func (f *TaskResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	f.client = client.CoreAPI()
 }
 
-func (p *TaskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (p *TaskResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	id, err := strconv.ParseInt(req.ID, 10, 64)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to parse ID", err.Error())
@@ -297,10 +335,34 @@ func (p *TaskResource) ImportState(ctx context.Context, req resource.ImportState
 
 func newTaskSchedule() core.TaskSchedule {
 	return core.TaskSchedule{
-		WeekDay:               "0,1,2,3,4,5,6",
-		MonthlyWeek:           []string{},
-		RepeatMinStoreConfig:  []int64{1, 5, 10, 15, 20, 30},
-		RepeatHourStoreConfig: []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
+		WeekDay:              "0,1,2,3,4,5,6",
+		MonthlyWeek:          []string{},
+		RepeatMinStoreConfig: []int64{1, 5, 10, 15, 20, 30},
+		RepeatHourStoreConfig: []int64{
+			1,
+			2,
+			3,
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+			11,
+			12,
+			13,
+			14,
+			15,
+			16,
+			17,
+			18,
+			19,
+			20,
+			21,
+			22,
+			23,
+		},
 	}
 }
 

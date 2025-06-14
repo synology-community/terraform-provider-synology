@@ -96,7 +96,10 @@ func projectExists(err error) bool {
 	return false
 }
 
-func (f *ProjectResource) handleConfigs(ctx context.Context, data ProjectResourceModel) (diags diag.Diagnostics) {
+func (f *ProjectResource) handleConfigs(
+	ctx context.Context,
+	data ProjectResourceModel,
+) (diags diag.Diagnostics) {
 	if data.Configs.IsNull() || data.Configs.IsUnknown() {
 		return
 	}
@@ -119,7 +122,48 @@ func (f *ProjectResource) handleConfigs(ctx context.Context, data ProjectResourc
 				}, false,
 				true)
 			if err != nil {
-				diags.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+				diags.AddError(
+					"Failed to upload file",
+					fmt.Sprintf("Unable to upload file, got error: %s", err),
+				)
+				return
+			}
+		}
+	}
+
+	return
+}
+
+func (f *ProjectResource) handleSecrets(
+	ctx context.Context,
+	data ProjectResourceModel,
+) (diags diag.Diagnostics) {
+	if data.Secrets.IsNull() || data.Secrets.IsUnknown() {
+		return
+	}
+
+	elements := map[string]models.Secret{}
+	diags = data.Secrets.ElementsAs(ctx, &elements, true)
+	if diags.HasError() {
+		return
+	}
+
+	for _, v := range elements {
+		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+			// Upload the file
+			_, err := f.fsClient.Upload(
+				ctx,
+				data.SharePath.ValueString(),
+				form.File{
+					Name:    v.File.ValueString(),
+					Content: v.Content.ValueString(),
+				}, false,
+				true)
+			if err != nil {
+				diags.AddError(
+					"Failed to upload file",
+					fmt.Sprintf("Unable to upload file, got error: %s", err),
+				)
 				return
 			}
 		}
@@ -161,7 +205,6 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 			Name:    share,
 			VolPath: volPath,
 		})
-
 		if err != nil {
 			return err
 		}
@@ -186,7 +229,11 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 }
 
 // Create implements resource.Resource.
-func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (f *ProjectResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data ProjectResourceModel
 
 	// Read Terraform plan data into the model
@@ -195,8 +242,6 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	projectYAML := ""
 
 	if data.SharePath.IsNull() || data.SharePath.IsUnknown() {
 		data.SharePath = types.StringValue(fmt.Sprintf("/projects/%s", data.Name.ValueString()))
@@ -207,7 +252,6 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	err := f.ensureProjectShare(ctx, data.SharePath.ValueString())
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create project share", err.Error())
 		return
@@ -220,10 +264,18 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
+	if !data.Secrets.IsNull() && !data.Secrets.IsUnknown() {
+		resp.Diagnostics.Append(f.handleSecrets(ctx, data)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	servicePortal := models.ServicePortal{}
 
 	if !data.ServicePortal.IsNull() && !data.ServicePortal.IsUnknown() {
-		resp.Diagnostics.Append(data.ServicePortal.As(ctx, &servicePortal, basetypes.ObjectAsOptions{})...)
+		resp.Diagnostics.Append(
+			data.ServicePortal.As(ctx, &servicePortal, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -233,7 +285,7 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	res, err := f.client.ProjectCreate(ctx, docker.ProjectCreateRequest{
 		Name:                  data.Name.ValueString(),
-		Content:               projectYAML,
+		Content:               data.Content.ValueString(),
 		SharePath:             data.SharePath.ValueString(),
 		EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
 		ServicePortalName:     servicePortal.Name.ValueString(),
@@ -293,13 +345,12 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:                    data.ID.ValueString(),
-			Content:               projectYAML,
+			Content:               data.Content.ValueString(),
 			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
 			ServicePortalName:     servicePortal.Name.ValueString(),
 			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
 			ServicePortalProtocol: servicePortal.Protocol.ValueString(),
 		})
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to update project", err.Error())
 			return
@@ -313,7 +364,6 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 			ID: data.ID.ValueString(),
 		})
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to build project after update", err.Error())
 			return
@@ -321,7 +371,6 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get project after create", err.Error())
 		return
@@ -339,7 +388,11 @@ func (f *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 // Delete implements resource.Resource.
-func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (f *ProjectResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data ProjectResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -349,7 +402,6 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get project before deletion", err.Error())
 		return
@@ -368,7 +420,6 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
 		ID: data.ID.ValueString(),
 	})
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to clean project for deletion", err.Error())
 		return
@@ -377,7 +428,6 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	_, err = f.client.ProjectDelete(ctx, docker.ProjectDeleteRequest{
 		ID: data.ID.ValueString(),
 	})
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete project", err.Error())
 		return
@@ -388,19 +438,22 @@ func (f *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 // Read implements resource.Resource.
-func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ProjectResourceModel
+func (f *ProjectResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
+	var state ProjectResourceModel
 
 	// Read Terraform configuration data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	proj, err := f.client.ProjectGet(ctx, data.ID.ValueString())
-
+	proj, err := f.client.ProjectGet(ctx, state.ID.ValueString())
 	if err != nil {
-		if proj, err = f.client.ProjectGetByName(ctx, data.Name.ValueString()); err != nil {
+		if proj, err = f.client.ProjectGetByName(ctx, state.Name.ValueString()); err != nil {
 			switch err.(type) {
 			case docker.ProjectNotFoundError:
 				resp.State.RemoveResource(ctx)
@@ -409,23 +462,32 @@ func (f *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 				resp.Diagnostics.AddError("Failed to get project on read", err.Error())
 				return
 			}
-		} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() != proj.ID {
+		} else if state.ID.IsNull() || state.ID.IsUnknown() || state.ID.ValueString() != proj.ID {
 			if proj.ID != "" {
-				data.ID = types.StringValue(proj.ID)
+				state.ID = types.StringValue(proj.ID)
 			}
 		}
 	}
 
-	data.Status = types.StringValue(proj.Status)
-	data.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
-	data.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
-	data.Content = types.StringValue(proj.Content)
+	state.Status = types.StringValue(proj.Status)
+	state.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
+	state.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	if proj.Content != "" {
+		state.Content = types.StringValue(proj.Content)
+	} else {
+		state.Content = types.StringNull()
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 // Update implements resource.Resource.
-func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (f *ProjectResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	var plan, state ProjectResourceModel
 
 	if plan.Metadata.IsNull() || plan.Metadata.IsUnknown() {
@@ -444,7 +506,7 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	var servicesChanged, configChanged bool
+	var servicesChanged, configChanged, secretChanged bool
 
 	if !reflect.DeepEqual(plan.Services, state.Services) {
 		servicesChanged = true
@@ -452,6 +514,10 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	if !reflect.DeepEqual(plan.Configs, state.Configs) {
 		configChanged = true
+	}
+
+	if !reflect.DeepEqual(plan.Secrets, state.Secrets) {
+		secretChanged = true
 	}
 
 	if !servicesChanged && !configChanged {
@@ -462,7 +528,8 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	servicePortal := models.ServicePortal{}
 
 	if !plan.ServicePortal.IsNull() && !plan.ServicePortal.IsUnknown() {
-		resp.Diagnostics.Append(plan.ServicePortal.As(ctx, &servicePortal, basetypes.ObjectAsOptions{})...)
+		resp.Diagnostics.Append(
+			plan.ServicePortal.As(ctx, &servicePortal, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -472,12 +539,40 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		f.handleConfigs(ctx, plan)
 	}
 
-	content := plan.Content.ValueString()
+	if secretChanged {
+		f.handleSecrets(ctx, plan)
+	}
+
+	var content string
+	if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
+		content = plan.Content.ValueString()
+	} else {
+		resp.Diagnostics.Append(
+			models.NewComposeContentBuilder(
+				ctx,
+			).SetServices(
+				&plan.Services,
+			).SetNetworks(
+				&plan.Networks,
+			).SetVolumes(
+				&plan.Volumes,
+			).SetConfigs(
+				&plan.Configs,
+			).SetSecrets(
+				&plan.Secrets,
+			).Build(
+				&content,
+			)...)
+
+		if resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Failed to build project content", "")
+			return
+		}
+	}
 
 	if servicesChanged {
 
 		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to get project on update", err.Error())
 			return
@@ -485,9 +580,13 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 
 		if proj.Content == content {
 			tflog.Info(ctx, "No changes detected in project, skipping update")
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), types.StringValue(proj.Status))...)
+			resp.Diagnostics.Append(
+				resp.State.SetAttribute(
+					ctx,
+					path.Root("status"),
+					types.StringValue(proj.Status),
+				)...)
 			return
-
 		}
 
 		if proj.IsRunning() {
@@ -500,13 +599,13 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 			}
 		}
 
-		_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
-			ID: plan.ID.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to clean project", err.Error())
-			return
-		}
+		// _, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
+		// 	ID: plan.ID.ValueString(),
+		// })
+		// if err != nil {
+		// 	resp.Diagnostics.AddError("Failed to clean project", err.Error())
+		// 	return
+		// }
 
 		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
 			ID:                    plan.ID.ValueString(),
@@ -516,7 +615,6 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
 			ServicePortalProtocol: servicePortal.Protocol.ValueString(),
 		})
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to update project", err.Error())
 			return
@@ -527,7 +625,6 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		_, err := f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 			ID: plan.ID.ValueString(),
 		})
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to build project", err.Error())
 			return
@@ -535,7 +632,6 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get project after update", err.Error())
 		return
@@ -545,6 +641,13 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
 
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("content"), plan.Content)...)
+	if resp.Diagnostics.HasError() {
+		resp.Diagnostics.AddError("Failed to set content", "")
+		return
+	}
+	// plan.Content = types.StringValue(proj.Content)
+
 	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
 	// Save data into Terraform state
@@ -552,12 +655,20 @@ func (f *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 // Metadata implements resource.Resource.
-func (f *ProjectResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (f *ProjectResource) Metadata(
+	_ context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "project")
 }
 
 // Schema implements resource.Resource.
-func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (f *ProjectResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: projectDescription,
 
@@ -579,6 +690,7 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					UseArgumentsForUnknownContent(),
+					// stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"metadata": schema.MapAttribute{
@@ -655,66 +767,13 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"container_name": schema.StringAttribute{
-							MarkdownDescription: "The container name.",
-							Optional:            true,
-						},
-						"replicas": schema.Int64Attribute{
-							MarkdownDescription: "The number of replicas.",
-							Optional:            true,
-						},
-						"mem_limit": schema.StringAttribute{
-							MarkdownDescription: "The memory limit.",
-							Optional:            true,
-						},
-						"entrypoint": schema.ListAttribute{
-							MarkdownDescription: "The entrypoint of the service.",
+						"cap_add": schema.ListAttribute{
+							MarkdownDescription: "The capabilities to add.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
-						"command": schema.ListAttribute{
-							MarkdownDescription: "The command of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"user": schema.StringAttribute{
-							MarkdownDescription: "The user of the service.",
-							Optional:            true,
-						},
-						"restart": schema.StringAttribute{
-							MarkdownDescription: "The restart policy.",
-							Optional:            true,
-						},
-						"network_mode": schema.StringAttribute{
-							MarkdownDescription: "The network mode.",
-							Optional:            true,
-						},
-						"privileged": schema.BoolAttribute{
-							MarkdownDescription: "Whether the service is privileged.",
-							Optional:            true,
-						},
-						"tmpfs": schema.ListAttribute{
-							MarkdownDescription: "The tmpfs of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"security_opt": schema.ListAttribute{
-							MarkdownDescription: "The security options of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"environment": schema.MapAttribute{
-							MarkdownDescription: "The environment of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"labels": schema.MapAttribute{
-							MarkdownDescription: "The labels of the network.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"dns": schema.ListAttribute{
-							MarkdownDescription: "The DNS of the service.",
+						"cap_drop": schema.ListAttribute{
+							MarkdownDescription: "The capabilities to drop.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
@@ -734,60 +793,42 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"cap_add": schema.ListAttribute{
-							MarkdownDescription: "The capabilities to add.",
+						"command": schema.ListAttribute{
+							MarkdownDescription: "The command of the service.",
 							Optional:            true,
 							ElementType:         types.StringType,
 						},
-						"cap_drop": schema.ListAttribute{
-							MarkdownDescription: "The capabilities to drop.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"sysctls": schema.MapAttribute{
-							MarkdownDescription: "The sysctls of the service.",
-							Optional:            true,
-							ElementType:         types.StringType,
-						},
-						"image": schema.StringAttribute{
-							MarkdownDescription: "The image of the service.",
-							Optional:            true,
-						},
-						"ports": schema.ListNestedAttribute{
-							MarkdownDescription: "The ports of the service.",
+						"configs": schema.ListNestedAttribute{
+							MarkdownDescription: "The configs of the service.",
 							Optional:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the port.",
-										Optional:            true,
-									},
-									"target": schema.Int64Attribute{
-										MarkdownDescription: "The target of the port.",
-										Optional:            true,
-									},
-									"published": schema.StringAttribute{
-										MarkdownDescription: "The published of the port.",
-										Optional:            true,
-									},
-									"protocol": schema.StringAttribute{
-										MarkdownDescription: "The protocol of the port.",
-										Optional:            true,
-									},
-									"app_protocol": schema.StringAttribute{
-										MarkdownDescription: "The app protocol of the port.",
+									"gid": schema.StringAttribute{
+										MarkdownDescription: "The GID of the config.",
 										Optional:            true,
 									},
 									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the port.",
+										MarkdownDescription: "The mode of the config.",
 										Optional:            true,
 									},
-									"host_ip": schema.StringAttribute{
-										MarkdownDescription: "The host IP of the port.",
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the config.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the config.",
+										Optional:            true,
+									},
+									"uid": schema.StringAttribute{
+										MarkdownDescription: "The UID of the config.",
 										Optional:            true,
 									},
 								},
 							},
+						},
+						"container_name": schema.StringAttribute{
+							MarkdownDescription: "The container name.",
+							Optional:            true,
 						},
 						"depends_on": schema.MapNestedAttribute{
 							MarkdownDescription: "The dependencies of the service.",
@@ -805,17 +846,117 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
+						"dns": schema.ListAttribute{
+							MarkdownDescription: "The DNS of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"entrypoint": schema.ListAttribute{
+							MarkdownDescription: "The entrypoint of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"environment": schema.MapAttribute{
+							MarkdownDescription: "The environment of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"extra_hosts": schema.MapAttribute{
+							MarkdownDescription: "The extra hosts of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"healthcheck": schema.SingleNestedAttribute{
+							MarkdownDescription: "Health check configuration.",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"interval": schema.StringAttribute{
+									MarkdownDescription: "Interval to run the test.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"retries": schema.Int64Attribute{
+									MarkdownDescription: "Number of retries.",
+									Optional:            true,
+								},
+								"start_interval": schema.StringAttribute{
+									MarkdownDescription: "Start interval.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"start_period": schema.StringAttribute{
+									MarkdownDescription: "Start period.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+								"test": schema.ListAttribute{
+									MarkdownDescription: "Test command to run.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+								"timeout": schema.StringAttribute{
+									MarkdownDescription: "Timeout to run the test.",
+									Optional:            true,
+									CustomType:          timetypes.GoDurationType{},
+								},
+							},
+						},
+						"hostname": schema.StringAttribute{
+							MarkdownDescription: "The hostname.",
+							Optional:            true,
+						},
+						"domainname": schema.StringAttribute{
+							MarkdownDescription: "The domain name.",
+							Optional:            true,
+						},
+						"image": schema.StringAttribute{
+							MarkdownDescription: "The image of the service.",
+							Optional:            true,
+						},
+						"init": schema.BoolAttribute{
+							MarkdownDescription: "Runs an init process (PID 1) inside the container that forwards signals and reaps processes. Set this option to true to enable this feature for the service.",
+							Optional:            true,
+						},
+						"labels": schema.MapAttribute{
+							MarkdownDescription: "The labels of the network.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"logging": schema.SingleNestedAttribute{
+							MarkdownDescription: "Logging configuration for the docker service.",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"driver": schema.StringAttribute{
+									MarkdownDescription: "The driver of the logging.",
+									Optional:            true,
+								},
+								"options": schema.MapAttribute{
+									MarkdownDescription: "The options of the logging.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+							},
+						},
+						"mem_limit": schema.StringAttribute{
+							MarkdownDescription: "The memory limit.",
+							Optional:            true,
+						},
+						"network_mode": schema.StringAttribute{
+							MarkdownDescription: "The network mode.",
+							Optional:            true,
+						},
 						"networks": schema.MapNestedAttribute{
 							MarkdownDescription: "The networks of the service.",
 							Optional:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the network.",
-										Optional:            true,
-									},
 									"aliases": schema.SetAttribute{
 										MarkdownDescription: "The aliases of the network.",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"driver_opts": schema.MapAttribute{
+										MarkdownDescription: "The driver options of the network.",
 										Optional:            true,
 										ElementType:         types.StringType,
 									},
@@ -836,10 +977,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 										MarkdownDescription: "The MAC address of the network.",
 										Optional:            true,
 									},
-									"driver_opts": schema.MapAttribute{
-										MarkdownDescription: "The driver options of the network.",
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the network.",
 										Optional:            true,
-										ElementType:         types.StringType,
 									},
 									"priority": schema.Int64Attribute{
 										MarkdownDescription: "The priority of the network.",
@@ -848,87 +988,152 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								},
 							},
 						},
-						"logging": schema.SingleNestedAttribute{
-							MarkdownDescription: "Logging configuration for the docker service.",
+						"ports": schema.ListNestedAttribute{
+							MarkdownDescription: "The ports of the service.",
 							Optional:            true,
-							Attributes: map[string]schema.Attribute{
-								"driver": schema.StringAttribute{
-									MarkdownDescription: "The driver of the logging.",
-									Optional:            true,
-								},
-								"options": schema.MapAttribute{
-									MarkdownDescription: "The options of the logging.",
-									Optional:            true,
-									ElementType:         types.StringType,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"app_protocol": schema.StringAttribute{
+										MarkdownDescription: "The app protocol of the port.",
+										Optional:            true,
+									},
+									"host_ip": schema.StringAttribute{
+										MarkdownDescription: "The host IP of the port.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the port.",
+										Optional:            true,
+									},
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the port.",
+										Optional:            true,
+									},
+									"protocol": schema.StringAttribute{
+										MarkdownDescription: "The protocol of the port.",
+										Optional:            true,
+									},
+									"published": schema.StringAttribute{
+										MarkdownDescription: "The published of the port.",
+										Optional:            true,
+									},
+									"target": schema.Int64Attribute{
+										MarkdownDescription: "The target of the port.",
+										Optional:            true,
+									},
 								},
 							},
 						},
-						"healthcheck": schema.SingleNestedAttribute{
-							MarkdownDescription: "Health check configuration.",
+						"privileged": schema.BoolAttribute{
+							MarkdownDescription: "Whether the service is privileged.",
 							Optional:            true,
-							Attributes: map[string]schema.Attribute{
-								"test": schema.ListAttribute{
-									MarkdownDescription: "Test command to run.",
-									Optional:            true,
-									ElementType:         types.StringType,
-								},
-								"interval": schema.StringAttribute{
-									MarkdownDescription: "Interval to run the test.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
-								},
-								"timeout": schema.StringAttribute{
-									MarkdownDescription: "Timeout to run the test.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
-								},
-								"retries": schema.NumberAttribute{
-									MarkdownDescription: "Number of retries.",
-									Optional:            true,
-								},
-								"start_period": schema.StringAttribute{
-									MarkdownDescription: "Start period.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
-								},
-								"start_interval": schema.StringAttribute{
-									MarkdownDescription: "Start interval.",
-									Optional:            true,
-									CustomType:          timetypes.GoDurationType{},
+						},
+						"replicas": schema.Int64Attribute{
+							MarkdownDescription: "The number of replicas.",
+							Optional:            true,
+						},
+						"restart": schema.StringAttribute{
+							MarkdownDescription: "The restart policy.",
+							Optional:            true,
+						},
+						"secrets": schema.ListNestedAttribute{
+							MarkdownDescription: "The secrets of the service.",
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"gid": schema.StringAttribute{
+										MarkdownDescription: "The GID of the config.",
+										Optional:            true,
+									},
+									"mode": schema.StringAttribute{
+										MarkdownDescription: "The mode of the config.",
+										Optional:            true,
+									},
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the config.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the config.",
+										Optional:            true,
+									},
+									"uid": schema.StringAttribute{
+										MarkdownDescription: "The UID of the config.",
+										Optional:            true,
+									},
 								},
 							},
+						},
+						"security_opt": schema.ListAttribute{
+							MarkdownDescription: "The security options of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"sysctls": schema.MapAttribute{
+							MarkdownDescription: "The sysctls of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"tmpfs": schema.ListAttribute{
+							MarkdownDescription: "The tmpfs of the service.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+						"ulimits": schema.MapNestedAttribute{
+							MarkdownDescription: "The ulimits of the service.",
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"hard": schema.Int64Attribute{
+										MarkdownDescription: "The hard of the ulimit.",
+										Optional:            true,
+									},
+									"name": schema.StringAttribute{
+										MarkdownDescription: "The name of the ulimit.",
+										Required:            true,
+									},
+									"soft": schema.Int64Attribute{
+										MarkdownDescription: "The soft of the ulimit.",
+										Optional:            true,
+									},
+									"value": schema.Int64Attribute{
+										MarkdownDescription: "The value of the ulimit.",
+										Optional:            true,
+									},
+								},
+							},
+						},
+						"user": schema.StringAttribute{
+							MarkdownDescription: "The user of the service.",
+							Optional:            true,
+						},
+						"pid": schema.StringAttribute{
+							MarkdownDescription: "The PID mode of the service.",
+							Optional:            true,
+						},
+						"userns_mode": schema.StringAttribute{
+							MarkdownDescription: "The user namespace mode of the service.",
+							Optional:            true,
+						},
+						"platform": schema.StringAttribute{
+							MarkdownDescription: "The platform of the service.",
+							Optional:            true,
 						},
 						"volumes": schema.ListNestedAttribute{
 							MarkdownDescription: "The volumes of the service.",
 							Optional:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
-									"source": schema.StringAttribute{
-										MarkdownDescription: "The source of the volume.",
-										Optional:            true,
-									},
-									"target": schema.StringAttribute{
-										MarkdownDescription: "The target of the volume.",
-										Optional:            true,
-									},
-									"read_only": schema.BoolAttribute{
-										MarkdownDescription: "Whether the volume is read only.",
-										Optional:            true,
-									},
-									"type": schema.StringAttribute{
-										MarkdownDescription: "The type of the volume.",
-										Required:            true,
-									},
 									"bind": schema.SingleNestedAttribute{
 										MarkdownDescription: "The bind of the volume.",
 										Optional:            true,
 										Attributes: map[string]schema.Attribute{
-											"propagation": schema.StringAttribute{
-												MarkdownDescription: "The propagation of the bind.",
-												Optional:            true,
-											},
 											"create_host_path": schema.BoolAttribute{
 												MarkdownDescription: "Whether to create the host path.",
+												Optional:            true,
+											},
+											"propagation": schema.StringAttribute{
+												MarkdownDescription: "The propagation of the bind.",
 												Optional:            true,
 											},
 											"selinux": schema.StringAttribute{
@@ -937,85 +1142,21 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 											},
 										},
 									},
-								},
-							},
-						},
-						"ulimits": schema.MapNestedAttribute{
-							MarkdownDescription: "The ulimits of the service.",
-							Optional:            true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"name": schema.StringAttribute{
-										MarkdownDescription: "The name of the ulimit.",
+									"read_only": schema.BoolAttribute{
+										MarkdownDescription: "Whether the volume is read only.",
+										Optional:            true,
+									},
+									"source": schema.StringAttribute{
+										MarkdownDescription: "The source of the volume.",
+										Optional:            true,
+									},
+									"target": schema.StringAttribute{
+										MarkdownDescription: "The target of the volume.",
+										Optional:            true,
+									},
+									"type": schema.StringAttribute{
+										MarkdownDescription: "The type of the volume.",
 										Required:            true,
-									},
-									"value": schema.Int64Attribute{
-										MarkdownDescription: "The value of the ulimit.",
-										Optional:            true,
-									},
-									"soft": schema.Int64Attribute{
-										MarkdownDescription: "The soft of the ulimit.",
-										Optional:            true,
-									},
-									"hard": schema.Int64Attribute{
-										MarkdownDescription: "The hard of the ulimit.",
-										Optional:            true,
-									},
-								},
-							},
-						},
-						"configs": schema.ListNestedAttribute{
-							MarkdownDescription: "The configs of the service.",
-							Optional:            true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"source": schema.StringAttribute{
-										MarkdownDescription: "The source of the config.",
-										Optional:            true,
-									},
-									"target": schema.StringAttribute{
-										MarkdownDescription: "The target of the config.",
-										Optional:            true,
-									},
-									"uid": schema.StringAttribute{
-										MarkdownDescription: "The UID of the config.",
-										Optional:            true,
-									},
-									"gid": schema.StringAttribute{
-										MarkdownDescription: "The GID of the config.",
-										Optional:            true,
-									},
-									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
-										Optional:            true,
-									},
-								},
-							},
-						},
-						"secrets": schema.ListNestedAttribute{
-							MarkdownDescription: "The secrets of the service.",
-							Optional:            true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"source": schema.StringAttribute{
-										MarkdownDescription: "The source of the config.",
-										Optional:            true,
-									},
-									"target": schema.StringAttribute{
-										MarkdownDescription: "The target of the config.",
-										Optional:            true,
-									},
-									"uid": schema.StringAttribute{
-										MarkdownDescription: "The UID of the config.",
-										Optional:            true,
-									},
-									"gid": schema.StringAttribute{
-										MarkdownDescription: "The GID of the config.",
-										Optional:            true,
-									},
-									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
-										Optional:            true,
 									},
 								},
 							},
@@ -1036,7 +1177,14 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							MarkdownDescription: "The driver of the network.",
 							Optional:            true,
 							Validators: []validator.String{
-								stringvalidator.OneOf("bridge", "host", "overlay", "macvlan", "none", "ipvlan"),
+								stringvalidator.OneOf(
+									"bridge",
+									"host",
+									"overlay",
+									"macvlan",
+									"none",
+									"ipvlan",
+								),
 							},
 						},
 						"driver_opts": schema.MapAttribute{
@@ -1136,6 +1284,9 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"secrets": schema.MapNestedAttribute{
 				MarkdownDescription: "Docker compose secrets.",
 				Optional:            true,
+				PlanModifiers: []planmodifier.Map{
+					SetSecretPathsFromContent(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -1189,6 +1340,10 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 								stringplanmodifier.UseStateForUnknown(),
 							},
 						},
+						"external": schema.BoolAttribute{
+							MarkdownDescription: "Whether the config is external.",
+							Optional:            true,
+						},
 					},
 				},
 			},
@@ -1208,7 +1363,11 @@ func (f *ProjectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	}
 }
 
-func (f *ProjectResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *ProjectResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -1219,7 +1378,10 @@ func (f *ProjectResource) Configure(ctx context.Context, req resource.ConfigureR
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -1230,9 +1392,12 @@ func (f *ProjectResource) Configure(ctx context.Context, req resource.ConfigureR
 	f.coreClient = client.CoreAPI()
 }
 
-func (f *ProjectResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (f *ProjectResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	res, err := f.client.ProjectGetByName(ctx, req.ID)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to list package feeds", err.Error())
 		return
@@ -1378,7 +1543,8 @@ func (f *ProjectResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	servicePortalValues := types.ObjectNull(servicePortalType)
 
-	if res.EnableServicePortal || res.ServicePortalName != "" || res.ServicePortalPort != 0 || res.ServicePortalProtocol != "" {
+	if res.EnableServicePortal || res.ServicePortalName != "" || res.ServicePortalPort != 0 ||
+		res.ServicePortalProtocol != "" {
 		servicePortal := models.ServicePortal{
 			Enable:   types.BoolValue(res.EnableServicePortal),
 			Name:     types.StringValue(res.ServicePortalName),

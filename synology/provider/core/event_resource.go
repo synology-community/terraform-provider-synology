@@ -39,7 +39,11 @@ type EventResource struct {
 }
 
 // Create implements resource.Resource.
-func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (p *EventResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data EventResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -51,11 +55,7 @@ func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	eventReq, err := getEventRequest(data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create event", err.Error())
-		return
-	}
+	eventReq := getEventRequest(data)
 
 	var eventCreate func(ctx context.Context, req core.EventRequest) (*core.EventResult, error)
 
@@ -73,7 +73,7 @@ func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, 
 		eventCreate = p.client.EventCreate
 	}
 
-	_, err = eventCreate(ctx, eventReq)
+	_, err := eventCreate(ctx, eventReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Event install failed", err.Error())
 		return
@@ -101,7 +101,11 @@ func (p *EventResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 // Update implements resource.Resource.
-func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (p *EventResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	var plan, state EventResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -111,11 +115,7 @@ func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	eventReq, err := getEventRequest(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create event", err.Error())
-		return
-	}
+	eventReq := getEventRequest(plan)
 
 	var eventUpdate func(ctx context.Context, req core.EventRequest) (*core.EventResult, error)
 
@@ -133,7 +133,7 @@ func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		eventUpdate = p.client.EventUpdate
 	}
 
-	_, err = eventUpdate(ctx, eventReq)
+	_, err := eventUpdate(ctx, eventReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Event install failed", err.Error())
 		return
@@ -161,7 +161,11 @@ func (p *EventResource) Update(ctx context.Context, req resource.UpdateRequest, 
 }
 
 // Delete implements resource.Resource.
-func (p *EventResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (p *EventResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data EventResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -193,12 +197,20 @@ func (p *EventResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 }
 
 // Metadata implements resource.Resource.
-func (p *EventResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (p *EventResource) Metadata(
+	ctx context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "event")
 }
 
 // Read implements resource.Resource.
-func (p *EventResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (p *EventResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data EventResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -216,11 +228,15 @@ func (p *EventResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	data.Event = types.StringValue(event.Event)
 	data.When = types.StringValue("apply")
 
-	//resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Schema implements resource.Resource.
-func (p *EventResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (p *EventResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
 
@@ -267,7 +283,11 @@ func (p *EventResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	}
 }
 
-func (f *EventResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *EventResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -278,7 +298,10 @@ func (f *EventResource) Configure(ctx context.Context, req resource.ConfigureReq
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -287,7 +310,11 @@ func (f *EventResource) Configure(ctx context.Context, req resource.ConfigureReq
 	f.client = client.CoreAPI()
 }
 
-func (p *EventResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (p *EventResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	id := req.ID
 
 	event, err := p.client.EventGet(ctx, id)
@@ -308,7 +335,7 @@ func (p *EventResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
 }
 
-func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err error) {
+func getEventRequest(data EventResourceModel) core.EventRequest {
 	event := "bootup"
 
 	if !data.Script.IsNull() && !data.Script.IsUnknown() && data.Script.ValueString() != "" {
@@ -317,7 +344,7 @@ func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err e
 
 	user := data.User.ValueString()
 
-	eventReq = core.EventRequest{
+	return core.EventRequest{
 		Name:               data.Name.ValueString(),
 		Owner:              map[string]string{"0": user},
 		Operation:          data.Script.ValueString(),
@@ -329,6 +356,4 @@ func getEventRequest(data EventResourceModel) (eventReq core.EventRequest, err e
 		NotifyMail:         "",
 		SynoConfirmPWToken: "",
 	}
-
-	return eventReq, nil
 }

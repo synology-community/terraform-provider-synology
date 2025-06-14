@@ -13,7 +13,7 @@ import (
 
 // }
 
-func GetType(r interface{}) (attr.Type, error) {
+func GetType(r any) (attr.Type, error) {
 	var v reflect.Value
 
 	if reflect.TypeOf(r).Kind() == reflect.Ptr {
@@ -71,7 +71,12 @@ func mapType(v reflect.Value) (attr.Type, error) {
 			attrTypes[k.String()] = types.StringType
 		case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrTypes[k.String()] = types.Int64Type
-		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+		case reflect.Uint,
+			reflect.Uint32,
+			reflect.Uint16,
+			reflect.Uint8,
+			reflect.Uintptr,
+			reflect.Uint64:
 			attrTypes[k.String()] = types.Int64Type
 		case reflect.Float32, reflect.Float64:
 			attrTypes[k.String()] = types.Float64Type
@@ -104,7 +109,12 @@ func sliceType(v reflect.Value) (attr.Type, error) {
 		return types.ListType{}.WithElementType(types.StringType), nil
 	case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
 		return types.ListType{}.WithElementType(types.Int64Type), nil
-	case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+	case reflect.Uint,
+		reflect.Uint32,
+		reflect.Uint16,
+		reflect.Uint8,
+		reflect.Uintptr,
+		reflect.Uint64:
 		return types.ListType{}.WithElementType(types.Int64Type), nil
 	case reflect.Float32, reflect.Float64:
 		return types.ListType{}.WithElementType(types.Float64Type), nil
@@ -136,7 +146,7 @@ func structType(v reflect.Value) (attr.Type, error) {
 		if tags, ok := field.Tag.Lookup("json"); ok {
 			jsonTags = strings.Split(tags, ",")
 		}
-		if !(field.IsExported() || field.Anonymous || len(jsonTags) > 0) {
+		if !field.IsExported() && !field.Anonymous && len(jsonTags) <= 0 {
 			continue
 		}
 		if len(jsonTags) > 0 {
@@ -184,7 +194,12 @@ func sliceValue(v reflect.Value) (attr.Value, error) {
 			attrValues = append(attrValues, types.StringValue(item.String()))
 		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrValues = append(attrValues, types.Int64Value(item.Int()))
-		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+		case reflect.Uint,
+			reflect.Uint32,
+			reflect.Uint16,
+			reflect.Uint8,
+			reflect.Uintptr,
+			reflect.Uint64:
 			attrValues = append(attrValues, types.Int64Value(int64(item.Uint())))
 		case reflect.Float32, reflect.Float64:
 			attrValues = append(attrValues, types.Float64Value(item.Float()))
@@ -233,7 +248,12 @@ func mapValue(v reflect.Value) (attr.Value, error) {
 			attrValues[k.String()] = types.StringValue(iv.String())
 		case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrValues[k.String()] = types.Int64Value(iv.Int())
-		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+		case reflect.Uint,
+			reflect.Uint32,
+			reflect.Uint16,
+			reflect.Uint8,
+			reflect.Uintptr,
+			reflect.Uint64:
 			attrValues[k.String()] = types.Int64Value(int64(iv.Uint()))
 		case reflect.Float32, reflect.Float64:
 			attrValues[k.String()] = types.Float64Value(iv.Float())
@@ -278,7 +298,7 @@ func structValue(v reflect.Value) (attr.Value, error) {
 		if tags, ok := field.Tag.Lookup("json"); ok {
 			jsonTags = strings.Split(tags, ",")
 		}
-		if !(field.IsExported() || field.Anonymous || len(jsonTags) > 0) {
+		if !field.IsExported() && !field.Anonymous && len(jsonTags) <= 0 {
 			continue
 		}
 		if len(jsonTags) > 0 {
@@ -296,7 +316,12 @@ func structValue(v reflect.Value) (attr.Value, error) {
 			attrValues[attrFieldName] = types.StringValue(v.Field(i).String())
 		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrValues[attrFieldName] = types.Int64Value(v.Field(i).Int())
-		case reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Uintptr, reflect.Uint64:
+		case reflect.Uint,
+			reflect.Uint32,
+			reflect.Uint16,
+			reflect.Uint8,
+			reflect.Uintptr,
+			reflect.Uint64:
 			attrValues[attrFieldName] = types.Int64Value(int64(v.Field(i).Uint()))
 		case reflect.Float32, reflect.Float64:
 			attrValues[attrFieldName] = types.Float64Value(v.Field(i).Float())
@@ -328,7 +353,7 @@ func structValue(v reflect.Value) (attr.Value, error) {
 	return types.ObjectValueMust(objectType.AttributeTypes(), attrValues), nil
 }
 
-func GetValue(r interface{}) (attr.Value, error) {
+func GetValue(r any) (attr.Value, error) {
 	var v reflect.Value
 
 	if reflect.TypeOf(r).Kind() == reflect.Ptr {
@@ -356,7 +381,7 @@ func GetValue(r interface{}) (attr.Value, error) {
 	return nil, fmt.Errorf("unsupported type %s", vk)
 }
 
-// func GetValue(r interface{}) (attr.Value, error) {
+// func GetValue(r any) (attr.Value, error) {
 // 	var result attr.Value
 // 	var valueResult attr.Value
 

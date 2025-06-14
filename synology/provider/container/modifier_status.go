@@ -6,6 +6,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+const (
+	AttrName = "name"
 )
 
 // useRunningStatus implements the plan modifier.
@@ -25,7 +30,11 @@ func (m useRunningStatus) MarkdownDescription(_ context.Context) string {
 	return "Once set, the value of this attribute in state will not change."
 }
 
-func (m useRunningStatus) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+func (m useRunningStatus) PlanModifyString(
+	ctx context.Context,
+	req planmodifier.StringRequest,
+	resp *planmodifier.StringResponse,
+) {
 	var plan, state ProjectResourceModel
 
 	if req.State.Raw.IsNull() {
@@ -64,21 +73,33 @@ func (u useDefaultSharePath) MarkdownDescription(context.Context) string {
 }
 
 // PlanModifyString implements planmodifier.String.
-func (u useDefaultSharePath) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	var plan ProjectResourceModel
-
-	// if req.State.Raw.IsNull() {
-	// 	return
-	// }
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
+func (u useDefaultSharePath) PlanModifyString(
+	ctx context.Context,
+	req planmodifier.StringRequest,
+	resp *planmodifier.StringResponse,
+) {
+	// Do nothing if there is an unknown configuration value, otherwise interpolation gets messed up.
+	if req.ConfigValue.IsUnknown() {
 		return
 	}
 
-	if plan.SharePath.IsNull() || plan.SharePath.IsUnknown() {
-		resp.Diagnostics.Append(req.Plan.SetAttribute(ctx, path.Root("share_path"), fmt.Sprintf("/docker/%s", plan.Name.ValueString()))...)
+	if !req.PlanValue.IsUnknown() {
+		return
 	}
+
+	// Set the share path to /docker/<name> if it is not set.
+	var name string
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(AttrName), &name)...)
+	if resp.Diagnostics.HasError() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root(AttrName),
+			"failed to get name attribute during plan modification",
+			"",
+		)
+		return
+	}
+
+	resp.PlanValue = types.StringValue(fmt.Sprintf("/docker/%s", name))
 }
 
 func UseDefaultSharePath() planmodifier.String {

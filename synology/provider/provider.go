@@ -7,11 +7,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/synology-community/terraform-provider-synology/synology/provider/container"
-	"github.com/synology-community/terraform-provider-synology/synology/provider/core"
-	"github.com/synology-community/terraform-provider-synology/synology/provider/filestation"
-	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization"
-
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -23,6 +18,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/core"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/filestation"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization"
 )
 
 const (
@@ -48,13 +47,21 @@ type SynologyProviderModel struct {
 	SkipCertCheck types.Bool   `tfsdk:"skip_cert_check"`
 }
 
-func (p *SynologyProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *SynologyProvider) Metadata(
+	ctx context.Context,
+	req provider.MetadataRequest,
+	resp *provider.MetadataResponse,
+) {
 	resp.TypeName = "synology"
 
 	tflog.Info(ctx, "Starting")
 }
 
-func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *SynologyProvider) Schema(
+	ctx context.Context,
+	req provider.SchemaRequest,
+	resp *provider.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
@@ -83,7 +90,11 @@ func (p *SynologyProvider) Schema(ctx context.Context, req provider.SchemaReques
 	}
 }
 
-func (p *SynologyProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+func (p *SynologyProvider) Configure(
+	ctx context.Context,
+	req provider.ConfigureRequest,
+	resp *provider.ConfigureResponse,
+) {
 	var data SynologyProviderModel
 
 	tflog.Info(ctx, "Configuring Synology provider")
@@ -157,10 +168,15 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 	c, err := client.New(api.Options{
 		Host:       host,
 		VerifyCert: !skipCertificateCheck,
-		//Logger: 	 tflog.(ctx),
+		// Logger: 	 tflog.(ctx),
 	})
 	if err != nil {
-		resp.Diagnostics.Append(diag.NewErrorDiagnostic("synology client creation failed", fmt.Sprintf("Unable to create Synology client, got error: %v", err)))
+		resp.Diagnostics.Append(
+			diag.NewErrorDiagnostic(
+				"synology client creation failed",
+				fmt.Sprintf("Unable to create Synology client, got error: %v", err),
+			),
+		)
 	}
 
 	if _, err := c.Login(ctx, api.LoginOptions{
@@ -169,7 +185,12 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 		OTPSecret: otp_secret,
 	}); err != nil {
 		if c.Credentials().Token == "" {
-			resp.Diagnostics.Append(diag.NewErrorDiagnostic("login to Synology station failed", fmt.Sprintf("Unable to login to Synology station, got error: %s", err)))
+			resp.Diagnostics.Append(
+				diag.NewErrorDiagnostic(
+					"login to Synology station failed",
+					fmt.Sprintf("Unable to login to Synology station, got error: %s", err),
+				),
+			)
 		}
 	}
 
@@ -178,7 +199,6 @@ func (p *SynologyProvider) Configure(ctx context.Context, req provider.Configure
 }
 
 func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Resource {
-
 	var resp []func() resource.Resource
 
 	resp = append(resp, NewApiResource, NewPasswordResource)
@@ -191,7 +211,6 @@ func (p *SynologyProvider) Resources(ctx context.Context) []func() resource.Reso
 }
 
 func (p *SynologyProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-
 	var resp []func() datasource.DataSource
 
 	resp = append(resp, core.DataSources()...)
@@ -206,10 +225,15 @@ func (p *SynologyProvider) Functions(ctx context.Context) []func() function.Func
 	return []func() function.Function{
 		NewISOFunction,
 		NewMkPasswdFunction,
+		NewIniEncodeFunction,
 	}
 }
 
-func (p *SynologyProvider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
+func (p *SynologyProvider) ValidateConfig(
+	ctx context.Context,
+	req provider.ValidateConfigRequest,
+	resp *provider.ValidateConfigResponse,
+) {
 	var data SynologyProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)

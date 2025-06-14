@@ -3,10 +3,10 @@ package models
 import (
 	"context"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type Volume struct {
@@ -31,7 +31,10 @@ func (m Volume) AttrType() map[string]attr.Type {
 	}
 }
 
-func (m Volume) AsComposeConfig(ctx context.Context, network *composetypes.VolumeConfig) (d diag.Diagnostics) {
+func (m Volume) AsComposeConfig(
+	ctx context.Context,
+	network *composetypes.VolumeConfig,
+) (d diag.Diagnostics) {
 	network.Name = m.Name.ValueString()
 
 	if !m.DriverOpts.IsNull() && !m.DriverOpts.IsUnknown() {
@@ -60,7 +63,10 @@ func (m Volume) AsComposeConfig(ctx context.Context, network *composetypes.Volum
 	return
 }
 
-func (m *Volume) FromComposeConfig(ctx context.Context, volume *composetypes.VolumeConfig) (d diag.Diagnostics) {
+func (m *Volume) FromComposeConfig(
+	ctx context.Context,
+	volume *composetypes.VolumeConfig,
+) (d diag.Diagnostics) {
 	m.Name = types.StringValue(volume.Name)
 	m.Driver = types.StringValue(volume.Driver)
 	m.External = types.BoolValue(bool(volume.External))

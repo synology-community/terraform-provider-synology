@@ -9,9 +9,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
+	"github.com/synology-community/go-synology/pkg/api"
 	"github.com/synology-community/go-synology/pkg/api/core"
 )
 
@@ -37,7 +39,11 @@ type PackageResource struct {
 }
 
 // Create implements resource.Resource.
-func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (p *PackageResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data PackageResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -86,7 +92,6 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 		ExtraValues: wizardConf,
 		Run:         data.Run.ValueBool(),
 	})
-
 	if err != nil {
 		resp.Diagnostics.AddError("Package install failed", err.Error())
 		return
@@ -100,12 +105,19 @@ func (p *PackageResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 // Update implements resource.Resource.
-func (p *PackageResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
-
+func (p *PackageResource) Update(
+	context.Context,
+	resource.UpdateRequest,
+	*resource.UpdateResponse,
+) {
 }
 
 // Read implements resource.Resource.
-func (p *PackageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (p *PackageResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data PackageResourceModel
 
 	// Read Terraform configuration data into the model
@@ -145,11 +157,15 @@ func (p *PackageResource) Read(ctx context.Context, req resource.ReadRequest, re
 		}
 	}
 
-	//resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Delete implements resource.Resource.
-func (p *PackageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (p *PackageResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data PackageResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -161,13 +177,12 @@ func (p *PackageResource) Delete(ctx context.Context, req resource.DeleteRequest
 		ID: packageName,
 	})
 	if err != nil {
-
-		pkg, err := p.client.PackageGet(ctx, packageName)
-		// Success, package not found
-		if err != nil && pkg == nil {
+		_, err := p.client.PackageGet(ctx, packageName)
+		switch err.(type) {
+		case api.NotFoundError:
 			resp.State.RemoveResource(ctx)
 			return
-		} else {
+		default:
 			resp.Diagnostics.AddError("Failed to uninstall package", err.Error())
 			return
 		}
@@ -177,12 +192,20 @@ func (p *PackageResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 // Metadata implements resource.Resource.
-func (p *PackageResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (p *PackageResource) Metadata(
+	ctx context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "package")
 }
 
 // Schema implements resource.Resource.
-func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (p *PackageResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
 
@@ -209,6 +232,12 @@ func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
+			"file": schema.StringAttribute{
+				MarkdownDescription: "The file to install.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
 			"beta": schema.BoolAttribute{
 				MarkdownDescription: "Whether to install beta versions of the package.",
 				Optional:            true,
@@ -225,7 +254,11 @@ func (p *PackageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	}
 }
 
-func (f *PackageResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *PackageResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -236,7 +269,10 @@ func (f *PackageResource) Configure(ctx context.Context, req resource.ConfigureR
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -246,7 +282,11 @@ func (f *PackageResource) Configure(ctx context.Context, req resource.ConfigureR
 }
 
 // ImportState implements resource.ResourceWithImportState.
-func (p *PackageResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (p *PackageResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	pkg, err := p.client.PackageGet(ctx, req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to find package", err.Error())

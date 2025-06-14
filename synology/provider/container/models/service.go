@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 	"strconv"
+	"strings"
+	"unsafe"
 
 	"github.com/docker/go-units"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
@@ -13,8 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-
-	composetypes "github.com/compose-spec/compose-go/v2/types"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type Capabilities struct {
@@ -31,6 +31,14 @@ func (m Capabilities) AttrType() map[string]attr.Type {
 		"add":  types.ListType{ElemType: types.StringType},
 		"drop": types.ListType{ElemType: types.StringType},
 	}
+}
+
+func convertToInt64Ptr(p *uint64) *int64 {
+	return (*int64)(unsafe.Pointer(p))
+}
+
+func convertToUint64Ptr(p *int64) *uint64 {
+	return (*uint64)(unsafe.Pointer(p))
 }
 
 type Logging struct {
@@ -123,7 +131,7 @@ type HealthCheck struct {
 	Timeout       timetypes.GoDuration `tfsdk:"timeout"`
 	StartInterval timetypes.GoDuration `tfsdk:"start_interval"`
 	StartPeriod   timetypes.GoDuration `tfsdk:"start_period"`
-	Retries       types.Number         `tfsdk:"retries"`
+	Retries       types.Int64          `tfsdk:"retries"`
 }
 
 func (m HealthCheck) ModelType() attr.Type {
@@ -137,7 +145,7 @@ func (m HealthCheck) AttrType() map[string]attr.Type {
 		"timeout":        timetypes.GoDurationType{},
 		"start_interval": timetypes.GoDurationType{},
 		"start_period":   timetypes.GoDurationType{},
-		"retries":        types.NumberType,
+		"retries":        types.Int64Type,
 	}
 }
 
@@ -238,34 +246,41 @@ func (m ServiceDependency) AttrType() map[string]attr.Type {
 }
 
 type Service struct {
-	ContainerName types.String `tfsdk:"container_name"`
-	Image         types.String `tfsdk:"image"`
-	MemLimit      types.String `tfsdk:"mem_limit"`
-	Entrypoint    types.List   `tfsdk:"entrypoint"`
-	Command       types.List   `tfsdk:"command"`
-	Replicas      types.Int64  `tfsdk:"replicas"`
-	Logging       types.Object `tfsdk:"logging"`
-	Ports         types.List   `tfsdk:"ports"`
-	Networks      types.Map    `tfsdk:"networks"`
-	NetworkMode   types.String `tfsdk:"network_mode"`
-	HealthCheck   types.Object `tfsdk:"healthcheck"`
-	SecurityOpt   types.List   `tfsdk:"security_opt"`
-	Volumes       types.List   `tfsdk:"volumes"`
-	Dependencies  types.Map    `tfsdk:"depends_on"`
-	Privileged    types.Bool   `tfsdk:"privileged"`
-	Tmpfs         types.List   `tfsdk:"tmpfs"`
-	Ulimits       types.Map    `tfsdk:"ulimits"`
-	Environment   types.Map    `tfsdk:"environment"`
-	Restart       types.String `tfsdk:"restart"`
-	Configs       types.List   `tfsdk:"configs"`
-	Secrets       types.List   `tfsdk:"secrets"`
-	Labels        types.Map    `tfsdk:"labels"`
-	DNS           types.List   `tfsdk:"dns"`
-	User          types.String `tfsdk:"user"`
 	Capabilities  types.Object `tfsdk:"capabilities"`
 	CapAdd        types.List   `tfsdk:"cap_add"`
 	CapDrop       types.List   `tfsdk:"cap_drop"`
+	Command       types.List   `tfsdk:"command"`
+	Configs       types.List   `tfsdk:"configs"`
+	ContainerName types.String `tfsdk:"container_name"`
+	Dependencies  types.Map    `tfsdk:"depends_on"`
+	DNS           types.List   `tfsdk:"dns"`
+	Entrypoint    types.List   `tfsdk:"entrypoint"`
+	Environment   types.Map    `tfsdk:"environment"`
+	ExtraHosts    types.Map    `tfsdk:"extra_hosts"`
+	HealthCheck   types.Object `tfsdk:"healthcheck"`
+	HostName      types.String `tfsdk:"hostname"`
+	DomainName    types.String `tfsdk:"domainname"`
+	Image         types.String `tfsdk:"image"`
+	Init          types.Bool   `tfsdk:"init"`
+	Labels        types.Map    `tfsdk:"labels"`
+	Logging       types.Object `tfsdk:"logging"`
+	MemLimit      types.String `tfsdk:"mem_limit"`
+	NetworkMode   types.String `tfsdk:"network_mode"`
+	Networks      types.Map    `tfsdk:"networks"`
+	Ports         types.List   `tfsdk:"ports"`
+	Privileged    types.Bool   `tfsdk:"privileged"`
+	Replicas      types.Int64  `tfsdk:"replicas"`
+	Restart       types.String `tfsdk:"restart"`
+	Secrets       types.List   `tfsdk:"secrets"`
+	SecurityOpt   types.List   `tfsdk:"security_opt"`
 	Sysctls       types.Map    `tfsdk:"sysctls"`
+	Tmpfs         types.List   `tfsdk:"tmpfs"`
+	Ulimits       types.Map    `tfsdk:"ulimits"`
+	User          types.String `tfsdk:"user"`
+	Pid           types.String `tfsdk:"pid"`
+	UserNSMode    types.String `tfsdk:"userns_mode"`
+	Platform      types.String `tfsdk:"platform"`
+	Volumes       types.List   `tfsdk:"volumes"`
 	// Extensions    types.Map    `tfsdk:"extensions"`
 }
 
@@ -310,6 +325,8 @@ func (m Service) AttrType() map[string]attr.Type {
 		"name":           types.StringType,
 		"image":          types.StringType,
 		"container_name": types.StringType,
+		"hostname":       types.StringType,
+		"domainname":     types.StringType,
 		"configs":        types.ListType{ElemType: ServiceConfig{}.ModelType()},
 		"entrypoint":     types.ListType{ElemType: types.StringType},
 		"command":        types.ListType{ElemType: types.StringType},
@@ -317,6 +334,10 @@ func (m Service) AttrType() map[string]attr.Type {
 		"network_mode":   types.StringType,
 		"replicas":       types.Int64Type,
 		"user":           types.StringType,
+		"pid":            types.StringType,
+		"userns_mode":    types.StringType,
+		"platform":       types.StringType,
+		"init":           types.BoolType,
 		"ports":          Port{}.ModelType(),
 		"mem_limit":      types.StringType,
 		// "extensions":     types.MapType{ElemType: types.StringType},
@@ -349,11 +370,11 @@ func (m Service) AttrType() map[string]attr.Type {
 		"cap_add":      types.ListType{ElemType: types.StringType},
 		"cap_drop":     types.ListType{ElemType: types.StringType},
 		"sysctls":      types.MapType{ElemType: types.StringType},
+		"extra_hosts":  types.MapType{ElemType: types.StringType},
 	}
 }
 
 func (m Service) Value() attr.Value {
-
 	var logging basetypes.ObjectValue
 	var entrypoints basetypes.ListValue
 	var commands basetypes.ListValue
@@ -372,6 +393,7 @@ func (m Service) Value() attr.Value {
 	var securityOpt basetypes.ListValue
 	var capabilities basetypes.ObjectValue
 	var sysctls basetypes.MapValue
+	var extraHosts basetypes.MapValue
 	// var extensions basetypes.MapValue
 
 	// if e, diag := m.Extensions.ToMapValue(context.Background()); !diag.HasError() {
@@ -446,38 +468,51 @@ func (m Service) Value() attr.Value {
 		sysctls = s
 	}
 
+	if e, diag := m.ExtraHosts.ToMapValue(context.Background()); !diag.HasError() {
+		extraHosts = e
+	}
+
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"container_name": types.StringValue(m.ContainerName.ValueString()),
-		"image":          types.StringValue(m.Image.ValueString()),
-		"entrypoint":     entrypoints,
+		"capabilities":   capabilities,
 		"command":        commands,
-		"mem_limit":      types.StringValue(m.MemLimit.ValueString()),
-		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
-		"ports":          ports,
-		"network":        networks,
-		"logging":        logging,
-		"network_mode":   types.StringValue(m.NetworkMode.ValueString()),
-		"healthcheck":    healthcheck,
-		"security_opt":   securityOpt,
+		"configs":        configs,
+		"container_name": types.StringValue(m.ContainerName.ValueString()),
 		"depends_on":     dependencies,
-		"volume":         volumes,
+		"dns":            dns,
+		"entrypoint":     entrypoints,
+		"environment":    environment,
+		"extra_hosts":    extraHosts,
+		"healthcheck":    healthcheck,
+		"hostname":       types.StringValue(m.HostName.ValueString()),
+		"domainname":     types.StringValue(m.DomainName.ValueString()),
+		"image":          types.StringValue(m.Image.ValueString()),
+		"init":           types.BoolValue(m.Init.ValueBool()),
+		"labels":         labels,
+		"logging":        logging,
+		"mem_limit":      types.StringValue(m.MemLimit.ValueString()),
+		"network_mode":   types.StringValue(m.NetworkMode.ValueString()),
+		"network":        networks,
+		"ports":          ports,
 		"privileged":     types.BoolValue(m.Privileged.ValueBool()),
+		"replicas":       types.Int64Value(m.Replicas.ValueInt64()),
+		"restart":        types.StringValue(m.Restart.ValueString()),
+		"secrets":        secrets,
+		"security_opt":   securityOpt,
+		"sysctls":        sysctls,
 		"tmpfs":          tmpfs,
 		"ulimit":         ulimits,
-		"environment":    environment,
-		"restart":        types.StringValue(m.Restart.ValueString()),
-		"configs":        configs,
-		"secrets":        secrets,
-		"labels":         labels,
-		// "extensions":     extensions,
-		"dns":          dns,
-		"user":         types.StringValue(m.User.ValueString()),
-		"capabilities": capabilities,
-		"sysctls":      sysctls,
+		"user":           types.StringValue(m.User.ValueString()),
+		"pid":            types.StringValue(m.Pid.ValueString()),
+		"userns_mode":    types.StringValue(m.UserNSMode.ValueString()),
+		"platform":       types.StringValue(m.Platform.ValueString()),
+		"volume":         volumes,
 	})
 }
 
-func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.ServiceConfig) (d diag.Diagnostics) {
+func (m Service) AsComposeConfig(
+	ctx context.Context,
+	service *composetypes.ServiceConfig,
+) (d diag.Diagnostics) {
 	d = []diag.Diagnostic{}
 
 	if !m.SecurityOpt.IsNull() && !m.SecurityOpt.IsUnknown() {
@@ -661,8 +696,9 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 				}
 			}
 			if !hc.Retries.IsNull() || !hc.Retries.IsUnknown() {
-				retries, _ := hc.Retries.ValueBigFloat().Uint64()
-				service.HealthCheck.Retries = &retries
+				if retries := hc.Retries.ValueInt64Pointer(); retries != nil {
+					service.HealthCheck.Retries = convertToUint64Ptr(retries)
+				}
 			}
 		} else {
 			d = append(d, diag...)
@@ -890,6 +926,25 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 		}
 	}
 
+	if !m.ExtraHosts.IsNull() && !m.ExtraHosts.IsUnknown() {
+		extraHosts := map[string]string{}
+
+		if service.ExtraHosts == nil {
+			service.ExtraHosts = composetypes.HostsList{}
+		}
+
+		if diag := m.ExtraHosts.ElementsAs(ctx, &extraHosts, true); !diag.HasError() {
+			for k, v := range extraHosts {
+				service.ExtraHosts[k] = []string{v}
+			}
+		} else {
+			d = append(d, diag...)
+		}
+	}
+
+	service.Init = m.Init.ValueBoolPointer()
+	service.Hostname = m.HostName.ValueString()
+	service.DomainName = m.DomainName.ValueString()
 	service.ContainerName = m.ContainerName.ValueString()
 	replicas := m.Replicas.ValueInt64()
 	intReplicas := int(replicas)
@@ -900,16 +955,26 @@ func (m Service) AsComposeConfig(ctx context.Context, service *composetypes.Serv
 	service.Deploy = &composetypes.DeployConfig{
 		Replicas: &intReplicas,
 	}
+
 	service.User = m.User.ValueString()
+	service.Pid = m.Pid.ValueString()
+	service.UserNSMode = m.UserNSMode.ValueString()
+	service.Platform = m.Platform.ValueString()
 
 	return d
 }
 
-func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.ServiceConfig) (d diag.Diagnostics) {
+func (m *Service) FromComposeConfig(
+	ctx context.Context,
+	service *composetypes.ServiceConfig,
+) (d diag.Diagnostics) {
 	d = []diag.Diagnostic{}
 
 	m.ContainerName = types.StringValue(service.ContainerName)
+	m.HostName = types.StringValue(service.Hostname)
+	m.DomainName = types.StringValue(service.DomainName)
 	m.MemLimit = types.StringValue(fmt.Sprintf("%d", service.MemLimit))
+	m.Init = types.BoolPointerValue(service.Init)
 
 	if service.Image != "" {
 		m.Image = types.StringValue(service.Image)
@@ -1040,7 +1105,11 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 			}
 			dependencies[k] = dependency
 		}
-		dependenciesValue, diags := types.MapValueFrom(ctx, ServiceDependency{}.ModelType(), dependencies)
+		dependenciesValue, diags := types.MapValueFrom(
+			ctx,
+			ServiceDependency{}.ModelType(),
+			dependencies,
+		)
 		if diags.HasError() {
 			d = append(d, diags...)
 		} else {
@@ -1099,27 +1168,37 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 		Timeout:       timetypes.NewGoDurationNull(),
 		StartInterval: timetypes.NewGoDurationNull(),
 		StartPeriod:   timetypes.NewGoDurationNull(),
-		Retries:       types.NumberNull(),
+		Retries:       types.Int64Null(),
 	}
 	if service.HealthCheck != nil {
 		if service.HealthCheck.Timeout != nil {
-			healthCheck.Timeout = timetypes.NewGoDurationValueFromStringMust(service.HealthCheck.Timeout.String())
+			healthCheck.Timeout = timetypes.NewGoDurationValueFromStringMust(
+				service.HealthCheck.Timeout.String(),
+			)
 		}
 
 		if service.HealthCheck.Interval != nil {
-			healthCheck.Interval = timetypes.NewGoDurationValueFromStringMust(service.HealthCheck.Interval.String())
+			healthCheck.Interval = timetypes.NewGoDurationValueFromStringMust(
+				service.HealthCheck.Interval.String(),
+			)
 		}
 
 		if service.HealthCheck.StartInterval != nil {
-			healthCheck.StartInterval = timetypes.NewGoDurationValueFromStringMust(service.HealthCheck.StartInterval.String())
+			healthCheck.StartInterval = timetypes.NewGoDurationValueFromStringMust(
+				service.HealthCheck.StartInterval.String(),
+			)
 		}
 
 		if service.HealthCheck.StartPeriod != nil {
-			healthCheck.StartPeriod = timetypes.NewGoDurationValueFromStringMust(service.HealthCheck.StartPeriod.String())
+			healthCheck.StartPeriod = timetypes.NewGoDurationValueFromStringMust(
+				service.HealthCheck.StartPeriod.String(),
+			)
 		}
 
 		if service.HealthCheck.Retries != nil {
-			healthCheck.Retries = types.NumberValue(big.NewFloat(float64(*service.HealthCheck.Retries)))
+			healthCheck.Retries = types.Int64PointerValue(
+				convertToInt64Ptr(service.HealthCheck.Retries),
+			)
 		}
 
 		if len(service.HealthCheck.Test) > 0 {
@@ -1222,7 +1301,11 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 
 			if v.LinkLocalIPs != nil {
 				if len(v.LinkLocalIPs) > 0 {
-					linkLocalIPsValue, diags := types.SetValueFrom(ctx, types.StringType, v.LinkLocalIPs)
+					linkLocalIPsValue, diags := types.SetValueFrom(
+						ctx,
+						types.StringType,
+						v.LinkLocalIPs,
+					)
 					if diags.HasError() {
 						d = append(d, diags...)
 					} else {
@@ -1347,7 +1430,11 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 			}
 		}
 
-		capabilitiesValue, diags := types.ObjectValueFrom(ctx, Capabilities{}.AttrType(), capabilities)
+		capabilitiesValue, diags := types.ObjectValueFrom(
+			ctx,
+			Capabilities{}.AttrType(),
+			capabilities,
+		)
 
 		if diags.HasError() {
 			d = append(d, diags...)
@@ -1361,10 +1448,20 @@ func (m *Service) FromComposeConfig(ctx context.Context, service *composetypes.S
 	}
 
 	if service.Sysctls != nil {
-		sysctls := map[string]types.String{}
+		sysctls := map[string]attr.Value{}
 		for k, v := range service.Sysctls {
 			sysctls[k] = types.StringValue(v)
 		}
+		m.Sysctls = types.MapValueMust(types.StringType, sysctls)
+	}
+
+	if service.ExtraHosts != nil {
+		extraHosts := map[string]attr.Value{}
+		for k, v := range service.ExtraHosts {
+			extraHosts[k] = types.StringValue(strings.Join(v, ","))
+		}
+
+		m.ExtraHosts = types.MapValueMust(types.StringType, extraHosts)
 	}
 
 	return d

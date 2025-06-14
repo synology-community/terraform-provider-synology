@@ -10,13 +10,14 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/kdomanski/iso9660"
 )
 
-const userDataFileName string = "user-data"
-const metaDataFileName string = "meta-data"
-const networkConfigFileName string = "network-config"
+const (
+	userDataFileName      string = "user-data"
+	metaDataFileName      string = "meta-data"
+	networkConfigFileName string = "network-config"
+)
 
 type CloudInit struct {
 	MetaData      string `yaml:"meta_data"`
@@ -24,9 +25,12 @@ type CloudInit struct {
 	NetworkConfig string `yaml:"network_config"`
 }
 
-func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) (string, error) {
+func IsoFromFiles(
+	ctx context.Context,
+	volumeIdentifier string,
+	files map[string]string,
+) (string, error) {
 	writer, err := iso9660.NewWriter()
-
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("failed to create writer: %v", err))
 	}
@@ -43,7 +47,7 @@ func IsoFromFiles(ctx context.Context, isoName string, files map[string]string) 
 	}
 
 	var b bytes.Buffer
-	err = writer.WriteTo(&b, isoName)
+	err = writer.WriteTo(&b, volumeIdentifier)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("failed to write ISO image: %s", err))
 		return "", err
@@ -78,10 +82,12 @@ func IsoFromCloudInit(ctx context.Context, ci CloudInit) (string, error) {
 }
 
 func removeTmpIsoDirectory(ctx context.Context, iso string) {
-
 	err := os.RemoveAll(filepath.Dir(iso))
 	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("error while removing tmp directory holding the ISO file: %s", err))
+		tflog.Error(
+			ctx,
+			fmt.Sprintf("error while removing tmp directory holding the ISO file: %s", err),
+		)
 	}
 }
 

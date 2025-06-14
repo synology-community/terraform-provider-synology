@@ -32,7 +32,10 @@ func TestAccGuestDataSource_basic(t *testing.T) {
 					{
 						Config: tt.DataSourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrSet("data.synology_virtualization_guest.foo", "id"),
+							r.TestCheckResourceAttrSet(
+								"data.synology_virtualization_guest.foo",
+								"id",
+							),
 						),
 					},
 				},

@@ -30,5 +30,6 @@ A file on the Synology NAS Filestation.
 - `access_time` (String) The time the file was last accessed.
 - `change_time` (String) The time the file was last changed.
 - `create_time` (String) The time the file was created.
+- `md5` (String) The MD5 hash of the file.
 - `modified_time` (String) The time the file was last modified.
 - `real_path` (String) The real path of the folder.

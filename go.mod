@@ -1,12 +1,13 @@
 module github.com/synology-community/terraform-provider-synology
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24
 
 require (
-	github.com/compose-spec/compose-go/v2 v2.6.4
+	github.com/compose-spec/compose-go/v2 v2.4.6
+	github.com/distribution/reference v0.5.0
+	github.com/docker/go-connections v0.5.0
 	github.com/docker/go-units v0.5.0
+	github.com/go-viper/mapstructure/v2 v2.1.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/terraform-plugin-docs v0.21.0
 	github.com/hashicorp/terraform-plugin-framework v1.14.1
@@ -15,11 +16,15 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.28.0
 	github.com/hashicorp/terraform-plugin-testing v1.13.2
 	github.com/kdomanski/iso9660 v0.4.0
-	github.com/synology-community/go-synology v0.1.6
+	github.com/mattn/go-shellwords v1.0.12
+	github.com/opencontainers/go-digest v1.0.0
+	github.com/subpop/go-ini v0.1.5
+	github.com/synology-community/go-synology v0.1.7-0.20250521195944-94f5f6b01dc7
 	github.com/tredoe/osutil v1.5.0
+	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
+	gopkg.in/yaml.v3 v3.0.1
+	gotest.tools/v3 v3.5.1
 )
-
-replace github.com/synology-community/go-synology v0.1.5-0.20240729234156-51ea47a113ba => /Users/atkini01/src/synology-community/go-synology
 
 require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
@@ -31,19 +36,14 @@ require (
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.8.1 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
-	github.com/distribution/reference v0.5.0 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/cli v1.1.7 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
-	github.com/mattn/go-shellwords v1.0.12 // indirect
-	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
-	github.com/pquerna/otp v1.4.0 // indirect
-	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/pquerna/otp v1.5.0 // indirect
+	github.com/rivo/uniseg v0.3.4 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
@@ -54,11 +54,9 @@ require (
 	github.com/yuin/goldmark v1.7.7 // indirect
 	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	go.abhg.dev/goldmark/frontmatter v0.2.0 // indirect
-	golang.org/x/exp v0.0.0-20240707233637-46b078467d37 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
@@ -112,3 +110,5 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
+
+tool github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs

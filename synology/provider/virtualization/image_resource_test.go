@@ -34,12 +34,19 @@ func TestAccImageResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_virtualization_image.foo", "name", func(attr string) error {
-								if attr != "testiso" {
-									return fmt.Errorf("expected image name to be 'testiso', got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_virtualization_image.foo",
+								"name",
+								func(attr string) error {
+									if attr != "testiso" {
+										return fmt.Errorf(
+											"expected image name to be 'testiso', got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},

@@ -120,7 +120,6 @@ func (m GuestDataSourceModel) AttrType() map[string]attr.Type {
 }
 
 func (m GuestDataSourceModel) Value() attr.Value {
-
 	var networks attr.Value
 	if m.Networks.IsNull() {
 		networks = basetypes.NewSetNull(VNicDataModel{}.ModelType())
@@ -198,11 +197,19 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 	return nil
 }
 
-func (d *GuestDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+func (d *GuestDataSource) Metadata(
+	ctx context.Context,
+	req datasource.MetadataRequest,
+	resp *datasource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "guest")
 }
 
-func (d *GuestDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (d *GuestDataSource) Schema(
+	ctx context.Context,
+	req datasource.SchemaRequest,
+	resp *datasource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		Description:         "Guest data source",
 		MarkdownDescription: "Guest data source",
@@ -258,7 +265,11 @@ func (d *GuestDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 	}
 }
 
-func (d *GuestDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *GuestDataSource) Configure(
+	ctx context.Context,
+	req datasource.ConfigureRequest,
+	resp *datasource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -269,7 +280,10 @@ func (d *GuestDataSource) Configure(ctx context.Context, req datasource.Configur
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -278,7 +292,11 @@ func (d *GuestDataSource) Configure(ctx context.Context, req datasource.Configur
 	d.client = client
 }
 
-func (d *GuestDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+func (d *GuestDataSource) Read(
+	ctx context.Context,
+	req datasource.ReadRequest,
+	resp *datasource.ReadResponse,
+) {
 	var data GuestDataSourceModel
 
 	// Read Terraform configuration data into the model
@@ -289,9 +307,11 @@ func (d *GuestDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	clientResponse, err := d.client.VirtualizationAPI().GuestGet(ctx, virtualization.Guest{
 		Name: name,
 	})
-
 	if err != nil {
-		resp.Diagnostics.AddError("API request failed", fmt.Sprintf("Unable to read data source, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"API request failed",
+			fmt.Sprintf("Unable to read data source, got error: %s", err),
+		)
 		return
 	}
 

@@ -16,7 +16,6 @@ A file on the Synology NAS Folderstation.
 
 ### Required
 
-- `name` (String) The name of the folder to be created.
 - `path` (String) A destination folder path starting with a shared folder to which files can be uploaded.
 
 ### Optional
