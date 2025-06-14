@@ -2,17 +2,21 @@
 name: Lint
 on:
   push:
+    branches:
+      - "main"
     paths:
       - "**.go"
-      - "vendor/**"
-      - ".github/workflows/**"
+      - go.mod
+      - go.sum
+      - ".github/workflows/lint.yaml"
 
   pull_request:
     types: ["opened", "synchronize"]
     paths:
       - "**.go"
-      - "vendor/**"
-      - ".github/workflows/**"
+      - go.mod
+      - go.sum
+      - ".github/workflows/lint.yaml"
 
 jobs:
   golangci:
