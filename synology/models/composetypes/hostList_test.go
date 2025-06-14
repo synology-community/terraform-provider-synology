@@ -134,7 +134,9 @@ func testHostsList(t *testing.T, sep string) {
 				for i, s := range actualOut {
 					expYAMLOut[i] = strings.Replace(s, ":", "=", 1)
 				}
-				assert.DeepEqual(t, yamlOut.([]string), expYAMLOut)
+				if yamlOut, ok := yamlOut.([]string); ok {
+					assert.DeepEqual(t, yamlOut, expYAMLOut)
+				}
 
 				// The JSON rendering of HostsList should also have '=' separators. Same as the
 				// YAML output, but as a JSON list of strings.

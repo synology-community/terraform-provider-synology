@@ -177,7 +177,7 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 	plen := len(folderParts)
 
 	if plen < 2 {
-		return fmt.Errorf("Invalid share path: %s", sharePath)
+		return fmt.Errorf("invalid share path: %s", sharePath)
 	}
 
 	share := folderParts[1]

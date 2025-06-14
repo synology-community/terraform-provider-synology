@@ -137,7 +137,7 @@ func Test_ForServicesCycle(t *testing.T) {
 	service := p.Services["service_1"]
 	service.Links = []string{"service_2"}
 	p.Services["service_1"] = service
-	p, err := p.WithSelectedServices([]string{"service_2"})
+	_, err := p.WithSelectedServices([]string{"service_2"})
 	assert.NilError(t, err)
 }
 

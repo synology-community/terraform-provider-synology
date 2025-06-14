@@ -43,7 +43,9 @@ func (l *HealthCheckTest) DecodeMapstructure(value any) error {
 	case []any:
 		seq := make([]string, len(v))
 		for i, e := range v {
-			seq[i] = e.(string)
+			if e, ok := e.(string); ok {
+				seq[i] = e
+			}
 		}
 		*l = seq
 	default:

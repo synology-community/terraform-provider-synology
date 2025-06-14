@@ -34,7 +34,7 @@ func (s SSHConfig) Get(id string) (string, error) {
 			return sshKey.Path, nil
 		}
 	}
-	return "", fmt.Errorf("ID %s not found in SSH keys", id)
+	return "", fmt.Errorf("iD %s not found in SSH keys", id)
 }
 
 // MarshalYAML makes SSHKey implement yaml.Marshaller.

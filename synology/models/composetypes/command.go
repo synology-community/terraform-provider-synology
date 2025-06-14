@@ -78,7 +78,9 @@ func (s *ShellCommand) DecodeMapstructure(value any) error {
 	case []any:
 		cmd := make([]string, len(v))
 		for i, s := range v {
-			cmd[i] = s.(string)
+			if s, ok := s.(string); ok {
+				cmd[i] = s
+			}
 		}
 		*s = cmd
 	}

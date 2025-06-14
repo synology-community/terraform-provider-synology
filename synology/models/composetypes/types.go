@@ -646,13 +646,15 @@ func (u *UlimitsConfig) DecodeMapstructure(value any) error {
 		u.Hard = 0
 	case map[string]any:
 		u.Single = 0
-		soft, ok := v["soft"]
-		if ok {
-			u.Soft = soft.(int)
+		if soft, ok := v["soft"]; ok {
+			if soft, ok := soft.(int); ok {
+				u.Soft = soft
+			}
 		}
-		hard, ok := v["hard"]
-		if ok {
-			u.Hard = hard.(int)
+		if hard, ok := v["hard"]; ok {
+			if hard, ok := hard.(int); ok {
+				u.Hard = hard
+			}
 		}
 	default:
 		return fmt.Errorf("unexpected value type %T for ulimit", value)

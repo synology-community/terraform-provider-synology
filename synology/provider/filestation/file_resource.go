@@ -85,6 +85,10 @@ func (f *FileResource) Create(
 			return
 		}
 
+		defer func() {
+			_ = dresp.Body.Close()
+		}()
+
 		dbody, err := io.ReadAll(dresp.Body)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -93,7 +97,6 @@ func (f *FileResource) Create(
 			)
 			return
 		}
-		dresp.Body.Close()
 		fileContent = string(dbody)
 	}
 
@@ -243,7 +246,6 @@ func (f *FileResource) Update(
 			)
 			return
 		}
-		dresp.Body.Close()
 		fileContent = string(dbody)
 	}
 
