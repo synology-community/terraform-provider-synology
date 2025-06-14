@@ -8,14 +8,8 @@ import (
 	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 )
 
-// UseArgumentsForUnknownContent returns a plan modifier that copies a known prior state
-// value into the planned value. Use this when it is known that an unconfigured
-// value will remain the same after a resource update.
-//
-// To prevent Terraform errors, the framework automatically sets unconfigured
-// and Computed attributes to an unknown value "(known after apply)" on update.
-// Using this plan modifier will instead display the prior state value in the
-// plan, unless a prior plan modifier adjusts the value.
+// UseArgumentsForUnknownContent returns a plan modifier that sets the Container
+// Project Resource content from the configured arguments.
 func UseArgumentsForUnknownContent() planmodifier.String {
 	return useArgumentsForUnknownContent{}
 }
@@ -34,60 +28,56 @@ func (m useArgumentsForUnknownContent) MarkdownDescription(_ context.Context) st
 }
 
 // PlanModifyString implements the plan modification logic.
-func (m useArgumentsForUnknownContent) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+func (m useArgumentsForUnknownContent) PlanModifyString(
+	ctx context.Context,
+	req planmodifier.StringRequest,
+	resp *planmodifier.StringResponse,
+) {
 	// Do nothing if there is an unknown configuration value, otherwise interpolation gets messed up.
 	if req.ConfigValue.IsUnknown() {
 		return
 	}
 
-	if !req.PlanValue.IsUnknown() && !req.PlanValue.IsNull() {
-		return
-	}
-
-	// Do nothing if there is no state value.
-	var plan, state ProjectResourceModel
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	// Get the current plan value - Should run after config modification
+	var config ProjectResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddAttributeError(req.Path, "failed to get plan value during plan modification", "")
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"failed to get plan value during plan modification",
+			"",
+		)
 		return
 	}
 
+	// Convert the config to yaml content
 	var yamlContent string
-
 	resp.Diagnostics.Append(
 		models.NewComposeContentBuilder(
 			ctx,
 		).SetServices(
-			&plan.Services,
+			&config.Services,
 		).SetNetworks(
-			&plan.Networks,
+			&config.Networks,
 		).SetVolumes(
-			&plan.Volumes,
+			&config.Volumes,
 		).SetConfigs(
-			&plan.Configs,
+			&config.Configs,
 		).SetSecrets(
-			&plan.Secrets,
+			&config.Secrets,
 		).Build(
 			&yamlContent,
 		)...)
 
 	if resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddAttributeError(req.Path, "failed to build yaml content during plan modification", "")
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"failed to build yaml content during plan modification",
+			"",
+		)
 		return
 	}
 
-	if req.State.Raw.IsKnown() && !req.State.Raw.IsNull() {
-		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-		if resp.Diagnostics.HasError() {
-			resp.Diagnostics.AddAttributeError(req.Path, "failed to get state value during plan modification", "")
-			return
-		}
-
-		if yamlContent != state.Content.ValueString() {
-			resp.RequiresReplace = true
-		}
-	}
-
+	// Set the plan value to the yaml content
 	resp.PlanValue = types.StringValue(yamlContent)
 }

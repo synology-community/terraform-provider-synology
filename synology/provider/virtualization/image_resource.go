@@ -38,7 +38,11 @@ type ImageResourceModel struct {
 }
 
 // Schema implements resource.Resource.
-func (f *ImageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (f *ImageResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A image on the Synology NAS Imagestation.",
 
@@ -82,7 +86,11 @@ func (f *ImageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 }
 
 // Create implements resource.Resource.
-func (f *ImageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (f *ImageResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data ImageResourceModel
 
 	// Read Terraform plan data into the model
@@ -100,11 +108,17 @@ func (f *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if !data.StorageID.IsUnknown() && !data.StorageID.IsNull() {
-		image.Storages = append(image.Storages, virtualization.Storage{ID: data.StorageID.ValueString()})
+		image.Storages = append(
+			image.Storages,
+			virtualization.Storage{ID: data.StorageID.ValueString()},
+		)
 	}
 
 	if !data.StorageName.IsUnknown() && !data.StorageName.IsNull() {
-		image.Storages = append(image.Storages, virtualization.Storage{Name: data.StorageName.ValueString()})
+		image.Storages = append(
+			image.Storages,
+			virtualization.Storage{Name: data.StorageName.ValueString()},
+		)
 	}
 
 	// Upload the image
@@ -113,11 +127,13 @@ func (f *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	res, err := f.client.ImageCreate(c, image)
 	if err != nil {
-
 		if strings.Contains(err.Error(), "403") {
 			img, err := f.getImage(ctx, data.Name.ValueString())
 			if err != nil {
-				resp.Diagnostics.AddError("Failed to list images", fmt.Sprintf("Unable to list images, got error: %s", err))
+				resp.Diagnostics.AddError(
+					"Failed to list images",
+					fmt.Sprintf("Unable to list images, got error: %s", err),
+				)
 				return
 			}
 			if img.ID != "" {
@@ -141,7 +157,11 @@ func (f *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 // Delete implements resource.Resource.
-func (f *ImageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (f *ImageResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data ImageResourceModel
 
 	// Read Terraform configuration data into the model
@@ -151,13 +171,20 @@ func (f *ImageResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	// Start Delete the image
 	if err := f.client.ImageDelete(ctx, imageName); err != nil {
-		resp.Diagnostics.AddError("Failed to delete image", fmt.Sprintf("Unable to delete image, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to delete image",
+			fmt.Sprintf("Unable to delete image, got error: %s", err),
+		)
 		return
 	}
 }
 
 // Read implements resource.Resource.
-func (f *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (f *ImageResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data ImageResourceModel
 
 	// Read Terraform configuration data into the model
@@ -165,7 +192,10 @@ func (f *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	image, err := f.getImage(ctx, data.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list images", fmt.Sprintf("Unable to list images, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to list images",
+			fmt.Sprintf("Unable to list images, got error: %s", err),
+		)
 		return
 	}
 
@@ -192,7 +222,11 @@ func (f *ImageResource) getImage(ctx context.Context, name string) (*virtualizat
 }
 
 // Update implements resource.Resource.
-func (f *ImageResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (f *ImageResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	// var data ImageResourceModel
 
 	// Read Terraform configuration data into the model
@@ -203,11 +237,19 @@ func (f *ImageResource) Update(ctx context.Context, req resource.UpdateRequest, 
 }
 
 // Metadata implements resource.Resource.
-func (f *ImageResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (f *ImageResource) Metadata(
+	_ context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "image")
 }
 
-func (f *ImageResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *ImageResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -218,7 +260,10 @@ func (f *ImageResource) Configure(ctx context.Context, req resource.ConfigureReq
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return

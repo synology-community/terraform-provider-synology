@@ -21,11 +21,14 @@ func NewPasswordResource() resource.Resource {
 	return &PasswordResource{}
 }
 
-type PasswordResource struct {
-}
+type PasswordResource struct{}
 
 // Create implements resource.Resource.
-func (a *PasswordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (a *PasswordResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data PasswordResourceModel
 
 	// Read Terraform plan data into the model
@@ -48,11 +51,14 @@ func (a *PasswordResource) Create(ctx context.Context, req resource.CreateReques
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 }
 
 // Delete implements resource.Resource.
-func (a *PasswordResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (a *PasswordResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data PasswordResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -63,21 +69,27 @@ func (a *PasswordResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 }
 
 // Metadata implements resource.Resource.
-func (a *PasswordResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (a *PasswordResource) Metadata(
+	_ context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = req.ProviderTypeName + "_password"
 }
 
 // Read implements resource.Resource.
 func (a *PasswordResource) Read(context.Context, resource.ReadRequest, *resource.ReadResponse) {
-
 }
 
 // Schema implements resource.Resource.
-func (a *PasswordResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (a *PasswordResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Resource for creating a password hash.",
 
@@ -95,7 +107,11 @@ func (a *PasswordResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 }
 
 // Update implements resource.Resource.
-func (a *PasswordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (a *PasswordResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	var data PasswordResourceModel
 
 	// Read Terraform plan data into the model
@@ -116,7 +132,11 @@ func (a *PasswordResource) Update(ctx context.Context, req resource.UpdateReques
 	data.Result = types.StringValue(result)
 }
 
-func (f *PasswordResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *PasswordResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return

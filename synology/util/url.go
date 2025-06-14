@@ -22,7 +22,7 @@ func MarshalURL(r any) (url.Values, error) {
 		if tags, ok := vT.Field(i).Tag.Lookup("synology"); ok {
 			synologyTags = strings.Split(tags, ",")
 		}
-		if !(vT.Field(i).IsExported() || vT.Field(i).Anonymous || len(synologyTags) > 0) {
+		if !vT.Field(i).IsExported() && !vT.Field(i).Anonymous && len(synologyTags) <= 0 {
 			continue
 		}
 		if len(synologyTags) > 0 {

@@ -20,8 +20,8 @@ import (
 )
 
 type File struct {
-	Path    string
-	Content string
+	Path    string `tfsdk:"path"`
+	Content string `tfsdk:"content"`
 }
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -50,7 +50,11 @@ type CloudInitResourceModel struct {
 }
 
 // Create implements resource.Resource.
-func (f *CloudInitResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (f *CloudInitResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data CloudInitResourceModel
 
 	// Read Terraform plan data into the model
@@ -76,7 +80,10 @@ func (f *CloudInitResource) Create(ctx context.Context, req resource.CreateReque
 		NetworkConfig: networkConfig,
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to create ISO", fmt.Sprintf("Unable to create ISO, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to create ISO",
+			fmt.Sprintf("Unable to create ISO, got error: %s", err),
+		)
 		return
 	}
 
@@ -86,13 +93,19 @@ func (f *CloudInitResource) Create(ctx context.Context, req resource.CreateReque
 		Content: iso,
 	}, createParents, overwrite)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to upload file",
+			fmt.Sprintf("Unable to upload file, got error: %s", err),
+		)
 		return
 	}
 
 	files, err := f.client.List(ctx, fileDir)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to list files",
+			fmt.Sprintf("Unable to list files, got error: %s", err),
+		)
 		return
 	}
 	for _, file := range files.Files {
@@ -112,17 +125,23 @@ func (f *CloudInitResource) Create(ctx context.Context, req resource.CreateReque
 }
 
 // Delete implements resource.Resource.
-func (f *CloudInitResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (f *CloudInitResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data CloudInitResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	path := data.Path.ValueString()
 	// Start Delete the file
 	_, err := f.client.Delete(ctx, []string{path}, true)
-
 	if err != nil {
 		if e := errors.Unwrap(err); e != nil {
-			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", e))
+			resp.Diagnostics.AddError(
+				"Failed to delete file",
+				fmt.Sprintf("Unable to delete file, got error: %s", e),
+			)
 		} else {
 			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
 		}
@@ -131,7 +150,11 @@ func (f *CloudInitResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 // Read implements resource.Resource.
-func (f *CloudInitResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (f *CloudInitResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data CloudInitResourceModel
 
 	// Read Terraform configuration data into the model
@@ -141,7 +164,10 @@ func (f *CloudInitResource) Read(ctx context.Context, req resource.ReadRequest, 
 	basedir := filepath.Dir(path)
 	files, err := f.client.List(ctx, basedir)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to list files",
+			fmt.Sprintf("Unable to list files, got error: %s", err),
+		)
 		return
 	}
 	for _, file := range files.Files {
@@ -158,7 +184,11 @@ func (f *CloudInitResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 // Update implements resource.Resource.
-func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (f *CloudInitResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	var data CloudInitResourceModel
 
 	// Read Terraform configuration data into the model
@@ -177,7 +207,10 @@ func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateReque
 		NetworkConfig: networkConfig,
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to create ISO", fmt.Sprintf("Unable to create ISO, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to create ISO",
+			fmt.Sprintf("Unable to create ISO, got error: %s", err),
+		)
 		return
 	}
 
@@ -193,14 +226,20 @@ func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateReque
 		file, data.CreateParents.ValueBool(),
 		true)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to upload file", fmt.Sprintf("Unable to upload file, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to upload file",
+			fmt.Sprintf("Unable to upload file, got error: %s", err),
+		)
 		return
 	}
 
 	basedir := filepath.Dir(path)
 	files, err := f.client.List(ctx, basedir)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to list files",
+			fmt.Sprintf("Unable to list files, got error: %s", err),
+		)
 		return
 	}
 	for _, file := range files.Files {
@@ -220,12 +259,20 @@ func (f *CloudInitResource) Update(ctx context.Context, req resource.UpdateReque
 }
 
 // Metadata implements resource.Resource.
-func (f *CloudInitResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (f *CloudInitResource) Metadata(
+	_ context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "cloud_init")
 }
 
 // Schema implements resource.Resource.
-func (f *CloudInitResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (f *CloudInitResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A file on the Synology NAS Filestation.",
 
@@ -282,7 +329,11 @@ func (f *CloudInitResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	}
 }
 
-func (f *CloudInitResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *CloudInitResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -293,7 +344,10 @@ func (f *CloudInitResource) Configure(ctx context.Context, req resource.Configur
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -302,7 +356,11 @@ func (f *CloudInitResource) Configure(ctx context.Context, req resource.Configur
 	f.client = client.FileStationAPI()
 }
 
-func (f *CloudInitResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (f *CloudInitResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	p := req.ID
 	basedir := filepath.Dir(p)
 
@@ -310,17 +368,40 @@ func (f *CloudInitResource) ImportState(ctx context.Context, req resource.Import
 
 	files, err := f.client.List(ctx, basedir)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list files", fmt.Sprintf("Unable to list files, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to list files",
+			fmt.Sprintf("Unable to list files, got error: %s", err),
+		)
 		return
 	}
 	for _, file := range files.Files {
 		if file.Path == p {
 			tflog.Info(ctx, fmt.Sprintf("File found: %s", file.Path))
 
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("modified_time"), file.Additional.Time.Mtime.Unix())...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("access_time"), file.Additional.Time.Atime.Unix())...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("change_time"), file.Additional.Time.Ctime.Unix())...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("create_time"), file.Additional.Time.Crtime.Unix())...)
+			resp.Diagnostics.Append(
+				resp.State.SetAttribute(
+					ctx,
+					path.Root("modified_time"),
+					file.Additional.Time.Mtime.Unix(),
+				)...)
+			resp.Diagnostics.Append(
+				resp.State.SetAttribute(
+					ctx,
+					path.Root("access_time"),
+					file.Additional.Time.Atime.Unix(),
+				)...)
+			resp.Diagnostics.Append(
+				resp.State.SetAttribute(
+					ctx,
+					path.Root("change_time"),
+					file.Additional.Time.Ctime.Unix(),
+				)...)
+			resp.Diagnostics.Append(
+				resp.State.SetAttribute(
+					ctx,
+					path.Root("create_time"),
+					file.Additional.Time.Crtime.Unix(),
+				)...)
 			continue
 		}
 	}

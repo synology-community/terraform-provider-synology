@@ -3,10 +3,10 @@ package models
 import (
 	"context"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type Secret struct {
@@ -15,7 +15,10 @@ type Secret struct {
 	File    types.String `tfsdk:"file"`
 }
 
-func (m Secret) AsComposeConfig(ctx context.Context, secret *composetypes.SecretConfig) (d diag.Diagnostics) {
+func (m Secret) AsComposeConfig(
+	ctx context.Context,
+	secret *composetypes.SecretConfig,
+) (d diag.Diagnostics) {
 	secret.Name = m.Name.ValueString()
 	if !m.File.IsNull() && !m.File.IsUnknown() {
 		secret.File = m.File.ValueString()
@@ -43,7 +46,10 @@ func (m Secret) Value() attr.Value {
 	})
 }
 
-func (m *Secret) FromComposeConfig(ctx context.Context, volume *composetypes.SecretConfig) (d diag.Diagnostics) {
+func (m *Secret) FromComposeConfig(
+	ctx context.Context,
+	volume *composetypes.SecretConfig,
+) (d diag.Diagnostics) {
 	m.Name = types.StringValue(volume.Name)
 	m.Content = types.StringValue(volume.Content)
 	m.File = types.StringValue(volume.File)

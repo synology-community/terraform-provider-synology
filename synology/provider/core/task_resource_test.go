@@ -39,12 +39,16 @@ func TestAccTaskResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_core_task.test", "id", func(attr string) error {
-								if attr == "" {
-									return fmt.Errorf("expected task id to be set")
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_core_task.test",
+								"id",
+								func(attr string) error {
+									if attr == "" {
+										return fmt.Errorf("expected task id to be set")
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},

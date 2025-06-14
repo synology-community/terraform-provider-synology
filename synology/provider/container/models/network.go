@@ -3,11 +3,11 @@ package models
 import (
 	"context"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/synology-community/terraform-provider-synology/synology/models/composetypes"
 )
 
 type IPAMPool struct {
@@ -76,7 +76,10 @@ func (m Network) AttrType() map[string]attr.Type {
 	}
 }
 
-func (m Network) AsComposeConfig(ctx context.Context, network *composetypes.NetworkConfig) (d diag.Diagnostics) {
+func (m Network) AsComposeConfig(
+	ctx context.Context,
+	network *composetypes.NetworkConfig,
+) (d diag.Diagnostics) {
 	network.Name = m.Name.ValueString()
 
 	if !m.DriverOpts.IsNull() && !m.DriverOpts.IsUnknown() {
@@ -150,10 +153,12 @@ func (m Network) AsComposeConfig(ctx context.Context, network *composetypes.Netw
 	}
 
 	return
-
 }
 
-func (m *Network) FromComposeConfig(ctx context.Context, network *composetypes.NetworkConfig) (d diag.Diagnostics) {
+func (m *Network) FromComposeConfig(
+	ctx context.Context,
+	network *composetypes.NetworkConfig,
+) (d diag.Diagnostics) {
 	m.Name = types.StringValue(network.Name)
 	m.Driver = types.StringValue(network.Driver)
 	m.External = types.BoolValue(bool(network.External))

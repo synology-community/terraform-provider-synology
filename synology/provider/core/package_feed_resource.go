@@ -28,7 +28,11 @@ type PackageFeedResource struct {
 }
 
 // Create implements resource.Resource.
-func (p *PackageFeedResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (p *PackageFeedResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data PackageFeedResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -49,7 +53,6 @@ func (p *PackageFeedResource) Create(ctx context.Context, req resource.CreateReq
 			Feed: feedURL,
 		},
 	})
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create package feed", err.Error())
 		return
@@ -63,7 +66,11 @@ func (p *PackageFeedResource) Create(ctx context.Context, req resource.CreateReq
 }
 
 // Delete implements resource.Resource.
-func (p *PackageFeedResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (p *PackageFeedResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data PackageFeedResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -77,7 +84,6 @@ func (p *PackageFeedResource) Delete(ctx context.Context, req resource.DeleteReq
 	err := p.client.PackageFeedDelete(ctx, core.PackageFeedDeleteRequest{
 		List: core.PackageFeeds{feedURL},
 	})
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete package feed", err.Error())
 		return
@@ -87,12 +93,20 @@ func (p *PackageFeedResource) Delete(ctx context.Context, req resource.DeleteReq
 }
 
 // Metadata implements resource.Resource.
-func (p *PackageFeedResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (p *PackageFeedResource) Metadata(
+	ctx context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "package_feed")
 }
 
 // Read implements resource.Resource.
-func (p *PackageFeedResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (p *PackageFeedResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data PackageFeedResourceModel
 
 	// Read Terraform configuration data into the model
@@ -102,7 +116,6 @@ func (p *PackageFeedResource) Read(ctx context.Context, req resource.ReadRequest
 	url := data.URL.ValueString()
 
 	feeds, err := p.client.PackageFeedList(ctx)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to list package feeds", err.Error())
 		return
@@ -119,12 +132,18 @@ func (p *PackageFeedResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	if !found {
-		resp.Diagnostics.AddError("Package feed not found", fmt.Sprintf("Package feed %s not found", name))
+		resp.Diagnostics.AddError(
+			"Package feed not found",
+			fmt.Sprintf("Package feed %s not found", name),
+		)
 		return
 	}
 
 	if foundURL != url {
-		resp.Diagnostics.AddError("Package feed URL does not match", fmt.Sprintf("Package feed URL does not match. Expected: %s, got: %s", url, foundURL))
+		resp.Diagnostics.AddError(
+			"Package feed URL does not match",
+			fmt.Sprintf("Package feed URL does not match. Expected: %s, got: %s", url, foundURL),
+		)
 		return
 	}
 
@@ -132,7 +151,11 @@ func (p *PackageFeedResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 // Schema implements resource.Resource.
-func (p *PackageFeedResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (p *PackageFeedResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A resource for managing package feeds.",
 
@@ -151,11 +174,18 @@ func (p *PackageFeedResource) Schema(_ context.Context, _ resource.SchemaRequest
 }
 
 // Update implements resource.Resource.
-func (p *PackageFeedResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
-
+func (p *PackageFeedResource) Update(
+	context.Context,
+	resource.UpdateRequest,
+	*resource.UpdateResponse,
+) {
 }
 
-func (f *PackageFeedResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *PackageFeedResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -166,7 +196,10 @@ func (f *PackageFeedResource) Configure(ctx context.Context, req resource.Config
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -176,9 +209,12 @@ func (f *PackageFeedResource) Configure(ctx context.Context, req resource.Config
 }
 
 // ImportState implements resource.ResourceWithImportState.
-func (p *PackageFeedResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (p *PackageFeedResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	feeds, err := p.client.PackageFeedList(ctx)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to list package feeds", err.Error())
 		return
@@ -195,7 +231,10 @@ func (p *PackageFeedResource) ImportState(ctx context.Context, req resource.Impo
 	}
 
 	if !found {
-		resp.Diagnostics.AddError("Package feed not found", fmt.Sprintf("Package feed %s not found", req.ID))
+		resp.Diagnostics.AddError(
+			"Package feed not found",
+			fmt.Sprintf("Package feed %s not found", req.ID),
+		)
 		return
 	}
 

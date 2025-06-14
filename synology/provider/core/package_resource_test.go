@@ -50,12 +50,16 @@ func TestAccPackageResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_core_package.foo", "version", func(attr string) error {
-								if attr == "" {
-									return fmt.Errorf("expected package version to be set")
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_core_package.foo",
+								"version",
+								func(attr string) error {
+									if attr == "" {
+										return fmt.Errorf("expected package version to be set")
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},
@@ -86,12 +90,19 @@ func TestAccPackageResource_url(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_core_package.noble", "url", func(attr string) error {
-								if attr != "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" {
-									return fmt.Errorf("expected package url to be 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img', got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_core_package.noble",
+								"url",
+								func(attr string) error {
+									if attr != "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" {
+										return fmt.Errorf(
+											"expected package url to be 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img', got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},

@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization/models"
-
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -20,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/virtualization"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/virtualization/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -56,7 +55,11 @@ type GuestResourceModel struct {
 }
 
 // Schema implements resource.Resource.
-func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (f *GuestResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A guest on the Synology NAS Gueststation.",
 
@@ -165,7 +168,11 @@ func (f *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 }
 
 // Create implements resource.Resource.
-func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (f *GuestResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data GuestResourceModel
 
 	// Read Terraform plan data into the model
@@ -237,7 +244,8 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 			disk := virtualization.VDisk{}
 
-			if (v.ImageID.IsNull() || v.ImageID.IsUnknown()) && (v.ImageName.IsNull() || v.ImageName.IsUnknown()) {
+			if (v.ImageID.IsNull() || v.ImageID.IsUnknown()) &&
+				(v.ImageName.IsNull() || v.ImageName.IsUnknown()) {
 				disk.CreateType = 0
 				disk.Size = v.Size.ValueInt64()
 			} else {
@@ -267,7 +275,10 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		if strings.Contains(err.Error(), "403") {
 			res, err = f.client.GuestGet(c, virtualization.Guest{Name: data.Name.ValueString()})
 			if err != nil {
-				resp.Diagnostics.AddError("failed to get guest", fmt.Sprintf("unable to get guest, got error: %s", err))
+				resp.Diagnostics.AddError(
+					"failed to get guest",
+					fmt.Sprintf("unable to get guest, got error: %s", err),
+				)
 				return
 			}
 		} else {
@@ -289,9 +300,11 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 			ID:        data.ID.ValueString(),
 			IsoImages: isoImages,
 		})
-
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to update guest", fmt.Sprintf("Unable to update guest, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"Failed to update guest",
+				fmt.Sprintf("Unable to update guest, got error: %s", err),
+			)
 			return
 		}
 	}
@@ -307,7 +320,11 @@ func (f *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 // Delete implements resource.Resource.
-func (f *GuestResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (f *GuestResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data GuestResourceModel
 
 	// Read Terraform configuration data into the model
@@ -323,13 +340,20 @@ func (f *GuestResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if err := f.client.GuestDelete(ctx, virtualization.Guest{
 		Name: data.Name.ValueString(),
 	}); err != nil {
-		resp.Diagnostics.AddError("Failed to delete guest", fmt.Sprintf("Unable to delete guest, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to delete guest",
+			fmt.Sprintf("Unable to delete guest, got error: %s", err),
+		)
 		return
 	}
 }
 
 // Read implements resource.Resource.
-func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (f *GuestResource) Read(
+	ctx context.Context,
+	req resource.ReadRequest,
+	resp *resource.ReadResponse,
+) {
 	var data GuestResourceModel
 
 	// Read Terraform configuration data into the model
@@ -337,7 +361,6 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	guest, err := f.client.GuestGet(ctx, virtualization.Guest{Name: data.Name.ValueString()})
 	if err != nil {
-
 		if strings.Contains(err.Error(), "404") {
 			resp.State.RemoveResource(ctx)
 			return
@@ -362,7 +385,11 @@ func (f *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 // Update implements resource.Resource.
-func (f *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (f *GuestResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
 	var data GuestResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -399,9 +426,11 @@ func (f *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		Name:      data.Name.ValueString(),
 		IsoImages: isoImages,
 	})
-
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to update guest", fmt.Sprintf("Unable to update guest, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to update guest",
+			fmt.Sprintf("Unable to update guest, got error: %s", err),
+		)
 		return
 	}
 
@@ -410,11 +439,19 @@ func (f *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 }
 
 // Metadata implements resource.Resource.
-func (f *GuestResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (f *GuestResource) Metadata(
+	_ context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = buildName(req.ProviderTypeName, "guest")
 }
 
-func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *GuestResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -425,7 +462,10 @@ func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureReq
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return
@@ -435,13 +475,21 @@ func (f *GuestResource) Configure(ctx context.Context, req resource.ConfigureReq
 }
 
 // ValidateConfig.
-func (f *GuestResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+func (f *GuestResource) ValidateConfig(
+	ctx context.Context,
+	req resource.ValidateConfigRequest,
+	resp *resource.ValidateConfigResponse,
+) {
 	var data GuestResourceModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	if (data.StorageID.IsNull() || data.StorageID.IsUnknown()) && (data.StorageName.IsNull() || data.StorageName.IsUnknown()) {
-		resp.Diagnostics.AddError("At least one of storage_id or storage_name must be set", "At least one of storage_id or storage_name must be set")
+	if (data.StorageID.IsNull() || data.StorageID.IsUnknown()) &&
+		(data.StorageName.IsNull() || data.StorageName.IsUnknown()) {
+		resp.Diagnostics.AddError(
+			"At least one of storage_id or storage_name must be set",
+			"At least one of storage_id or storage_name must be set",
+		)
 	}
 
 	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
@@ -453,15 +501,21 @@ func (f *GuestResource) ValidateConfig(ctx context.Context, req resource.Validat
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
 }
 
-func (f *GuestResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (f *GuestResource) ImportState(
+	ctx context.Context,
+	req resource.ImportStateRequest,
+	resp *resource.ImportStateResponse,
+) {
 	guestName := req.ID
 
 	guest, err := f.client.GuestGet(ctx, virtualization.Guest{Name: guestName})
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"Failed to list guests",
+			fmt.Sprintf("Unable to list guests, got error: %s", err),
+		)
 		return
 	}
 

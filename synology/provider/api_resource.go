@@ -37,7 +37,7 @@ type ApiResource struct {
 	client synology.Api
 }
 
-func getParams(params map[string]string) interface{} {
+func getParams(params map[string]string) any {
 	sf := []reflect.StructField{}
 	for k, v := range params {
 		sf = append(sf, reflect.StructField{
@@ -60,7 +60,11 @@ func getParams(params map[string]string) interface{} {
 }
 
 // Create implements resource.Resource.
-func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (a *ApiResource) Create(
+	ctx context.Context,
+	req resource.CreateRequest,
+	resp *resource.CreateResponse,
+) {
 	var data ApiResourceModel
 
 	// Read Terraform plan data into the model
@@ -91,7 +95,6 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	result, err := api.GetQuery[map[string]any](a.client, ctx, parameters, method)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to invoke API", err.Error())
 		return
@@ -107,11 +110,14 @@ func (a *ApiResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 }
 
 // Delete implements resource.Resource.
-func (a *ApiResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (a *ApiResource) Delete(
+	ctx context.Context,
+	req resource.DeleteRequest,
+	resp *resource.DeleteResponse,
+) {
 	var data ApiResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -136,7 +142,6 @@ func (a *ApiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 			Version:        int(data.Version.ValueInt64()),
 			ErrorSummaries: api.GlobalErrors,
 		})
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to invoke API", err.Error())
 			return
@@ -157,17 +162,24 @@ func (a *ApiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 }
 
 // Metadata implements resource.Resource.
-func (a *ApiResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (a *ApiResource) Metadata(
+	_ context.Context,
+	req resource.MetadataRequest,
+	resp *resource.MetadataResponse,
+) {
 	resp.TypeName = req.ProviderTypeName + "_api"
 }
 
 // Read implements resource.Resource.
 func (a *ApiResource) Read(context.Context, resource.ReadRequest, *resource.ReadResponse) {
-
 }
 
 // Schema implements resource.Resource.
-func (a *ApiResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (a *ApiResource) Schema(
+	_ context.Context,
+	_ resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
 
@@ -207,10 +219,13 @@ func (a *ApiResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 
 // Update implements resource.Resource.
 func (a *ApiResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
-
 }
 
-func (f *ApiResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (f *ApiResource) Configure(
+	ctx context.Context,
+	req resource.ConfigureRequest,
+	resp *resource.ConfigureResponse,
+) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -221,7 +236,10 @@ func (f *ApiResource) Configure(ctx context.Context, req resource.ConfigureReque
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf(
+				"Expected client.Client, got: %T. Please report this issue to the provider developers.",
+				req.ProviderData,
+			),
 		)
 
 		return

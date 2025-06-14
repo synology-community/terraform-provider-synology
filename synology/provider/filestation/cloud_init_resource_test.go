@@ -34,12 +34,19 @@ func TestAccCloudInitResource_basic(t *testing.T) {
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith("synology_filestation_cloud_init.foo", "path", func(attr string) error {
-								if attr != "/data/foo/bar/test.iso" {
-									return fmt.Errorf("expected file path to be '/data/foo/bar/test.iso', got %s", attr)
-								}
-								return nil
-							}),
+							r.TestCheckResourceAttrWith(
+								"synology_filestation_cloud_init.foo",
+								"path",
+								func(attr string) error {
+									if attr != "/data/foo/bar/test.iso" {
+										return fmt.Errorf(
+											"expected file path to be '/data/foo/bar/test.iso', got %s",
+											attr,
+										)
+									}
+									return nil
+								},
+							),
 						),
 					},
 				},
