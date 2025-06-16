@@ -22,7 +22,7 @@ require (
 	github.com/tredoe/osutil v1.5.0
 	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
 	gopkg.in/yaml.v3 v3.0.1
-	gotest.tools/v3 v3.5.1
+	gotest.tools/v3 v3.5.2
 )
 
 require (
