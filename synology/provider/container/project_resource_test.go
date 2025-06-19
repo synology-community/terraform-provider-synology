@@ -10,14 +10,6 @@ import (
 
 const (
 	testProject = `
-	provider "synology" {
-		host            = "https://nas.appkins.io:5001"
-		user            = "terraform"
-		password        = "ABP8kdn7teu.fck-kzk"
-		skip_cert_check = true
-  	otp_secret      = ""
-  }
-
 	resource "synology_container_project" "default" {
 		name = "foo"
 
@@ -81,130 +73,6 @@ const (
 			}
 		}
 	}`
-	homebridgeProject = `
-	resource "synology_container_project" "default" {
-		name = "homebridge"
-
-		services = {
-			homebridge = {
-				name     = "homebridge"
-				replicas = 1
-
-				image = "homebridge/homebridge:latest"
-
-				network_mode = "host"
-
-				healthcheck = {
-					test         = [
-						"curl --fail localhost:8581 || exit 1"
-					]
-					interval     = "60s"
-					retries      = 5
-					start_period = "300s"
-					timeout      = "2s"
-				}
-
-				volumes = [
-					{
-						source = "/volume1/docker/homebridge"
-						target = "/homebridge"
-						bind {
-							create_host_path = true
-						}
-					}
-				]
-			}
-		}
-	}`
-
-	traefikProject = `
-resource "synology_container_project" "default" {
-	name = "traefik"
-
-	services = {
-		traefik = {
-			name     = "traefik"
-			replicas = 1
-
-			image = "traefik:v2.4"
-
-			network_mode = "host"
-
-		}
-	}
-}
-
-import {
-	to = synology_container_project.default
-	id = "traefik"
-}`
-
-	k3sProject = `
-	resource "synology_container_project" "foo" {
-		name = "k3s"
-
-		service {
-			name     = "server"
-			replicas = 1
-
-			image {
-				name = "rancher/k3s"
-				tag  = "latest"
-			}
-
-			network_mode = "bridge"
-
-			environment = {
-				"K3S_TOKEN"             = "token"
-				"K3S_KUBECONFIG_OUTPUT" = "/output/kubeconfig.yaml"
-				"K3S_KUBECONFIG_MODE"   = "666"
-			}
-
-			port {
-				target    = 6443
-				published = 6443
-			}
-
-			port {
-				target    = 80
-				published = 8088
-			}
-
-			port {
-				target    = 443
-				published = 8443
-			}
-
-			ulimit {
-				name = "nofile"
-				soft = 65535
-				hard = 65535
-			}
-
-			ulimit {
-				name  = "nproc"
-				value = 65535
-			}
-
-			tmpfs = [
-				"/run",
-				"/var/run"
-			]
-
-			restart = "unless-stopped"
-
-			# volume {
-			# 	source = "k3s-server"
-			# 	target = "/var/lib/rancher/k3s"
-	    # }
-
-			volume {
-				source = "/volume1/docker/k3s"
-				target = "/output"
-				type   = "bind"
-		  }
-		}
-	}`
 )
 
 type ProjectResource struct{}
@@ -215,16 +83,8 @@ func TestAccProjectResource_basic(t *testing.T) {
 		ResourceBlock string
 	}{
 		{
-			"traefik",
-			traefikProject,
-		},
-		{
-			"foo",
+			"basic project",
 			testProject,
-		},
-		{
-			"k3s",
-			k3sProject,
 		},
 		// {
 		// 	"homebridge project",

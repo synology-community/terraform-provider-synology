@@ -13,13 +13,11 @@ A Generic API Resource for making calls to the Synology DSM API.
 
 ```terraform
 resource "synology_core_event" "test" {
-  name = "Test"
-
+  name   = "Test"
+  run    = true
   script = "echo 'Hello, World!'"
   user   = "root"
-
-  run  = true
-  when = "apply"
+  when   = ["apply", "destroy", "upgrade"]
 }
 ```
 
@@ -36,4 +34,4 @@ resource "synology_core_event" "test" {
 - `event` (String) Event trigger to run script. One of `bootup` or `shutdown`
 - `run` (Boolean) Whether to run the event after creation.
 - `user` (String) The user that will execute the event.
-- `when` (String) When to run the event. Valid values are `apply` and `destroy`.
+- `when` (List of String) When to run the event. Valid values are `apply` and `destroy`.

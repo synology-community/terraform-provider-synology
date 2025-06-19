@@ -168,7 +168,8 @@ func (p *SynologyProvider) Configure(
 	c, err := client.New(api.Options{
 		Host:       host,
 		VerifyCert: !skipCertificateCheck,
-		// Logger: 	 tflog.(ctx),
+		RetryLimit: 5,
+		Logger:     NewLogger(ctx),
 	})
 	if err != nil {
 		resp.Diagnostics.Append(
@@ -177,21 +178,28 @@ func (p *SynologyProvider) Configure(
 				fmt.Sprintf("Unable to create Synology client, got error: %v", err),
 			),
 		)
+		return
 	}
 
-	if _, err := c.Login(ctx, api.LoginOptions{
-		Username:  user,
-		Password:  password,
-		OTPSecret: otp_secret,
-	}); err != nil {
-		if c.Credentials().Token == "" {
+	// Only login if we don't already have a valid token
+	if c.Credentials().Token == "" {
+		tflog.Debug(ctx, "No valid token found, performing login")
+		if _, err := c.Login(ctx, api.LoginOptions{
+			Username:  user,
+			Password:  password,
+			OTPSecret: otp_secret,
+		}); err != nil {
 			resp.Diagnostics.Append(
 				diag.NewErrorDiagnostic(
 					"login to Synology station failed",
 					fmt.Sprintf("Unable to login to Synology station, got error: %s", err),
 				),
 			)
+			return
 		}
+		tflog.Debug(ctx, "Login successful")
+	} else {
+		tflog.Debug(ctx, "Valid token found, skipping login")
 	}
 
 	resp.DataSourceData = c

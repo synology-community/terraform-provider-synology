@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -12,6 +13,19 @@ type ServicePortal struct {
 	Name     types.String `tfsdk:"name"`
 	Port     types.Int64  `tfsdk:"port"`
 	Protocol types.String `tfsdk:"protocol"`
+}
+
+func (s ServicePortal) ModelType() attr.Type {
+	return types.ObjectType{AttrTypes: s.AttrType()}
+}
+
+func (s ServicePortal) AttrType() map[string]attr.Type {
+	return map[string]attr.Type{
+		"enable":   types.BoolType,
+		"name":     types.StringType,
+		"port":     types.Int64Type,
+		"protocol": types.StringType,
+	}
 }
 
 func (s *ServicePortal) First(ctx context.Context, m types.Set) diag.Diagnostics {

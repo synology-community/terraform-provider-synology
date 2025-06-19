@@ -3,12 +3,12 @@ module github.com/synology-community/terraform-provider-synology
 go 1.24
 
 require (
-	github.com/compose-spec/compose-go/v2 v2.6.4
+	github.com/compose-spec/compose-go/v2 v2.4.6
 	github.com/distribution/reference v0.5.0
 	github.com/docker/go-connections v0.5.0
 	github.com/docker/go-units v0.5.0
-	github.com/go-viper/mapstructure/v2 v2.3.0
-	github.com/hashicorp/go-retryablehttp v0.7.8
+	github.com/go-viper/mapstructure/v2 v2.1.0
+	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/terraform-plugin-framework v1.15.0
 	github.com/hashicorp/terraform-plugin-framework-timetypes v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.18.0
@@ -18,11 +18,11 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/subpop/go-ini v0.1.5
-	github.com/synology-community/go-synology v0.1.7-0.20250521195944-94f5f6b01dc7
+	github.com/synology-community/go-synology v0.1.8
 	github.com/tredoe/osutil v1.5.0
 	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
 	gopkg.in/yaml.v3 v3.0.1
-	gotest.tools/v3 v3.5.2
+	gotest.tools/v3 v3.5.1
 )
 
 require (
@@ -98,7 +98,7 @@ require (
 	github.com/zclconf/go-cty v1.16.3 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/mod v0.25.0 // indirect
-	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sync v0.15.0
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
