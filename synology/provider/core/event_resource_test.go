@@ -19,13 +19,11 @@ func TestAccEventResource_basic(t *testing.T) {
 			"test",
 			`
 			resource "synology_core_event" "test" {
-				name = "Test"
-
+				name   = "Test"
 				script = "echo 'Hello, World!'"
-				user = "root"
-
-				run = true
-				when = "apply"
+				user   = "root"
+				run    = true
+				when   = ["apply"]
 			}`,
 		},
 	}

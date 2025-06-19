@@ -3,13 +3,22 @@ package core
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
@@ -24,11 +33,14 @@ type EventResourceModel struct {
 	User  types.String `tfsdk:"user"`
 	Event types.String `tfsdk:"event"`
 
-	Run  types.Bool   `tfsdk:"run"`
-	When types.String `tfsdk:"when"`
+	Run  types.Bool `tfsdk:"run"`
+	When types.List `tfsdk:"when"`
 }
 
-var _ resource.Resource = &EventResource{}
+var (
+	_ resource.Resource                = &EventResource{}
+	_ resource.ResourceWithImportState = &EventResource{}
+)
 
 func NewEventResource() resource.Resource {
 	return &EventResource{}
@@ -91,7 +103,13 @@ func (p *EventResource) Create(
 		return
 	}
 
-	if data.Run.ValueBool() && data.When.ValueString() == "apply" {
+	when := []string{}
+	resp.Diagnostics.Append(data.When.ElementsAs(ctx, &when, true)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.Run.ValueBool() && slices.Contains(when, "apply") {
 		err := p.client.EventRun(ctx, data.Name.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to run event", err.Error())
@@ -143,7 +161,7 @@ func (p *EventResource) Update(
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("run"), plan.Run)...)
 	}
 
-	if plan.When.ValueString() != state.When.ValueString() {
+	if !plan.When.Equal(state.When) {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("when"), plan.When)...)
 	}
 
@@ -151,7 +169,23 @@ func (p *EventResource) Update(
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), plan.Name)...)
 	}
 
-	if plan.Run.ValueBool() && plan.When.ValueString() == "upgrade" {
+	if !plan.Script.Equal(state.Script) {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("script"), plan.Script)...)
+	}
+	if !plan.User.Equal(state.User) {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user"), plan.User)...)
+	}
+	if !plan.Event.Equal(state.Event) {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("event"), plan.Event)...)
+	}
+
+	when := []string{}
+	resp.Diagnostics.Append(plan.When.ElementsAs(ctx, &when, true)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if plan.Run.ValueBool() && slices.Contains(when, "upgrade") {
 		err := p.client.EventRun(ctx, plan.Name.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to run event", err.Error())
@@ -172,7 +206,13 @@ func (p *EventResource) Delete(
 		return
 	}
 
-	if data.Run.ValueBool() && data.When.ValueString() == "destroy" {
+	when := []string{}
+	resp.Diagnostics.Append(data.When.ElementsAs(ctx, &when, true)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.Run.ValueBool() && slices.Contains(when, "destroy") {
 		err := p.client.EventRun(ctx, data.Name.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to run event", err.Error())
@@ -220,15 +260,28 @@ func (p *EventResource) Read(
 	event, err := p.client.EventGet(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.State.RemoveResource(ctx)
+		return
 	}
 
 	data.Name = types.StringValue(event.Name)
 	data.Script = types.StringValue(event.Operation)
-	data.User = types.StringValue(event.Owner["0"])
+	for _, owner := range event.Owner {
+		if owner == "root" {
+			data.User = types.StringValue("root")
+			break
+		}
+	}
 	data.Event = types.StringValue(event.Event)
-	data.When = types.StringValue("apply")
+	if data.When.IsNull() || data.When.IsUnknown() {
+		data.When = types.ListValueMust(types.StringType, []attr.Value{
+			types.StringValue("apply"),
+		})
+	}
+	if data.Run.IsNull() || data.Run.IsUnknown() {
+		data.Run = types.BoolValue(false)
+	}
 
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Schema implements resource.Resource.
@@ -244,6 +297,13 @@ func (p *EventResource) Schema(
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of the event to install.",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 128),
+					stringvalidator.RegexMatches(
+						regexp.MustCompile("^[a-zA-Z0-9][a-zA-Z0-9 ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$"),
+						"Task name can include only English characters, numbers, and spaces; it cannot start/end with spaces.",
+					),
+				},
 			},
 			"script": schema.StringAttribute{
 				MarkdownDescription: "Script content to run in the event.",
@@ -254,6 +314,9 @@ func (p *EventResource) Schema(
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("root"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"event": schema.StringAttribute{
 				MarkdownDescription: "Event trigger to run script. One of `bootup` or `shutdown`",
@@ -263,20 +326,36 @@ func (p *EventResource) Schema(
 				},
 				Computed: true,
 				Default:  stringdefault.StaticString("bootup"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"run": schema.BoolAttribute{
 				MarkdownDescription: "Whether to run the event after creation.",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
-			"when": schema.StringAttribute{
+			"when": schema.ListAttribute{
+				ElementType:         types.StringType,
 				MarkdownDescription: "When to run the event. Valid values are `apply` and `destroy`.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("apply"),
-				Validators: []validator.String{
-					stringvalidator.OneOf("apply", "destroy", "upgrade"),
+				Default: listdefault.StaticValue(
+					types.ListValueMust(types.StringType, []attr.Value{
+						types.StringValue("apply"),
+					}),
+				),
+				Validators: []validator.List{
+					listvalidator.ValueStringsAre(
+						stringvalidator.OneOf("apply", "destroy", "upgrade"),
+					),
+				},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
@@ -293,9 +372,9 @@ func (f *EventResource) Configure(
 		return
 	}
 
-	client, ok := req.ProviderData.(synology.Api)
-
-	if !ok {
+	if client, ok := req.ProviderData.(synology.Api); ok {
+		f.client = client.CoreAPI()
+	} else {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
 			fmt.Sprintf(
@@ -303,11 +382,7 @@ func (f *EventResource) Configure(
 				req.ProviderData,
 			),
 		)
-
-		return
 	}
-
-	f.client = client.CoreAPI()
 }
 
 func (p *EventResource) ImportState(
@@ -315,30 +390,12 @@ func (p *EventResource) ImportState(
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
-	id := req.ID
-
-	event, err := p.client.EventGet(ctx, id)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to find event", err.Error())
-		return
-	}
-
-	result := EventResourceModel{
-		Name:   types.StringValue(event.Name),
-		Script: types.StringValue(event.Operation),
-		User:   types.StringValue(event.Owner["0"]),
-		Event:  types.StringValue(event.Event),
-		Run:    types.BoolValue(false),
-		When:   types.StringValue("apply"),
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
 func getEventRequest(data EventResourceModel) core.EventRequest {
-	event := "bootup"
-
-	if !data.Script.IsNull() && !data.Script.IsUnknown() && data.Script.ValueString() != "" {
+	event := data.Event.ValueString()
+	if event == "" {
 		event = "bootup"
 	}
 

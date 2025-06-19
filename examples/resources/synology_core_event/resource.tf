@@ -1,9 +1,7 @@
 resource "synology_core_event" "test" {
-  name = "Test"
-
+  name   = "Test"
+  run    = true
   script = "echo 'Hello, World!'"
   user   = "root"
-
-  run  = true
-  when = "apply"
+  when   = ["apply", "destroy", "upgrade"]
 }
