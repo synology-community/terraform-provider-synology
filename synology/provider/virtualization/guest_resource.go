@@ -484,8 +484,9 @@ func (f *GuestResource) ValidateConfig(
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	if (data.StorageID.IsNull() || data.StorageID.IsUnknown()) &&
-		(data.StorageName.IsNull() || data.StorageName.IsUnknown()) {
+	// Only validate if both values are explicitly null (not set)
+	// Allow unknown values to pass validation as they will be resolved during planning
+	if data.StorageID.IsNull() && data.StorageName.IsNull() {
 		resp.Diagnostics.AddError(
 			"At least one of storage_id or storage_name must be set",
 			"At least one of storage_id or storage_name must be set",
