@@ -3,7 +3,7 @@ module github.com/synology-community/terraform-provider-synology
 go 1.24
 
 require (
-	github.com/compose-spec/compose-go/v2 v2.7.1
+	github.com/compose-spec/compose-go/v2 v2.8.0
 	github.com/distribution/reference v0.5.0
 	github.com/docker/go-connections v0.5.0
 	github.com/docker/go-units v0.5.0
