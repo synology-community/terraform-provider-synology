@@ -18,7 +18,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/subpop/go-ini v0.1.5
-	github.com/synology-community/go-synology v0.1.7-0.20250521195944-94f5f6b01dc7
+	github.com/synology-community/go-synology v0.1.8
 	github.com/tredoe/osutil v1.5.0
 	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
 	gopkg.in/yaml.v3 v3.0.1
@@ -98,7 +98,7 @@ require (
 	github.com/zclconf/go-cty v1.16.3 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/mod v0.25.0 // indirect
-	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sync v0.16.0
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
