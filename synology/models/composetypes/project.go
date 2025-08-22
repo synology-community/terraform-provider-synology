@@ -749,15 +749,21 @@ func loadMappingFile(path string, format string, resolve dotenv.LookupFn) (Mappi
 	}
 	defer file.Close() //nolint:errcheck
 
-	var fileVars map[string]string
+	var fileVars = map[string]string{}
+
 	if format != "" {
-		fileVars, err = dotenv.ParseWithFormat(file, path, resolve, format)
+		// ParseWithFormat(r io.Reader, filename string, vars map[string]string, resolve LookupFn, format string) error
+		if err := dotenv.ParseWithFormat(file, path, fileVars, resolve, format); err != nil {
+			return nil, err
+		}
 	} else {
+		// ParseWithLookup(r io.Reader, lookupFn LookupFn) (map[string]string, error)
 		fileVars, err = dotenv.ParseWithLookup(file, resolve)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
+
 	return fileVars, nil
 }
 

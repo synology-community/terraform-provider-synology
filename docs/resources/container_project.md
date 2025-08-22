@@ -193,6 +193,8 @@ Optional:
 - `mem_limit` (String) The memory limit.
 - `network_mode` (String) The network mode.
 - `networks` (Attributes Map) The networks of the service. (see [below for nested schema](#nestedatt--services--networks))
+- `pid` (String) The PID mode of the service.
+- `platform` (String) The platform of the service.
 - `ports` (Attributes List) The ports of the service. (see [below for nested schema](#nestedatt--services--ports))
 - `privileged` (Boolean) Whether the service is privileged.
 - `replicas` (Number) The number of replicas.
@@ -203,6 +205,7 @@ Optional:
 - `tmpfs` (List of String) The tmpfs of the service.
 - `ulimits` (Attributes Map) The ulimits of the service. (see [below for nested schema](#nestedatt--services--ulimits))
 - `user` (String) The user of the service.
+- `userns_mode` (String) The user namespace mode of the service.
 - `volumes` (Attributes List) The volumes of the service. (see [below for nested schema](#nestedatt--services--volumes))
 
 <a id="nestedatt--services--capabilities"></a>
