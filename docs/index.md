@@ -48,7 +48,7 @@ provider "synology" {
 ### Optional
 
 - `host` (String) Remote Synology URL, e.g. 'https://host:5001'.
-- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station.
+- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A–Z, 2–7, optional '=', spaces ignored).
 - `password` (String, Sensitive) Password to use when connecting to Synology station.
 - `session_cache` (String) Session cache mode - one of: auto, keyring, file, memory, off. Default: auto.
 - `session_cache_path` (String) Directory for file-based session cache when session_cache = "file". Defaults to OS user cache dir.

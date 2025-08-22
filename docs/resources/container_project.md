@@ -16,31 +16,32 @@ A Docker Compose project for the Container Manager Synology API.
 
 ```terraform
 resource "synology_container_project" "foo" {
-  name = "foo"
+  name       = "foo"
+  share_path = "/docker/foo"
+  run        = true
 
   services = {
     "bar" = {
-      image = {
-        name = "nginx"
-        tag  = "latest"
-      }
+      image = "nginx:latest"
 
       ports = [{
         target    = 80
-        published = 80
+        published = 8888
       }]
 
       configs = [
         {
-          source = "baz"
-          target = "/config/baz.txt"
+          name   = "index"
+          source = "index"
+          target = "/usr/share/nginx/html/index.html"
           gid    = 0
           uid    = 0
           mode   = "0660"
         },
         {
-          source = "qux"
-          target = "/config/qux.toml"
+          name   = "compose"
+          source = "compose"
+          target = "/usr/share/nginx/html/compose.yaml"
         }
       ]
 
@@ -49,12 +50,14 @@ resource "synology_container_project" "foo" {
   }
 
   configs = {
-    "baz" = {
-      content = "Hello, World!"
+    "index" = {
+      name    = "index"
+      content = "<h1>Hello, World!!!</h1><a href=\"/compose.yaml\">compose.yaml</a>"
     }
 
-    "qux" = {
-      file = "/volume1/foo/bar"
+    "compose" = {
+      name = "compose"
+      file = "/volume1/docker/foo/compose.yaml"
     }
   }
 }
@@ -74,7 +77,7 @@ resource "synology_container_project" "foo" {
 - `extensions` (Attributes Map) Docker compose extensions. (see [below for nested schema](#nestedatt--extensions))
 - `metadata` (Map of String) The metadata of the project.
 - `networks` (Attributes Map) Docker compose networks. (see [below for nested schema](#nestedatt--networks))
-- `run` (Boolean) Whether to run the project.
+- `run` (Boolean) Whether to run the project (and rebuild).
 - `secrets` (Attributes Map) Docker compose secrets. (see [below for nested schema](#nestedatt--secrets))
 - `service_portal` (Attributes) Synology Web Station configuration for the docker compose project. (see [below for nested schema](#nestedatt--service_portal))
 - `services` (Attributes Map) Docker compose services. (see [below for nested schema](#nestedatt--services))

@@ -630,6 +630,15 @@ func (f *ProjectResource) Update(
 			return
 		}
 	}
+	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
+		_, err := f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to restart project", err.Error())
+			return
+		}
+	}
 
 	proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 	if err != nil {
@@ -647,27 +656,6 @@ func (f *ProjectResource) Update(
 		return
 	}
 	// plan.Content = types.StringValue(proj.Content)
-
-	// FIXME: make it configurable
-	if !proj.IsRunning() {
-		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
-			ID: plan.ID.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to build project", err.Error())
-			return
-		}
-	}
-	// FIXME: make it configurable
-	if !proj.IsRunning() {
-		_, err = f.client.ProjectStartStream(ctx, docker.ProjectStreamRequest{
-			ID: plan.ID.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to start project", err.Error())
-			return
-		}
-	}
 
 	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
@@ -733,7 +721,7 @@ func (f *ProjectResource) Schema(
 				Computed: true,
 			},
 			"run": schema.BoolAttribute{
-				MarkdownDescription: "Whether to run the project.",
+				MarkdownDescription: "Whether to run the project (and rebuild).",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),

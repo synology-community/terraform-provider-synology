@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"time"
@@ -179,6 +180,8 @@ type SynologyProviderModel struct {
 	SessionCachePath types.String `tfsdk:"session_cache_path"`
 }
 
+var reBase32Chars = regexp.MustCompile(`^[A-Z2-7= ]+$`)
+
 func (p *SynologyProvider) Metadata(
 	ctx context.Context,
 	req provider.MetadataRequest,
@@ -210,9 +213,13 @@ func (p *SynologyProvider) Schema(
 				Sensitive:   true,
 			},
 			"otp_secret": schema.StringAttribute{
-				Description: "OTP secret to use when connecting to Synology station.",
+				Description: "OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A–Z, 2–7, optional '=', spaces ignored).",
 				Optional:    true,
 				Sensitive:   true,
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(16, 32),
+					stringvalidator.RegexMatches(reBase32Chars, "must be base32 encoded secret only, not whole otp:// URI"),
+				},
 			},
 			"skip_cert_check": schema.BoolAttribute{
 				Description: "Whether to skip SSL certificate checks.",
@@ -268,6 +275,18 @@ func (p *SynologyProvider) Configure(
 	if otp_secret == "" {
 		if v := os.Getenv(SYNOLOGY_OTP_SECRET_ENV_VAR); v != "" {
 			otp_secret = v
+			if !reBase32Chars.MatchString(otp_secret) {
+				resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+					path.Root("otp_secret"),
+					"invalid otp_secret value (via "+SYNOLOGY_OTP_SECRET_ENV_VAR+")",
+					"input is not valid base32-encoded string"))
+			}
+			if len(otp_secret) < 16 || len(otp_secret) > 32 {
+				resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+					path.Root("otp_secret"),
+					"invalid otp_secret value (via "+SYNOLOGY_OTP_SECRET_ENV_VAR+")",
+					"input shoud be between 16 and 32 base32 characters"))
+			}
 		}
 	}
 
