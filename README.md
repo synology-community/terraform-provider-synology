@@ -43,3 +43,12 @@ resource "synology_api" "foo" {
 }
 ```
 
+## Permissions required
+
+### docker
+
+- member of Administrators group (Container Manager has no RBAC)
+- RW on target share
+- applications granted:
+  - DSM
+  - File Station

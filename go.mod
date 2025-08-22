@@ -3,6 +3,7 @@ module github.com/synology-community/terraform-provider-synology
 go 1.24
 
 require (
+	github.com/99designs/keyring v1.2.2
 	github.com/compose-spec/compose-go/v2 v2.8.1
 	github.com/distribution/reference v0.5.0
 	github.com/docker/go-connections v0.6.0
@@ -28,7 +29,6 @@ require (
 require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
-	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/Kunde21/markdownfmt/v3 v3.1.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect

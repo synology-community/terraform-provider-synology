@@ -78,7 +78,7 @@ resource "synology_container_project" "foo" {
 - `secrets` (Attributes Map) Docker compose secrets. (see [below for nested schema](#nestedatt--secrets))
 - `service_portal` (Attributes) Synology Web Station configuration for the docker compose project. (see [below for nested schema](#nestedatt--service_portal))
 - `services` (Attributes Map) Docker compose services. (see [below for nested schema](#nestedatt--services))
-- `share_path` (String) The share path of the project.
+- `share_path` (String) The share path of the project (without /volume1 or similar, just /docker/foo).
 - `volumes` (Attributes Map) Docker compose volumes. (see [below for nested schema](#nestedatt--volumes))
 
 ### Read-Only

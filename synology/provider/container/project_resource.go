@@ -648,6 +648,27 @@ func (f *ProjectResource) Update(
 	}
 	// plan.Content = types.StringValue(proj.Content)
 
+	// FIXME: make it configurable
+	if !proj.IsRunning() {
+		_, err = f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to build project", err.Error())
+			return
+		}
+	}
+	// FIXME: make it configurable
+	if !proj.IsRunning() {
+		_, err = f.client.ProjectStartStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to start project", err.Error())
+			return
+		}
+	}
+
 	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
 	// Save data into Terraform state
@@ -703,7 +724,7 @@ func (f *ProjectResource) Schema(
 				},
 			},
 			"share_path": schema.StringAttribute{
-				MarkdownDescription: "The share path of the project.",
+				MarkdownDescription: "The share path of the project (without /volume1 or similar, just /docker/foo).",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -1327,7 +1348,7 @@ func (f *ProjectResource) Schema(
 						"content": schema.StringAttribute{
 							MarkdownDescription: "The content of the config.",
 							Optional:            true,
-							Computed:            true,
+							Computed:            false,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
 							},
