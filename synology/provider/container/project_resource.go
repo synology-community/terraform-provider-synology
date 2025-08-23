@@ -630,6 +630,15 @@ func (f *ProjectResource) Update(
 			return
 		}
 	}
+	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
+		_, err := f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to restart project", err.Error())
+			return
+		}
+	}
 
 	proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 	if err != nil {
@@ -703,7 +712,7 @@ func (f *ProjectResource) Schema(
 				},
 			},
 			"share_path": schema.StringAttribute{
-				MarkdownDescription: "The share path of the project.",
+				MarkdownDescription: "The share path of the project (without /volume1 or similar, just /docker/foo).",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -712,7 +721,7 @@ func (f *ProjectResource) Schema(
 				Computed: true,
 			},
 			"run": schema.BoolAttribute{
-				MarkdownDescription: "Whether to run the project.",
+				MarkdownDescription: "Whether to run the project (and rebuild).",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
@@ -1327,7 +1336,7 @@ func (f *ProjectResource) Schema(
 						"content": schema.StringAttribute{
 							MarkdownDescription: "The content of the config.",
 							Optional:            true,
-							Computed:            true,
+							Computed:            false,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
 							},

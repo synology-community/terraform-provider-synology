@@ -2,7 +2,7 @@
 
 This provider allows [Terraform](https://www.terraform.io/) to manage remote [Synology NAS](https://www.synology.com/dsm/solution/what-is-nas/for-home) server.
 
-This repo uses the Synology [API client](https://www.github.com/synology-community/go-synology) to access remote NAS from Go code.
+This repo uses the Synology [API client](https://www.github.com/synology-community/go-synology) to access remote NAS from Go code. Token caching (critically required for TOTP) provided by [99designs/keyring](https://github.com/99designs/keyring).
 
 ## Documentation Links
 
@@ -43,3 +43,12 @@ resource "synology_api" "foo" {
 }
 ```
 
+## Permissions required
+
+### docker
+
+- member of Administrators group (Container Manager has no RBAC)
+- RW on target share
+- applications granted:
+  - DSM
+  - File Station

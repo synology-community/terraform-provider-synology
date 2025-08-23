@@ -11,11 +11,34 @@ description: |-
 ## Example Usage
 
 ```terraform
+// basic usage
 provider "synology" {
-  host            = "synology.local:5001"
+  host            = "https://synology.local:5001"
   user            = "tf-user"
   password        = "testing-password" // use it only for testing purposes, use SYNOLOGY_PASSWORD env var to set this value
   skip_cert_check = true               // use it only for testing purposes
+}
+
+// OTP with cached session in keyring
+provider "synology" {
+  host          = "https://synology.local:5001"
+  user          = "tf-user"
+  password      = "testing-password"
+  otp_secret    = "0123456789ABCDEF"
+  session_cache = "keyring" # auto | keyring | file | memory | off
+  # If you use file mode:
+  # session_cache     = "file"
+  # session_cache_path = pathexpand("~/.cache/synology-tf")
+}
+
+// OTP with cached session in file
+provider "synology" {
+  host               = "https://synology.local:5001"
+  user               = "tf-user"
+  password           = "testing-password"
+  otp_secret         = "0123456789ABCDEF"
+  session_cache      = "file" # auto | keyring | file | memory | off
+  session_cache_path = pathexpand("~/.cache/synology-tf")
 }
 ```
 
@@ -24,8 +47,10 @@ provider "synology" {
 
 ### Optional
 
-- `host` (String) Remote Synology station host in form of 'host:port'.
-- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station.
+- `host` (String) Remote Synology URL, e.g. 'https://host:5001'.
+- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A–Z, 2–7, optional '=', spaces ignored).
 - `password` (String, Sensitive) Password to use when connecting to Synology station.
+- `session_cache` (String) Session cache mode - one of: auto, keyring, file, memory, off. Default: auto.
+- `session_cache_path` (String) Directory for file-based session cache when session_cache = "file". Defaults to OS user cache dir.
 - `skip_cert_check` (Boolean) Whether to skip SSL certificate checks.
 - `user` (String) User to connect to Synology station with.

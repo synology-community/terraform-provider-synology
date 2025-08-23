@@ -1,29 +1,30 @@
 resource "synology_container_project" "foo" {
-  name = "foo"
+  name       = "foo"
+  share_path = "/docker/foo"
+  run        = true
 
   services = {
     "bar" = {
-      image = {
-        name = "nginx"
-        tag  = "latest"
-      }
+      image = "nginx:latest"
 
       ports = [{
         target    = 80
-        published = 80
+        published = 8888
       }]
 
       configs = [
         {
-          source = "baz"
-          target = "/config/baz.txt"
+          name   = "index"
+          source = "index"
+          target = "/usr/share/nginx/html/index.html"
           gid    = 0
           uid    = 0
           mode   = "0660"
         },
         {
-          source = "qux"
-          target = "/config/qux.toml"
+          name   = "compose"
+          source = "compose"
+          target = "/usr/share/nginx/html/compose.yaml"
         }
       ]
 
@@ -32,12 +33,14 @@ resource "synology_container_project" "foo" {
   }
 
   configs = {
-    "baz" = {
-      content = "Hello, World!"
+    "index" = {
+      name    = "index"
+      content = "<h1>Hello, World!!!</h1><a href=\"/compose.yaml\">compose.yaml</a>"
     }
 
-    "qux" = {
-      file = "/volume1/foo/bar"
+    "compose" = {
+      name = "compose"
+      file = "/volume1/docker/foo/compose.yaml"
     }
   }
 }

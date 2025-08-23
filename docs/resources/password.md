@@ -1,5 +1,5 @@
 ---
-page_title: "synology_password Resource - synology"
+page_title: "synology_password Resource - terraform-provider-synology"
 subcategory: ""
 description: |-
   Resource for creating a password hash.
