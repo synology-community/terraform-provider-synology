@@ -1,4 +1,4 @@
-package container
+package modifier
 
 import (
 	"context"
@@ -12,14 +12,8 @@ import (
 	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 )
 
-// SetSecretPathsFromContent returns a plan modifier that copies a known prior state
-// value into the planned value. Use this when it is known that an unconfigured
-// value will remain the same after a resource update.
-//
-// To prevent Terraform errors, the framework automatically sets unconfigured
-// and Computed attributes to an unknown value "(known after apply)" on update.
-// Using this plan modifier will instead display the prior state value in the
-// plan, unless a prior plan modifier adjusts the value.
+// SetSecretPathsFromContent returns a plan modifier that populates secret file paths
+// based on their names when content is present.
 func SetSecretPathsFromContent() planmodifier.Map {
 	return setSecretPathsFromContent{}
 }
@@ -29,15 +23,15 @@ type setSecretPathsFromContent struct{}
 
 // Description returns a human-readable description of the plan modifier.
 func (m setSecretPathsFromContent) Description(_ context.Context) string {
-	return "Creates content from the Container Project Resource arguments."
+	return "Populates secret file paths based on names when content is present."
 }
 
 // MarkdownDescription returns a markdown description of the plan modifier.
 func (m setSecretPathsFromContent) MarkdownDescription(_ context.Context) string {
-	return "Creates content from the Container Project Resource arguments."
+	return "Populates secret file paths based on names when content is present."
 }
 
-// PlanModifyString implements the plan modification logic.
+// PlanModifyMap implements the plan modification logic.
 func (m setSecretPathsFromContent) PlanModifyMap(
 	ctx context.Context,
 	req planmodifier.MapRequest,
@@ -48,8 +42,8 @@ func (m setSecretPathsFromContent) PlanModifyMap(
 		return
 	}
 
-	var configMap types.Map
-	resp.Diagnostics.Append(populateSecretPathsInMap(ctx, req.Path, req.ConfigValue, &configMap)...)
+	var secretMap types.Map
+	resp.Diagnostics.Append(populateSecretPathsInMap(ctx, req.Path, req.ConfigValue, &secretMap)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -58,13 +52,13 @@ func (m setSecretPathsFromContent) PlanModifyMap(
 		var planMap types.Map
 		resp.Diagnostics.Append(populateSecretPathsInMap(ctx, req.Path, req.PlanValue, &planMap)...)
 		if !resp.Diagnostics.HasError() {
-			if reflect.DeepEqual(configMap, planMap) {
+			if reflect.DeepEqual(secretMap, planMap) {
 				return
 			}
 		}
 	}
 
-	resp.PlanValue = configMap
+	resp.PlanValue = secretMap
 }
 
 func populateSecretPathsInMap(

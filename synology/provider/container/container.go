@@ -16,6 +16,7 @@ func buildName(providerName, resourceName string) string {
 func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		NewProjectResource,
+		NewNetworkResource,
 	}
 }
 

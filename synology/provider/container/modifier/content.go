@@ -1,4 +1,4 @@
-package container
+package modifier
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 )
 
-// UseArgumentsForUnknownContent returns a plan modifier that sets the Container
+// UseSchemaForUnknownContent returns a plan modifier that sets the Container
 // Project Resource content from the configured arguments.
-func UseArgumentsForUnknownContent() planmodifier.String {
+func UseSchemaForUnknownContent() planmodifier.String {
 	return useArgumentsForUnknownContent{}
 }
 
@@ -39,7 +39,7 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 	}
 
 	// Get the current plan value - Should run after config modification
-	var config ProjectResourceModel
+	var config models.ProjectResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		resp.Diagnostics.AddAttributeError(
@@ -52,23 +52,7 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 
 	// Convert the config to yaml content
 	var yamlContent string
-	resp.Diagnostics.Append(
-		models.NewComposeContentBuilder(
-			ctx,
-		).SetServices(
-			&config.Services,
-		).SetNetworks(
-			&config.Networks,
-		).SetVolumes(
-			&config.Volumes,
-		).SetConfigs(
-			&config.Configs,
-		).SetSecrets(
-			&config.Secrets,
-		).Build(
-			&yamlContent,
-		)...)
-
+	resp.Diagnostics.Append(config.ConfigRaw(ctx, &yamlContent)...)
 	if resp.Diagnostics.HasError() {
 		resp.Diagnostics.AddAttributeError(
 			req.Path,

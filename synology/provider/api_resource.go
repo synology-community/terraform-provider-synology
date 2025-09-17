@@ -157,7 +157,6 @@ func (a *ApiResource) Delete(
 
 		// Save data into Terraform state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 	}
 }
 
@@ -218,7 +217,53 @@ func (a *ApiResource) Schema(
 }
 
 // Update implements resource.Resource.
-func (a *ApiResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
+func (a *ApiResource) Update(
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
+) {
+	var plan ApiResourceModel
+
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if plan.When.ValueString() == "destroy" {
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
+
+	params := map[string]string{}
+	resp.Diagnostics.Append(plan.Parameters.ElementsAs(ctx, &params, true)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	parameters := getParams(params)
+
+	method := api.Method{
+		API:            plan.API.ValueString(),
+		Method:         plan.Method.ValueString(),
+		Version:        int(plan.Version.ValueInt64()),
+		ErrorSummaries: api.GlobalErrors,
+	}
+
+	result, err := api.GetQuery[map[string]any](a.client, ctx, parameters, method)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to invoke API", err.Error())
+		return
+	}
+
+	objValue, err := util.GetValue(*result)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get value", err.Error())
+		return
+	}
+
+	plan.Result = types.DynamicValue(objValue)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (f *ApiResource) Configure(

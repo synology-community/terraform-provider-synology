@@ -9,9 +9,7 @@ import (
 	"github.com/synology-community/terraform-provider-synology/synology/provider"
 )
 
-//go:generate terraform fmt -recursive ./examples/
-
-//go:generate go tool github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name synology
+//go:generate go tool tfplugindocs generate -provider-name synology
 func main() {
 	var debug bool
 
