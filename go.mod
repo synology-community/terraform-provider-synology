@@ -3,6 +3,7 @@ module github.com/synology-community/terraform-provider-synology
 go 1.25.0
 
 require (
+	github.com/99designs/keyring v1.2.2
 	github.com/compose-spec/compose-go/v2 v2.8.2
 	github.com/distribution/reference v0.6.0
 	github.com/docker/go-connections v0.6.0
@@ -44,15 +45,16 @@ require (
 	github.com/hashicorp/cli v1.1.7 // indirect
 	github.com/hashicorp/terraform-plugin-docs v0.21.0 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
-	github.com/imdario/mergo v0.3.15 // indirect
+	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/posener/complete v1.2.3 // indirect
 	github.com/pquerna/otp v1.5.0 // indirect
-	github.com/rivo/uniseg v0.3.4 // indirect
+	github.com/rivo/uniseg v0.4.2 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
+	github.com/ubiquiti-community/go-unifi v1.33.12 // indirect
 	github.com/yuin/goldmark v1.7.7 // indirect
 	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	go.abhg.dev/goldmark/frontmatter v0.2.0 // indirect
