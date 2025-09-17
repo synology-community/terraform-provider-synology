@@ -141,21 +141,19 @@ func (c *ComposeContentBuilder) SetSecrets(secrets *types.Map) *ComposeContentBu
 
 		elements := map[string]Secret{}
 		c.diags.Append(secrets.ElementsAs(c.ctx, &elements, true)...)
-
 		if c.diags.HasError() {
 			return c
 		}
-
 		c.project.Secrets = map[string]composetypes.SecretConfig{}
-
 		for k, v := range elements {
+			if v.File.ValueString() == "" {
+				v.File = types.StringValue(v.Name.ValueString())
+			}
 			sec := composetypes.SecretConfig{}
-
 			c.diags.Append(v.AsComposeConfig(c.ctx, &sec)...)
 			if c.diags.HasError() {
 				return c
 			}
-
 			c.project.Secrets[k] = sec
 		}
 	}

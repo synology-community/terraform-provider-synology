@@ -22,6 +22,8 @@ func (m Secret) AsComposeConfig(
 	secret.Name = m.Name.ValueString()
 	if !m.File.IsNull() && !m.File.IsUnknown() {
 		secret.File = m.File.ValueString()
+	} else {
+		secret.File = m.Name.ValueString() // Default to name if file is not set
 	}
 	return
 }
