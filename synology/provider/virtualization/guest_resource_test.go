@@ -16,7 +16,7 @@ import (
 type GuestResource struct{}
 
 // TestGuestResourceValidateConfig_ModuleVariables tests the validation logic
-// when storage_name is provided via module variables (unknown during validation)
+// when storage_name is provided via module variables (unknown during validation).
 func TestGuestResourceValidateConfig_ModuleVariables(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -76,18 +76,20 @@ func TestGuestResourceValidateConfig_ModuleVariables(t *testing.T) {
 				VramSize:    types.Int64Value(4096),
 			}
 
+			res := resource.SchemaResponse{}
+
 			// Create a tfsdk.Config from the model
-			schema, diags := guestResource.Schema(context.Background(), resource.SchemaRequest{}, &resource.SchemaResponse{})
-			if diags.HasError() {
-				t.Fatalf("Failed to get schema: %v", diags)
+			guestResource.Schema(context.Background(), resource.SchemaRequest{}, &res)
+			if res.Diagnostics.HasError() {
+				t.Fatalf("Failed to get schema: %v", res.Diagnostics)
 			}
 
 			config := tfsdk.Config{
-				Schema: schema.Schema,
+				Schema: res.Schema,
 			}
 
 			// Set the config values
-			diags = config.Set(context.Background(), model)
+			diags := config.Get(context.Background(), model)
 			if diags.HasError() {
 				t.Fatalf("Failed to set config: %v", diags)
 			}
