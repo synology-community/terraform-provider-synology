@@ -21,8 +21,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
@@ -30,7 +32,6 @@ import (
 	"github.com/compose-spec/compose-go/v2/utils"
 	"github.com/distribution/reference"
 	godigest "github.com/opencontainers/go-digest"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 )
@@ -120,21 +121,21 @@ func (p *Project) ServicesWithBuild() []string {
 	servicesBuild := p.Services.Filter(func(s ServiceConfig) bool {
 		return s.Build != nil && s.Build.Context != ""
 	})
-	return maps.Keys(servicesBuild)
+	return slices.Collect(maps.Keys(servicesBuild))
 }
 
 func (p *Project) ServicesWithExtends() []string {
 	servicesExtends := p.Services.Filter(func(s ServiceConfig) bool {
 		return s.Extends != nil && *s.Extends != (ExtendsConfig{})
 	})
-	return maps.Keys(servicesExtends)
+	return slices.Collect(maps.Keys(servicesExtends))
 }
 
 func (p *Project) ServicesWithDependsOn() []string {
 	servicesDependsOn := p.Services.Filter(func(s ServiceConfig) bool {
 		return len(s.DependsOn) > 0
 	})
-	return maps.Keys(servicesDependsOn)
+	return slices.Collect(maps.Keys(servicesDependsOn))
 }
 
 func (p *Project) ServicesWithCapabilities() ([]string, []string, []string) {
@@ -749,15 +750,21 @@ func loadMappingFile(path string, format string, resolve dotenv.LookupFn) (Mappi
 	}
 	defer file.Close() //nolint:errcheck
 
-	var fileVars map[string]string
+	fileVars := map[string]string{}
+
 	if format != "" {
-		fileVars, err = dotenv.ParseWithFormat(file, path, resolve, format)
+		// ParseWithFormat(r io.Reader, filename string, vars map[string]string, resolve LookupFn, format string) error
+		if err := dotenv.ParseWithFormat(file, path, fileVars, resolve, format); err != nil {
+			return nil, err
+		}
 	} else {
+		// ParseWithLookup(r io.Reader, lookupFn LookupFn) (map[string]string, error)
 		fileVars, err = dotenv.ParseWithLookup(file, resolve)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
+
 	return fileVars, nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
@@ -30,6 +31,7 @@ import (
 	"github.com/synology-community/go-synology/pkg/api/filestation"
 	"github.com/synology-community/go-synology/pkg/util/form"
 	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/container/modifier"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -43,36 +45,6 @@ type ProjectResource struct {
 	client     docker.Api
 	fsClient   filestation.Api
 	coreClient core.Api
-}
-
-// ProjectResourceModel describes the resource data model.
-type ProjectResourceModel struct {
-	ID            types.String `tfsdk:"id"`
-	Name          types.String `tfsdk:"name"`
-	SharePath     types.String `tfsdk:"share_path"`
-	Services      types.Map    `tfsdk:"services"`
-	Networks      types.Map    `tfsdk:"networks"`
-	Volumes       types.Map    `tfsdk:"volumes"`
-	Secrets       types.Map    `tfsdk:"secrets"`
-	Configs       types.Map    `tfsdk:"configs"`
-	Extensions    types.Map    `tfsdk:"extensions"`
-	Run           types.Bool   `tfsdk:"run"`
-	Status        types.String `tfsdk:"status"`
-	ServicePortal types.Object `tfsdk:"service_portal"`
-	Content       types.String `tfsdk:"content"`
-	Metadata      types.Map    `tfsdk:"metadata"`
-	// ComposeFiles types.ListType `tfsdk:"compose_files"`
-	// Environment  types.MapType  `tfsdk:"environment"`
-	CreatedAt timetypes.RFC3339 `tfsdk:"created_at"`
-	UpdatedAt timetypes.RFC3339 `tfsdk:"updated_at"`
-}
-
-func (p ProjectResourceModel) IsRunning() bool {
-	return strings.ToUpper(p.Status.ValueString()) == "RUNNING"
-}
-
-func (p ProjectResourceModel) ShouldRun() bool {
-	return !p.IsRunning() && p.Run.ValueBool()
 }
 
 const projectDescription = `A Docker Compose project for the Container Manager Synology API.
@@ -98,7 +70,7 @@ func projectExists(err error) bool {
 
 func (f *ProjectResource) handleConfigs(
 	ctx context.Context,
-	data ProjectResourceModel,
+	data models.ProjectResourceModel,
 ) (diags diag.Diagnostics) {
 	if data.Configs.IsNull() || data.Configs.IsUnknown() {
 		return
@@ -136,7 +108,7 @@ func (f *ProjectResource) handleConfigs(
 
 func (f *ProjectResource) handleSecrets(
 	ctx context.Context,
-	data ProjectResourceModel,
+	data models.ProjectResourceModel,
 ) (diags diag.Diagnostics) {
 	if data.Secrets.IsNull() || data.Secrets.IsUnknown() {
 		return
@@ -234,7 +206,7 @@ func (f *ProjectResource) Create(
 	req resource.CreateRequest,
 	resp *resource.CreateResponse,
 ) {
-	var data ProjectResourceModel
+	var data models.ProjectResourceModel
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -325,6 +297,7 @@ func (f *ProjectResource) Create(
 				resp.Diagnostics.AddError("Failed to stop project", err.Error())
 				return
 			}
+			time.Sleep(2 * time.Second)
 			_, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
 				ID: data.ID.ValueString(),
 			})
@@ -393,7 +366,7 @@ func (f *ProjectResource) Delete(
 	req resource.DeleteRequest,
 	resp *resource.DeleteResponse,
 ) {
-	var data ProjectResourceModel
+	var data models.ProjectResourceModel
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -443,7 +416,7 @@ func (f *ProjectResource) Read(
 	req resource.ReadRequest,
 	resp *resource.ReadResponse,
 ) {
-	var state ProjectResourceModel
+	var state models.ProjectResourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -469,10 +442,37 @@ func (f *ProjectResource) Read(
 		}
 	}
 
+	servicePortalType := map[string]attr.Type{
+		"enable":   types.BoolType,
+		"name":     types.StringType,
+		"port":     types.Int64Type,
+		"protocol": types.StringType,
+	}
+
+	servicePortalValues := types.ObjectNull(servicePortalType)
+	if proj.EnableServicePortal || proj.ServicePortalName != "" || proj.ServicePortalPort != 0 ||
+		proj.ServicePortalProtocol != "" {
+		servicePortal := models.ServicePortal{
+			Enable:   types.BoolValue(proj.EnableServicePortal),
+			Name:     types.StringValue(proj.ServicePortalName),
+			Port:     types.Int64Value(int64(proj.ServicePortalPort)),
+			Protocol: types.StringValue(proj.ServicePortalProtocol),
+		}
+
+		svcPortalValues, diags := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+		} else {
+			servicePortalValues = svcPortalValues
+		}
+	}
+	if !servicePortalValues.IsNull() {
+		state.ServicePortal = servicePortalValues
+	}
+
 	state.Status = types.StringValue(proj.Status)
 	state.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	state.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
-
 	if proj.Content != "" {
 		state.Content = types.StringValue(proj.Content)
 	} else {
@@ -488,7 +488,7 @@ func (f *ProjectResource) Update(
 	req resource.UpdateRequest,
 	resp *resource.UpdateResponse,
 ) {
-	var plan, state ProjectResourceModel
+	var plan, state models.ProjectResourceModel
 
 	if plan.Metadata.IsNull() || plan.Metadata.IsUnknown() {
 		plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
@@ -520,7 +520,7 @@ func (f *ProjectResource) Update(
 		secretChanged = true
 	}
 
-	if !servicesChanged && !configChanged {
+	if !servicesChanged && !configChanged && !secretChanged {
 		tflog.Info(ctx, "No changes detected in services or configs, skipping update")
 		return
 	}
@@ -597,6 +597,7 @@ func (f *ProjectResource) Update(
 				resp.Diagnostics.AddError("Failed to stop project", err.Error())
 				return
 			}
+			time.Sleep(2 * time.Second) // Wait for the project to stop
 		}
 
 		// _, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
@@ -630,6 +631,15 @@ func (f *ProjectResource) Update(
 			return
 		}
 	}
+	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
+		_, err := f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
+			ID: plan.ID.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to restart project", err.Error())
+			return
+		}
+	}
 
 	proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 	if err != nil {
@@ -640,13 +650,13 @@ func (f *ProjectResource) Update(
 	plan.Status = types.StringValue(proj.Status)
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
+	plan.Content = types.StringValue(proj.Content)
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("content"), plan.Content)...)
 	if resp.Diagnostics.HasError() {
 		resp.Diagnostics.AddError("Failed to set content", "")
 		return
 	}
-	// plan.Content = types.StringValue(proj.Content)
 
 	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
@@ -689,7 +699,7 @@ func (f *ProjectResource) Schema(
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
-					UseArgumentsForUnknownContent(),
+					modifier.UseSchemaForUnknownContent(),
 					// stringplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -703,16 +713,16 @@ func (f *ProjectResource) Schema(
 				},
 			},
 			"share_path": schema.StringAttribute{
-				MarkdownDescription: "The share path of the project.",
+				MarkdownDescription: "The share path of the project (without /volume1 or similar, just /docker/foo).",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					UseDefaultSharePath(),
+					modifier.UseDefaultSharePath(),
 				},
 				Computed: true,
 			},
 			"run": schema.BoolAttribute{
-				MarkdownDescription: "Whether to run the project.",
+				MarkdownDescription: "Whether to run the project (and rebuild).",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
@@ -724,7 +734,7 @@ func (f *ProjectResource) Schema(
 				MarkdownDescription: "The status of the project.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
-					UseRunningStatus(),
+					modifier.UseRunningStatus(),
 				},
 			},
 			"created_at": schema.StringAttribute{
@@ -1285,43 +1295,12 @@ func (f *ProjectResource) Schema(
 				MarkdownDescription: "Docker compose secrets.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Map{
-					SetSecretPathsFromContent(),
+					modifier.SetSecretPathsFromContent(),
 				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "The name of the secret.",
-							Optional:            true,
-						},
-						"content": schema.StringAttribute{
-							MarkdownDescription: "The content of the config.",
-							Optional:            true,
-							Computed:            true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-						},
-						"file": schema.StringAttribute{
-							MarkdownDescription: "The file of the config.",
-							Optional:            true,
-							Computed:            true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-						},
-					},
-				},
-			},
-			"configs": schema.MapNestedAttribute{
-				MarkdownDescription: "Docker compose configs.",
-				Optional:            true,
-				PlanModifiers: []planmodifier.Map{
-					SetConfigPathsFromContent(),
-				},
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							MarkdownDescription: "The name of the config.",
 							Required:            true,
 						},
 						"content": schema.StringAttribute{
@@ -1337,7 +1316,35 @@ func (f *ProjectResource) Schema(
 							Optional:            true,
 							Computed:            true,
 							PlanModifiers: []planmodifier.String{
+								modifier.SetFilePathFromContent(),
+							},
+						},
+					},
+				},
+			},
+			"configs": schema.MapNestedAttribute{
+				MarkdownDescription: "Docker compose configs.",
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							MarkdownDescription: "The name of the config.",
+							Required:            true,
+						},
+						"content": schema.StringAttribute{
+							MarkdownDescription: "The content of the config.",
+							Optional:            true,
+							Computed:            false,
+							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"file": schema.StringAttribute{
+							MarkdownDescription: "The file of the config.",
+							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								modifier.SetFilePathFromContent(),
 							},
 						},
 						"external": schema.BoolAttribute{
@@ -1397,194 +1404,38 @@ func (f *ProjectResource) ImportState(
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
-	res, err := f.client.ProjectGetByName(ctx, req.ID)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to list package feeds", err.Error())
-		return
-	}
+	resource.ImportStatePassthroughID(
+		ctx,
+		path.Root("name"),
+		req,
+		resp,
+	)
 
-	// compProj := &composetypes.Project{
-	// 	Name: res.Name,
+	// project := models.ProjectResourceModel{
+	// 	ID:        types.StringValue(res.ID),
+	// 	Content:   types.StringValue(res.Content),
+	// 	Status:    types.StringValue(res.Status),
+	// 	CreatedAt: timetypes.NewRFC3339TimeValue(res.CreatedAt),
+	// 	UpdatedAt: timetypes.NewRFC3339TimeValue(res.UpdatedAt),
+	// 	Name:      types.StringValue(res.Name),
+	// 	SharePath: types.StringValue(res.SharePath),
+	// 	Services:  types.MapValueMust(models.Service{}.ModelType(), map[string]attr.Value{}),
+	// 	Volumes:   types.MapValueMust(models.Volume{}.ModelType(), map[string]attr.Value{}),
+	// 	Secrets:   types.MapValueMust(models.Secret{}.ModelType(), map[string]attr.Value{}),
+	// 	Configs:   types.MapValueMust(models.Config{}.ModelType(), map[string]attr.Value{}),
+	// 	Networks:  types.MapValueMust(models.Network{}.ModelType(), map[string]attr.Value{}),
+	// 	// Secrets:   types.MapNull(models.Secret{}.ModelType()),
+	// 	// Configs:   types.MapNull(models.Config{}.ModelType()),
+	// 	// Networks:  types.MapNull(models.Network{}.ModelType()),
+	// 	Extensions: types.MapNull(types.ObjectType{
+	// 		AttrTypes: map[string]attr.Type{
+	// 			"name": types.StringType,
+	// 		},
+	// 	}),
+	// 	Run:           types.BoolValue(false),
+	// 	Metadata:      types.MapNull(types.StringType),
+	// 	ServicePortal: servicePortalValues,
 	// }
 
-	// services := map[string]models.Service{}
-	// svcs := basetypes.NewMapNull(models.Service{}.ModelType())
-
-	// if res.Content != "" {
-	// 	model, err := loader.ParseYAML([]byte(res.Content))
-	// 	if err == nil {
-	// 		err := loader.Transform(model, compProj)
-	// 		if err != nil {
-	// 			resp.Diagnostics.AddError("Failed to transform project", err.Error())
-	// 			return
-	// 		}
-	// 	}
-	// }
-
-	// if compProj.Services != nil {
-	// 	for k, svc := range compProj.Services {
-	// 		nSvc := models.Service{}
-	// 		diags := nSvc.FromComposeConfig(ctx, &svc)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 			return
-	// 		} else {
-	// 			services[k] = nSvc
-	// 		}
-	// 	}
-
-	// 	svcValues, diags := types.MapValueFrom(ctx, models.Service{}.ModelType(), services)
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.Append(diags...)
-	// 	} else {
-	// 		svcs = svcValues
-	// 	}
-	// }
-
-	// volumes := map[string]models.Volume{}
-	// vols := basetypes.NewMapNull(models.Volume{}.ModelType())
-
-	// if compProj.Volumes != nil {
-	// 	for k, vol := range compProj.Volumes {
-	// 		nVol := models.Volume{}
-	// 		diags := nVol.FromComposeConfig(ctx, &vol)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 			return
-	// 		} else {
-	// 			volumes[k] = nVol
-	// 		}
-	// 	}
-
-	// 	volValues, diags := types.MapValueFrom(ctx, models.Volume{}.ModelType(), volumes)
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.Append(diags...)
-	// 	} else {
-	// 		vols = volValues
-	// 	}
-	// }
-
-	// secrets := map[string]models.Secret{}
-	// secretsMap := basetypes.NewMapNull(models.Secret{}.ModelType())
-
-	// if compProj.Secrets != nil {
-	// 	for k, sec := range compProj.Secrets {
-	// 		nSec := models.Secret{}
-	// 		diags := nSec.FromComposeConfig(ctx, &sec)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 			return
-	// 		} else {
-	// 			secrets[k] = nSec
-	// 		}
-
-	// 		secValues, diags := types.MapValueFrom(ctx, models.Secret{}.ModelType(), secrets)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 		} else {
-	// 			secretsMap = secValues
-	// 		}
-	// 	}
-	// }
-
-	// networks := map[string]models.Network{}
-	// nets := basetypes.NewMapNull(models.Network{}.ModelType())
-
-	// if compProj.Networks != nil {
-	// 	for k, net := range compProj.Networks {
-	// 		nNet := models.Network{}
-	// 		diags := nNet.FromComposeConfig(ctx, &net)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 			return
-	// 		} else {
-	// 			networks[k] = nNet
-	// 		}
-	// 	}
-
-	// 	netValues, diags := types.MapValueFrom(ctx, models.Network{}.ModelType(), networks)
-	// 	if diags.HasError() {
-	// 		resp.Diagnostics.Append(diags...)
-	// 	} else {
-	// 		nets = netValues
-	// 	}
-	// }
-
-	// configs := map[string]models.Config{}
-	// configsMap := basetypes.NewMapNull(models.Config{}.ModelType())
-
-	// if compProj.Configs != nil {
-
-	// 	for k, cfg := range compProj.Configs {
-	// 		nCfg := models.Config{}
-	// 		diags := nCfg.FromComposeConfig(ctx, &cfg)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 			return
-	// 		} else {
-	// 			configs[k] = nCfg
-	// 		}
-
-	// 		cfgValues, diags := types.MapValueFrom(ctx, models.Config{}.ModelType(), configs)
-	// 		if diags.HasError() {
-	// 			resp.Diagnostics.Append(diags...)
-	// 		} else {
-	// 			configsMap = cfgValues
-	// 		}
-	// 	}
-	// }
-
-	servicePortalType := map[string]attr.Type{
-		"enable":   types.BoolType,
-		"name":     types.StringType,
-		"port":     types.Int64Type,
-		"protocol": types.StringType,
-	}
-
-	servicePortalValues := types.ObjectNull(servicePortalType)
-
-	if res.EnableServicePortal || res.ServicePortalName != "" || res.ServicePortalPort != 0 ||
-		res.ServicePortalProtocol != "" {
-		servicePortal := models.ServicePortal{
-			Enable:   types.BoolValue(res.EnableServicePortal),
-			Name:     types.StringValue(res.ServicePortalName),
-			Port:     types.Int64Value(int64(res.ServicePortalPort)),
-			Protocol: types.StringValue(res.ServicePortalProtocol),
-		}
-
-		svcPortalValues, diags := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-		} else {
-			servicePortalValues = svcPortalValues
-		}
-	}
-
-	project := ProjectResourceModel{
-		ID:        types.StringValue(res.ID),
-		Content:   types.StringValue(res.Content),
-		Status:    types.StringValue(res.Status),
-		CreatedAt: timetypes.NewRFC3339TimeValue(res.CreatedAt),
-		UpdatedAt: timetypes.NewRFC3339TimeValue(res.UpdatedAt),
-		Name:      types.StringValue(res.Name),
-		SharePath: types.StringValue(res.SharePath),
-		Services:  types.MapValueMust(models.Service{}.ModelType(), map[string]attr.Value{}),
-		Volumes:   types.MapValueMust(models.Volume{}.ModelType(), map[string]attr.Value{}),
-		Secrets:   types.MapValueMust(models.Secret{}.ModelType(), map[string]attr.Value{}),
-		Configs:   types.MapValueMust(models.Config{}.ModelType(), map[string]attr.Value{}),
-		Networks:  types.MapValueMust(models.Network{}.ModelType(), map[string]attr.Value{}),
-		// Secrets:   types.MapNull(models.Secret{}.ModelType()),
-		// Configs:   types.MapNull(models.Config{}.ModelType()),
-		// Networks:  types.MapNull(models.Network{}.ModelType()),
-		Extensions: types.MapNull(types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"name": types.StringType,
-			},
-		}),
-		Run:           types.BoolValue(false),
-		Metadata:      types.MapNull(types.StringType),
-		ServicePortal: servicePortalValues,
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, project)...)
+	// resp.Diagnostics.Append(resp.State.Set(ctx, project)...)
 }

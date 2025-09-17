@@ -16,31 +16,32 @@ A Docker Compose project for the Container Manager Synology API.
 
 ```terraform
 resource "synology_container_project" "foo" {
-  name = "foo"
+  name       = "foo"
+  share_path = "/docker/foo"
+  run        = true
 
   services = {
     "bar" = {
-      image = {
-        name = "nginx"
-        tag  = "latest"
-      }
+      image = "nginx:latest"
 
       ports = [{
         target    = 80
-        published = 80
+        published = 8888
       }]
 
       configs = [
         {
-          source = "baz"
-          target = "/config/baz.txt"
+          name   = "index"
+          source = "index"
+          target = "/usr/share/nginx/html/index.html"
           gid    = 0
           uid    = 0
           mode   = "0660"
         },
         {
-          source = "qux"
-          target = "/config/qux.toml"
+          name   = "compose"
+          source = "compose"
+          target = "/usr/share/nginx/html/compose.yaml"
         }
       ]
 
@@ -49,12 +50,14 @@ resource "synology_container_project" "foo" {
   }
 
   configs = {
-    "baz" = {
-      content = "Hello, World!"
+    "index" = {
+      name    = "index"
+      content = "<h1>Hello, World!!!</h1><a href=\"/compose.yaml\">compose.yaml</a>"
     }
 
-    "qux" = {
-      file = "/volume1/foo/bar"
+    "compose" = {
+      name = "compose"
+      file = "/volume1/docker/foo/compose.yaml"
     }
   }
 }
@@ -74,11 +77,11 @@ resource "synology_container_project" "foo" {
 - `extensions` (Attributes Map) Docker compose extensions. (see [below for nested schema](#nestedatt--extensions))
 - `metadata` (Map of String) The metadata of the project.
 - `networks` (Attributes Map) Docker compose networks. (see [below for nested schema](#nestedatt--networks))
-- `run` (Boolean) Whether to run the project.
+- `run` (Boolean) Whether to run the project (and rebuild).
 - `secrets` (Attributes Map) Docker compose secrets. (see [below for nested schema](#nestedatt--secrets))
 - `service_portal` (Attributes) Synology Web Station configuration for the docker compose project. (see [below for nested schema](#nestedatt--service_portal))
 - `services` (Attributes Map) Docker compose services. (see [below for nested schema](#nestedatt--services))
-- `share_path` (String) The share path of the project.
+- `share_path` (String) The share path of the project (without /volume1 or similar, just /docker/foo).
 - `volumes` (Attributes Map) Docker compose volumes. (see [below for nested schema](#nestedatt--volumes))
 
 ### Read-Only
@@ -149,11 +152,14 @@ Optional:
 <a id="nestedatt--secrets"></a>
 ### Nested Schema for `secrets`
 
+Required:
+
+- `name` (String) The name of the secret.
+
 Optional:
 
 - `content` (String) The content of the config.
 - `file` (String) The file of the config.
-- `name` (String) The name of the secret.
 
 
 <a id="nestedatt--service_portal"></a>
@@ -193,6 +199,8 @@ Optional:
 - `mem_limit` (String) The memory limit.
 - `network_mode` (String) The network mode.
 - `networks` (Attributes Map) The networks of the service. (see [below for nested schema](#nestedatt--services--networks))
+- `pid` (String) The PID mode of the service.
+- `platform` (String) The platform of the service.
 - `ports` (Attributes List) The ports of the service. (see [below for nested schema](#nestedatt--services--ports))
 - `privileged` (Boolean) Whether the service is privileged.
 - `replicas` (Number) The number of replicas.
@@ -203,6 +211,7 @@ Optional:
 - `tmpfs` (List of String) The tmpfs of the service.
 - `ulimits` (Attributes Map) The ulimits of the service. (see [below for nested schema](#nestedatt--services--ulimits))
 - `user` (String) The user of the service.
+- `userns_mode` (String) The user namespace mode of the service.
 - `volumes` (Attributes List) The volumes of the service. (see [below for nested schema](#nestedatt--services--volumes))
 
 <a id="nestedatt--services--capabilities"></a>
