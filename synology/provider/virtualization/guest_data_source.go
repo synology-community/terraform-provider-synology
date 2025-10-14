@@ -175,7 +175,7 @@ func (m *GuestDataSourceModel) FromGuest(v *virtualization.Guest) error {
 
 		disks = append(disks, disk)
 	}
-	if diskst, err := types.SetValue(VNicDataModel{}.ModelType(), disks); err == nil {
+	if diskst, err := types.SetValue(VDiskDataModel{}.ModelType(), disks); err == nil {
 		m.Disks = diskst
 	}
 
