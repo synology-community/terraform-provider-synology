@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/99designs/keyring v1.2.2
-	github.com/compose-spec/compose-go/v2 v2.9.0
+	github.com/compose-spec/compose-go/v2 v2.9.1
 	github.com/distribution/reference v0.6.0
 	github.com/docker/go-connections v0.6.0
 	github.com/docker/go-units v0.5.0
