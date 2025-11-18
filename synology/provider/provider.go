@@ -211,16 +211,9 @@ func (p *SynologyProvider) Schema(
 				Sensitive:   true,
 			},
 			"otp_secret": schema.StringAttribute{
-				Description: "OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A–Z, 2–7, optional '=', spaces ignored).",
+				Description: "OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A-Z, 2-7, optional '=', spaces ignored).",
 				Optional:    true,
 				Sensitive:   true,
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(16, 32),
-					stringvalidator.RegexMatches(
-						reBase32Chars,
-						"must be base32 encoded secret only, not whole otp:// URI",
-					),
-				},
 			},
 			"skip_cert_check": schema.BoolAttribute{
 				Description: "Whether to skip SSL certificate checks.",
@@ -517,14 +510,29 @@ func (p *SynologyProvider) ValidateConfig(
 		return
 	}
 
-	if _, err := url.Parse(data.Host.ValueString()); err != nil {
-		resp.Diagnostics.Append(
-			diag.NewAttributeErrorDiagnostic(
-				path.Root("host"),
-				"invalid provider configuration",
-				"host is not a valid URL"),
-		)
-		return
+	if !data.Host.IsNull() && !data.Host.IsUnknown() {
+		if _, err := url.Parse(data.Host.ValueString()); err != nil {
+			resp.Diagnostics.Append(
+				diag.NewAttributeErrorDiagnostic(
+					path.Root("host"),
+					"invalid provider configuration",
+					"host is not a valid URL"),
+			)
+			return
+		}
+	}
+
+	// Validate OTP secret
+	if !data.OtpSecret.IsNull() && !data.OtpSecret.IsUnknown() {
+		if err := validateOtpSecret(data.OtpSecret.ValueString()); err != nil {
+			resp.Diagnostics.Append(
+				diag.NewAttributeErrorDiagnostic(
+					path.Root("otp_secret"),
+					"invalid OTP secret",
+					err.Error(),
+				),
+			)
+		}
 	}
 
 	mode := ""
@@ -557,6 +565,16 @@ func (p *SynologyProvider) ValidateConfig(
 			),
 		)
 	}
+}
+
+func validateOtpSecret(s string) error {
+	if len(s) < 16 || len(s) > 32 {
+		return fmt.Errorf("invalid OTP secret length")
+	}
+	if !reBase32Chars.MatchString(s) {
+		return fmt.Errorf("invalid OTP secret format")
+	}
+	return nil
 }
 
 func New() func() provider.Provider {
