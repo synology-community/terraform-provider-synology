@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/99designs/keyring"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -22,7 +21,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
@@ -72,8 +70,12 @@ func cacheKey(host, user string, skipCertCheck bool) string {
 func openSessionRing(mode, path string) (keyring.Keyring, string, error) {
 	cfg := keyring.Config{ServiceName: "terraform-provider-synology"}
 	switch mode {
-	case "off":
-		return nil, "", fmt.Errorf("disabled")
+	case "auto":
+		cfg.AllowedBackends = []keyring.BackendType{
+			keyring.KeychainBackend, keyring.WinCredBackend,
+			keyring.SecretServiceBackend, keyring.KWalletBackend,
+			keyring.PassBackend, keyring.FileBackend,
+		}
 	case "keyring":
 		cfg.AllowedBackends = []keyring.BackendType{
 			keyring.KeychainBackend, keyring.WinCredBackend,
@@ -83,12 +85,8 @@ func openSessionRing(mode, path string) (keyring.Keyring, string, error) {
 		cfg.AllowedBackends = []keyring.BackendType{keyring.FileBackend}
 	case "memory":
 		// handled later
-	default: // auto
-		cfg.AllowedBackends = []keyring.BackendType{
-			keyring.KeychainBackend, keyring.WinCredBackend,
-			keyring.SecretServiceBackend, keyring.KWalletBackend,
-			keyring.PassBackend, keyring.FileBackend,
-		}
+	default: // off
+		return nil, "", fmt.Errorf("disabled")
 	}
 	if path == "" {
 		if dir, err := os.UserCacheDir(); err == nil {
@@ -222,9 +220,6 @@ func (p *SynologyProvider) Schema(
 			"session_cache": schema.StringAttribute{
 				Description: "Session cache mode - one of: auto, keyring, file, memory, off. Default: auto.",
 				Optional:    true,
-				Validators: []validator.String{
-					stringvalidator.OneOf("auto", "keyring", "file", "memory", "off"),
-				},
 			},
 			"session_cache_path": schema.StringAttribute{
 				Description: "Directory for file-based session cache when session_cache = \"file\". Defaults to OS user cache dir.",
@@ -297,7 +292,7 @@ func (p *SynologyProvider) Configure(
 		}
 	}
 
-	cacheMode := "auto"
+	cacheMode := "off"
 	if !data.SessionCacheMode.IsNull() && !data.SessionCacheMode.IsUnknown() &&
 		data.SessionCacheMode.ValueString() != "" {
 		cacheMode = data.SessionCacheMode.ValueString()
@@ -522,6 +517,18 @@ func (p *SynologyProvider) ValidateConfig(
 		}
 	}
 
+	if !data.SessionCacheMode.IsNull() && !data.SessionCacheMode.IsUnknown() {
+		if !isValidSessionCacheMode(data.SessionCacheMode.ValueString()) {
+			resp.Diagnostics.Append(
+				diag.NewAttributeErrorDiagnostic(
+					path.Root("session_cache_mode"),
+					"invalid session_cache_mode",
+					"session_cache_mode must be one of: 'file', 'memory', 'auto', 'keyring', 'off'",
+				),
+			)
+		}
+	}
+
 	// Validate OTP secret
 	if !data.OtpSecret.IsNull() && !data.OtpSecret.IsUnknown() {
 		if err := validateOtpSecret(data.OtpSecret.ValueString()); err != nil {
@@ -535,36 +542,40 @@ func (p *SynologyProvider) ValidateConfig(
 		}
 	}
 
-	mode := ""
 	if !data.SessionCacheMode.IsNull() && !data.SessionCacheMode.IsUnknown() {
-		mode = data.SessionCacheMode.ValueString()
-	}
-	pstr := ""
-	if !data.SessionCachePath.IsNull() && !data.SessionCachePath.IsUnknown() {
-		pstr = data.SessionCachePath.ValueString()
-	}
+		mode := data.SessionCacheMode.ValueString()
 
-	if mode == "file" && pstr == "" {
-		resp.Diagnostics.Append(
-			diag.NewAttributeErrorDiagnostic(
-				path.Root("session_cache_path"),
-				"missing session_cache_path",
-				"When session_cache is \"file\", you must set session_cache_path to a writable directory.",
-			),
-		)
-	}
-	if mode != "" && mode != "file" && pstr != "" {
-		resp.Diagnostics.Append(
-			diag.NewAttributeWarningDiagnostic(
-				path.Root("session_cache_path"),
-				"session_cache_path ignored",
-				fmt.Sprintf(
-					"session_cache is %q, so session_cache_path will be ignored. Set session_cache = \"file\" to use it.",
-					mode,
+		pstr := ""
+		if !data.SessionCachePath.IsNull() && !data.SessionCachePath.IsUnknown() {
+			pstr = data.SessionCachePath.ValueString()
+		}
+
+		if mode == "file" && pstr == "" {
+			resp.Diagnostics.Append(
+				diag.NewAttributeErrorDiagnostic(
+					path.Root("session_cache_path"),
+					"missing session_cache_path",
+					"When session_cache is \"file\", you must set session_cache_path to a writable directory.",
 				),
-			),
-		)
+			)
+		}
+		if mode != "" && mode != "file" && pstr != "" {
+			resp.Diagnostics.Append(
+				diag.NewAttributeWarningDiagnostic(
+					path.Root("session_cache_path"),
+					"session_cache_path ignored",
+					fmt.Sprintf(
+						"session_cache is %q, so session_cache_path will be ignored. Set session_cache = \"file\" to use it.",
+						mode,
+					),
+				),
+			)
+		}
 	}
+}
+
+func isValidSessionCacheMode(s string) bool {
+	return s == "auto" || s == "keyring" || s == "file" || s == "memory" || s == "off"
 }
 
 func validateOtpSecret(s string) error {
