@@ -1,0 +1,30 @@
+services:
+  dsm:
+    container_name: dsm-test
+    image: vdsm/virtual-dsm:latest
+    environment:
+      DISK_SIZE: "64G"
+      RAM_SIZE: "2G"
+      CPU_CORES: "2"
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    volumes:
+      - dsm-storage:/storage
+    restart: on-failure
+    stop_grace_period: 2m
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+volumes:
+  dsm-storage:
+    driver: local

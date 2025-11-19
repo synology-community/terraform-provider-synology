@@ -180,7 +180,43 @@ func (a *ApiResource) Schema(
 	resp *resource.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
+		MarkdownDescription: `Generic API resource for making direct calls to any Synology DSM API.
+
+Use this resource for API endpoints that don't have dedicated resources. Supports both apply-time and destroy-time operations.
+
+## Example Usage
+
+` + "```hcl" + `
+# Get system information
+resource "synology_api" "system_info" {
+  api     = "SYNO.Core.System"
+  method  = "info"
+  version = 1
+  
+  parameters = {
+    query = "all"
+  }
+}
+
+output "system_info" {
+  value = synology_api.system_info.result
+}
+
+# Run cleanup on destroy
+resource "synology_api" "cleanup" {
+  api     = "SYNO.Custom.Cleanup"
+  method  = "run"
+  version = 1
+  when    = "destroy"
+  
+  parameters = {
+    path = "/volume1/temp"
+  }
+}
+` + "```" + `
+
+See [examples/resources/synology_api](https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_api) for more examples.
+`,
 
 		Attributes: map[string]schema.Attribute{
 			"api": schema.StringAttribute{

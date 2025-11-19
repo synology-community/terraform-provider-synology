@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+.github
+
+# Terraform
+.terraform
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfvars
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+terraform-provider-synology
+dist/
+bin/
+
+# Testing
+*.test
+coverage.out
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+TESTING.md
+docs/
+
+# Temporary files
+tmp/
+*.log

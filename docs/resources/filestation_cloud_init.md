@@ -2,12 +2,80 @@
 page_title: "Filestation: synology_filestation_cloud_init"
 subcategory: "Filestation"
 description: |-
-  A file on the Synology NAS Filestation.
+  Creates a cloud-init ISO file on Synology File Station.
+  Generates a cloud-init ISO from user-data, meta-data, and network-config for virtual machine provisioning. The ISO can be mounted to VMs for automated configuration.
+  Example Usage
+  
+  resource "synology_filestation_cloud_init" "vm_config" {
+    path           = "/volume1/vms/cloud-init.iso"
+    create_parents = true
+    overwrite      = true
+    
+    user_data = <<-EOF
+      #cloud-config
+      users:
+        - name: admin
+          groups: sudo
+          shell: /bin/bash
+          sudo: ['ALL=(ALL) NOPASSWD:ALL']
+          ssh_authorized_keys:
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB...
+      
+      packages:
+        - docker.io
+        - nginx
+    EOF
+    
+    network_config = <<-EOF
+      version: 2
+      ethernets:
+        eth0:
+          dhcp4: true
+    EOF
+  }
+  
+  See examples/resources/synology_filestation_cloud_init https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_filestation_cloud_init for more examples.
 ---
 
 # Filestation: Cloud Init (Resource)
 
-A file on the Synology NAS Filestation.
+Creates a cloud-init ISO file on Synology File Station.
+
+Generates a cloud-init ISO from user-data, meta-data, and network-config for virtual machine provisioning. The ISO can be mounted to VMs for automated configuration.
+
+## Example Usage
+
+```hcl
+resource "synology_filestation_cloud_init" "vm_config" {
+  path           = "/volume1/vms/cloud-init.iso"
+  create_parents = true
+  overwrite      = true
+  
+  user_data = <<-EOF
+    #cloud-config
+    users:
+      - name: admin
+        groups: sudo
+        shell: /bin/bash
+        sudo: ['ALL=(ALL) NOPASSWD:ALL']
+        ssh_authorized_keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB...
+    
+    packages:
+      - docker.io
+      - nginx
+  EOF
+  
+  network_config = <<-EOF
+    version: 2
+    ethernets:
+      eth0:
+        dhcp4: true
+  EOF
+}
+```
+
+See [examples/resources/synology_filestation_cloud_init](https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_filestation_cloud_init) for more examples.
 
 ## Example Usage
 

@@ -2,12 +2,70 @@
 page_title: "Virtualization: synology_virtualization_guest"
 subcategory: "Virtualization"
 description: |-
-  A guest on the Synology NAS Gueststation.
+  Manages virtual machines on Synology Virtual Machine Manager.
+  Create and configure virtual machines with custom CPU, memory, disk, and network settings. Supports ISO mounting for installation and cloud-init.
+  Example Usage
+  
+  resource "synology_virtualization_guest" "ubuntu_vm" {
+    name         = "ubuntu-server"
+    storage_name = "default"
+    
+    vcpu_num  = 2
+    vram_size = 2048
+    
+    network {
+      name = "default"
+    }
+    
+    disk {
+      size = 20000  # 20GB
+    }
+    
+    iso {
+      image_id = synology_virtualization_image.ubuntu_iso.id
+      boot     = true
+    }
+    
+    run = true
+  }
+  
+  See examples/resources/synology_virtualization_guest https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_virtualization_guest for more examples.
 ---
 
 # Virtualization: Guest (Resource)
 
-A guest on the Synology NAS Gueststation.
+Manages virtual machines on Synology Virtual Machine Manager.
+
+Create and configure virtual machines with custom CPU, memory, disk, and network settings. Supports ISO mounting for installation and cloud-init.
+
+## Example Usage
+
+```hcl
+resource "synology_virtualization_guest" "ubuntu_vm" {
+  name         = "ubuntu-server"
+  storage_name = "default"
+  
+  vcpu_num  = 2
+  vram_size = 2048
+  
+  network {
+    name = "default"
+  }
+  
+  disk {
+    size = 20000  # 20GB
+  }
+  
+  iso {
+    image_id = synology_virtualization_image.ubuntu_iso.id
+    boot     = true
+  }
+  
+  run = true
+}
+```
+
+See [examples/resources/synology_virtualization_guest](https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_virtualization_guest) for more examples.
 
 ## Example Usage
 

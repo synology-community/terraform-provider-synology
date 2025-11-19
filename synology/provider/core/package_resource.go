@@ -207,7 +207,29 @@ func (p *PackageResource) Schema(
 	resp *resource.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
+		MarkdownDescription: `Manages packages on a Synology NAS using the Package Center API.
+
+Install, configure, and manage Synology packages with optional wizard configuration for initial setup.
+
+## Example Usage
+
+` + "```hcl" + `
+# Install MariaDB with wizard configuration
+resource "synology_core_package" "mariadb" {
+  name = "MariaDB10"
+  
+  wizard = {
+    port              = "3306"
+    new_root_password = "secure-password"
+  }
+}
+
+# Install Docker package
+resource "synology_core_package" "docker" {
+  name = "Docker"
+}
+` + "```" + `
+`,
 
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{

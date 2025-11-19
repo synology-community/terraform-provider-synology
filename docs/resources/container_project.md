@@ -2,15 +2,139 @@
 page_title: "Container: synology_container_project"
 subcategory: "Container"
 description: |-
-  A Docker Compose project for the Container Manager Synology API.
-  **Note:** Synology creates a shared folder for each project. The shared folder is created in the `/projects` directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the `/volume1/projects` directory on the Synology NAS.
+  Manages Docker Compose projects using Synology Container Manager.
+  Deploy and manage multi-container Docker applications using compose-style configuration. Supports services, networks, volumes, secrets, and configs.
+  **Note:** Synology creates a shared folder for each project in the `/projects` directory by default. The shared folder is named after the project name and is mounted to `/volume1/projects` on the NAS.
+  Example Usage
+  
+  resource "synology_container_project" "web_app" {
+    name = "my-web-app"
+    run  = true
+    
+    services = {
+      web = {
+        image = "nginx:latest"
+        
+        ports = [{
+          target    = 80
+          published = "8080"
+        }]
+        
+        configs = [{
+          source = "nginx_config"
+          target = "/etc/nginx/nginx.conf"
+        }]
+      }
+      
+      db = {
+        image = "postgres:13"
+        
+        environment = {
+          POSTGRES_DB       = "myapp"
+          POSTGRES_USER     = "appuser"
+          POSTGRES_PASSWORD = "secure-password"
+        }
+        
+        volumes = [{
+          type   = "volume"
+          source = "postgres-data"
+          target = "/var/lib/postgresql/data"
+        }]
+      }
+    }
+    
+    configs = {
+      nginx_config = {
+        name    = "nginx_config"
+        content = file("nginx.conf")
+      }
+    }
+    
+    volumes = {
+      postgres-data = {
+        driver = "local"
+      }
+    }
+    
+    networks = {
+      app-network = {
+        driver = "bridge"
+      }
+    }
+  }
+  
+  See examples/resources/synology_container_project https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_container_project for more examples.
 ---
 
 # Container: Project (Resource)
 
-A Docker Compose project for the Container Manager Synology API.
+Manages Docker Compose projects using Synology Container Manager.
 
-> **Note:** Synology creates a shared folder for each project. The shared folder is created in the `/projects` directory by default. The shared folder is named after the project name. The shared folder is used to store the project files and data. The shared folder is mounted to the `/volume1/projects` directory on the Synology NAS.
+Deploy and manage multi-container Docker applications using compose-style configuration. Supports services, networks, volumes, secrets, and configs.
+
+> **Note:** Synology creates a shared folder for each project in the `/projects` directory by default. The shared folder is named after the project name and is mounted to `/volume1/projects` on the NAS.
+
+## Example Usage
+
+```hcl
+resource "synology_container_project" "web_app" {
+  name = "my-web-app"
+  run  = true
+  
+  services = {
+    web = {
+      image = "nginx:latest"
+      
+      ports = [{
+        target    = 80
+        published = "8080"
+      }]
+      
+      configs = [{
+        source = "nginx_config"
+        target = "/etc/nginx/nginx.conf"
+      }]
+    }
+    
+    db = {
+      image = "postgres:13"
+      
+      environment = {
+        POSTGRES_DB       = "myapp"
+        POSTGRES_USER     = "appuser"
+        POSTGRES_PASSWORD = "secure-password"
+      }
+      
+      volumes = [{
+        type   = "volume"
+        source = "postgres-data"
+        target = "/var/lib/postgresql/data"
+      }]
+    }
+  }
+  
+  configs = {
+    nginx_config = {
+      name    = "nginx_config"
+      content = file("nginx.conf")
+    }
+  }
+  
+  volumes = {
+    postgres-data = {
+      driver = "local"
+    }
+  }
+  
+  networks = {
+    app-network = {
+      driver = "bridge"
+    }
+  }
+}
+```
+
+See [examples/resources/synology_container_project](https://github.com/synology-community/terraform-provider-synology/tree/main/examples/resources/synology_container_project) for more examples.
 
 ## Example Usage
 

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"crypto/sha1"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/99designs/keyring"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -21,7 +23,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api"
@@ -165,18 +169,50 @@ var _ provider.Provider = &SynologyProvider{}
 // SynologyProvider defines the provider implementation.
 type SynologyProvider struct{}
 
-// SynologyProviderModel describes the provider data model.
-type SynologyProviderModel struct {
-	Host             types.String `tfsdk:"host"`
-	User             types.String `tfsdk:"user"`
-	Password         types.String `tfsdk:"password"`
-	OtpSecret        types.String `tfsdk:"otp_secret"`
-	SkipCertCheck    types.Bool   `tfsdk:"skip_cert_check"`
-	SessionCacheMode types.String `tfsdk:"session_cache"`
-	SessionCachePath types.String `tfsdk:"session_cache_path"`
+// SessionCacheModel describes the session cache configuration.
+type SessionCacheModel struct {
+	Mode types.String `tfsdk:"mode"`
+	Path types.String `tfsdk:"path"`
 }
 
-var reBase32Chars = regexp.MustCompile(`^[A-Z2-7= ]+$`)
+// SynologyProviderModel describes the provider data model.
+type SynologyProviderModel struct {
+	Host          types.String `tfsdk:"host"`
+	User          types.String `tfsdk:"user"`
+	Password      types.String `tfsdk:"password"`
+	OtpSecret     types.String `tfsdk:"otp_secret"`
+	SkipCertCheck types.Bool   `tfsdk:"skip_cert_check"`
+	SessionCache  types.Object `tfsdk:"session_cache"`
+}
+
+var (
+	reBase32Chars = regexp.MustCompile(`^[A-Z2-7= ]+$`)
+	reHostname    = regexp.MustCompile(`^https?://[^\s/$.?#].[^\s]*$`)
+)
+
+// getStringWithEnvFallback returns the value from a types.String attribute, falling back to an environment variable if unset.
+func getStringWithEnvFallback(attr types.String, envVar string) string {
+	if !attr.IsNull() && !attr.IsUnknown() && attr.ValueString() != "" {
+		return attr.ValueString()
+	}
+	if v := os.Getenv(envVar); v != "" {
+		return v
+	}
+	return ""
+}
+
+// getBoolWithEnvFallback returns the value from a types.Bool attribute, falling back to an environment variable if unset.
+func getBoolWithEnvFallback(attr types.Bool, envVar string, defaultValue bool) bool {
+	if !attr.IsNull() && !attr.IsUnknown() {
+		return attr.ValueBool()
+	}
+	if vString := os.Getenv(envVar); vString != "" {
+		if v, err := strconv.ParseBool(vString); err == nil {
+			return v
+		}
+	}
+	return defaultValue
+}
 
 func (p *SynologyProvider) Metadata(
 	ctx context.Context,
@@ -194,10 +230,17 @@ func (p *SynologyProvider) Schema(
 	resp *provider.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
+		Description: "The Synology provider enables Terraform to manage resources on Synology DiskStation Manager (DSM) systems.",
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
-				Description: "Remote Synology URL, e.g. 'https://host:5001'.",
+				Description: "Remote Synology URL, e.g. `https://host:5001`.",
 				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						reHostname,
+						"must be a valid URL",
+					),
+				},
 			},
 			"user": schema.StringAttribute{
 				Description: "User to connect to Synology station with.",
@@ -212,18 +255,34 @@ func (p *SynologyProvider) Schema(
 				Description: "OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A-Z, 2-7, optional '=', spaces ignored).",
 				Optional:    true,
 				Sensitive:   true,
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(16, 32),
+					stringvalidator.RegexMatches(
+						reBase32Chars,
+						"must be base32 encoded secret only, not whole otp:// URI",
+					),
+				},
 			},
 			"skip_cert_check": schema.BoolAttribute{
 				Description: "Whether to skip SSL certificate checks.",
 				Optional:    true,
 			},
-			"session_cache": schema.StringAttribute{
-				Description: "Session cache mode - one of: auto, keyring, file, memory, off. Default: auto.",
+			"session_cache": schema.SingleNestedAttribute{
+				Description: "Session cache configuration. Supports caching Synology DSM sessions to reduce login frequency.",
 				Optional:    true,
-			},
-			"session_cache_path": schema.StringAttribute{
-				Description: "Directory for file-based session cache when session_cache = \"file\". Defaults to OS user cache dir.",
-				Optional:    true,
+				Attributes: map[string]schema.Attribute{
+					"mode": schema.StringAttribute{
+						Description: "Session cache mode - one of: auto, keyring, file, memory, off. Default: off. Can be set via SYNOLOGY_SESSION_CACHE environment variable.",
+						Optional:    true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("auto", "keyring", "file", "memory", "off"),
+						},
+					},
+					"path": schema.StringAttribute{
+						Description: "Directory for file-based session cache when mode = \"file\". Defaults to OS user cache dir. Can be set via SYNOLOGY_SESSION_CACHE_PATH environment variable.",
+						Optional:    true,
+					},
+				},
 			},
 		},
 	}
@@ -242,80 +301,73 @@ func (p *SynologyProvider) Configure(
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	host := data.Host.ValueString()
-	if host == "" {
-		if v := os.Getenv(SYNOLOGY_HOST_ENV_VAR); v != "" {
-			host = v
-		}
-	}
-	user := data.User.ValueString()
-	if user == "" {
-		if v := os.Getenv(SYNOLOGY_USER_ENV_VAR); v != "" {
-			user = v
-		}
-	}
-	password := data.Password.ValueString()
-	if password == "" {
-		if v := os.Getenv(SYNOLOGY_PASSWORD_ENV_VAR); v != "" {
-			password = v
-		}
-	}
-	otp_secret := data.OtpSecret.ValueString()
-	if otp_secret == "" {
-		if v := os.Getenv(SYNOLOGY_OTP_SECRET_ENV_VAR); v != "" {
-			otp_secret = v
-			if !reBase32Chars.MatchString(otp_secret) {
-				resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
-					path.Root("otp_secret"),
-					"invalid otp_secret value (via "+SYNOLOGY_OTP_SECRET_ENV_VAR+")",
-					"input is not valid base32-encoded string"))
-			}
-			if len(otp_secret) < 16 || len(otp_secret) > 32 {
-				resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
-					path.Root("otp_secret"),
-					"invalid otp_secret value (via "+SYNOLOGY_OTP_SECRET_ENV_VAR+")",
-					"input shoud be between 16 and 32 base32 characters"))
-			}
-		}
-	}
 
-	var skipCertificateCheck bool
+	// Get configuration values with environment variable fallbacks
+	host := getStringWithEnvFallback(data.Host, SYNOLOGY_HOST_ENV_VAR)
+	user := getStringWithEnvFallback(data.User, SYNOLOGY_USER_ENV_VAR)
+	password := getStringWithEnvFallback(data.Password, SYNOLOGY_PASSWORD_ENV_VAR)
+	otpSecret := getStringWithEnvFallback(data.OtpSecret, SYNOLOGY_OTP_SECRET_ENV_VAR)
+	skipCertificateCheck := getBoolWithEnvFallback(
+		data.SkipCertCheck,
+		SYNOLOGY_SKIP_CERT_CHECK_ENV_VAR,
+		true,
+	)
 
-	if data.SkipCertCheck.IsNull() || data.SkipCertCheck.IsUnknown() {
-		skipCertificateCheck = true
-	} else {
-		skipCertificateCheck = data.SkipCertCheck.ValueBool()
-	}
-	if vString := os.Getenv(SYNOLOGY_SKIP_CERT_CHECK_ENV_VAR); vString != "" {
-		if v, err := strconv.ParseBool(vString); err == nil {
-			skipCertificateCheck = v
-		}
-	}
-
-	cacheMode := "off"
-	if !data.SessionCacheMode.IsNull() && !data.SessionCacheMode.IsUnknown() &&
-		data.SessionCacheMode.ValueString() != "" {
-		cacheMode = data.SessionCacheMode.ValueString()
-	} else if v := os.Getenv(SYNOLOGY_SESSION_CACHE_MODE); v != "" {
-		cacheMode = v
-		switch cacheMode {
-		case "auto", "keyring", "file", "memory", "off":
-			// ok
-		default:
+	// Validate OTP secret only if it's provided
+	if otpSecret != "" {
+		if err := validateOtpSecret(otpSecret); err != nil {
 			resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
-				path.Root("session_cache"),
-				"invalid session_cache value",
-				fmt.Sprintf("Unsupported value %q; valid values are: auto, keyring, file, memory, off.", cacheMode),
+				path.Root("otp_secret"),
+				"Invalid OTP secret",
+				err.Error(),
 			))
 			return
 		}
 	}
+
+	// Extract session cache configuration
+	var sessionCache SessionCacheModel
+	cacheMode := "off"
 	cachePath := ""
-	if !data.SessionCachePath.IsNull() && !data.SessionCachePath.IsUnknown() &&
-		data.SessionCachePath.ValueString() != "" {
-		cachePath = data.SessionCachePath.ValueString()
-	} else if v := os.Getenv(SYNOLOGY_SESSION_CACHE_PATH); v != "" {
-		cachePath = v
+
+	if !data.SessionCache.IsNull() && !data.SessionCache.IsUnknown() {
+		diags := data.SessionCache.As(
+			ctx,
+			&sessionCache,
+			basetypes.ObjectAsOptions{UnhandledNullAsEmpty: true, UnhandledUnknownAsEmpty: true},
+		)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		cacheMode = getStringWithEnvFallback(sessionCache.Mode, SYNOLOGY_SESSION_CACHE_MODE)
+		cachePath = getStringWithEnvFallback(sessionCache.Path, SYNOLOGY_SESSION_CACHE_PATH)
+	} else {
+		// Check environment variables if session_cache object is not provided
+		if v := os.Getenv(SYNOLOGY_SESSION_CACHE_MODE); v != "" {
+			cacheMode = v
+		}
+		if v := os.Getenv(SYNOLOGY_SESSION_CACHE_PATH); v != "" {
+			cachePath = v
+		}
+	}
+
+	// Use default if still empty
+	if cacheMode == "" {
+		cacheMode = "off"
+	}
+
+	// Validate cache mode
+	if !isValidSessionCacheMode(cacheMode) {
+		resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+			path.Root("session_cache").AtName("mode"),
+			"Invalid session cache mode",
+			fmt.Sprintf(
+				"Unsupported value %q; valid values are: auto, keyring, file, memory, off.",
+				cacheMode,
+			),
+		))
+		return
 	}
 
 	if host == "" {
@@ -380,7 +432,7 @@ func (p *SynologyProvider) Configure(
 	}
 
 	v, err, _ := sf.Do(key, func() (any, error) {
-		if otp_secret != "" {
+		if otpSecret != "" {
 			wait := nextTotpWaitDuration()
 			tflog.Warn(ctx, fmt.Sprintf("Waiting %s for fresh TOTP window before login.", wait))
 			_ = waitUntilNextTotpStep(ctx, wait)
@@ -389,9 +441,9 @@ func (p *SynologyProvider) Configure(
 		_, loginErr := cli.Login(ctx, api.LoginOptions{
 			Username:  user,
 			Password:  password,
-			OTPSecret: otp_secret,
+			OTPSecret: otpSecret,
 		})
-		if loginErr == api.ErrOtpRejected && otp_secret != "" {
+		if loginErr == api.ErrOtpRejected && otpSecret != "" {
 			wait := nextTotpWaitDuration()
 			tflog.Warn(
 				ctx,
@@ -411,7 +463,7 @@ func (p *SynologyProvider) Configure(
 				_, loginErr = cli.Login(ctx, api.LoginOptions{
 					Username:  user,
 					Password:  password,
-					OTPSecret: otp_secret,
+					OTPSecret: otpSecret,
 				})
 			}
 		}
@@ -517,55 +569,68 @@ func (p *SynologyProvider) ValidateConfig(
 		}
 	}
 
-	if !data.SessionCacheMode.IsNull() && !data.SessionCacheMode.IsUnknown() {
-		if !isValidSessionCacheMode(data.SessionCacheMode.ValueString()) {
-			resp.Diagnostics.Append(
-				diag.NewAttributeErrorDiagnostic(
-					path.Root("session_cache_mode"),
-					"invalid session_cache_mode",
-					"session_cache_mode must be one of: 'file', 'memory', 'auto', 'keyring', 'off'",
-				),
-			)
-		}
-	}
-
-	// Validate OTP secret
-	if !data.OtpSecret.IsNull() && !data.OtpSecret.IsUnknown() {
+	// Validate OTP secret only if provided
+	if !data.OtpSecret.IsNull() && !data.OtpSecret.IsUnknown() &&
+		data.OtpSecret.ValueString() != "" {
 		if err := validateOtpSecret(data.OtpSecret.ValueString()); err != nil {
 			resp.Diagnostics.Append(
 				diag.NewAttributeErrorDiagnostic(
 					path.Root("otp_secret"),
-					"invalid OTP secret",
+					"Invalid OTP secret",
 					err.Error(),
 				),
 			)
 		}
 	}
 
-	if !data.SessionCacheMode.IsNull() && !data.SessionCacheMode.IsUnknown() {
-		mode := data.SessionCacheMode.ValueString()
+	// Validate session_cache configuration only if provided
+	if !data.SessionCache.IsNull() && !data.SessionCache.IsUnknown() {
+		var sessionCache SessionCacheModel
+		diags := data.SessionCache.As(
+			ctx,
+			&sessionCache,
+			basetypes.ObjectAsOptions{UnhandledNullAsEmpty: true, UnhandledUnknownAsEmpty: true},
+		)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		mode := ""
+		if !sessionCache.Mode.IsNull() && !sessionCache.Mode.IsUnknown() {
+			mode = sessionCache.Mode.ValueString()
+			if !isValidSessionCacheMode(mode) {
+				resp.Diagnostics.Append(
+					diag.NewAttributeErrorDiagnostic(
+						path.Root("session_cache").AtName("mode"),
+						"Invalid session cache mode",
+						"session_cache.mode must be one of: 'auto', 'keyring', 'file', 'memory', 'off'",
+					),
+				)
+			}
+		}
 
 		pstr := ""
-		if !data.SessionCachePath.IsNull() && !data.SessionCachePath.IsUnknown() {
-			pstr = data.SessionCachePath.ValueString()
+		if !sessionCache.Path.IsNull() && !sessionCache.Path.IsUnknown() {
+			pstr = sessionCache.Path.ValueString()
 		}
 
 		if mode == "file" && pstr == "" {
 			resp.Diagnostics.Append(
-				diag.NewAttributeErrorDiagnostic(
-					path.Root("session_cache_path"),
-					"missing session_cache_path",
-					"When session_cache is \"file\", you must set session_cache_path to a writable directory.",
+				diag.NewAttributeWarningDiagnostic(
+					path.Root("session_cache").AtName("path"),
+					"Missing session_cache.path",
+					"When session_cache.mode is \"file\", session_cache.path should be set to a writable directory. Will use default OS cache directory.",
 				),
 			)
 		}
 		if mode != "" && mode != "file" && pstr != "" {
 			resp.Diagnostics.Append(
 				diag.NewAttributeWarningDiagnostic(
-					path.Root("session_cache_path"),
-					"session_cache_path ignored",
+					path.Root("session_cache").AtName("path"),
+					"session_cache.path ignored",
 					fmt.Sprintf(
-						"session_cache is %q, so session_cache_path will be ignored. Set session_cache = \"file\" to use it.",
+						"session_cache.mode is %q, so session_cache.path will be ignored. Set mode = \"file\" to use it.",
 						mode,
 					),
 				),

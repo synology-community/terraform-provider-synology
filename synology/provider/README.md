@@ -1,12 +1,4 @@
----
-page_title: "{{ title .ProviderShortName }} Provider"
-description: |-
-{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
----
-
-# {{ title .ProviderShortName }} Provider
-
-{{ .Description | trimspace }}
+The Synology provider enables Terraform to manage resources on Synology DiskStation Manager (DSM) systems.
 
 ## Authentication
 
@@ -27,23 +19,33 @@ provider "synology" {
 
 ### With Two-Factor Authentication (OTP)
 
+```hcl
+provider "synology" {
+  host       = "https://nas.example.com:5001"
+  user       = "admin"
+  password   = "your-password"
+  otp_secret = "YOUR_BASE32_TOTP_SECRET"
+}
+```
 
 ### Using Environment Variables
 
 ```hcl
-# Provider configuration can be omitted when all 
-# required settings are configured via environment variables
-provider "synology" {}
+provider "synology" {
+  # Configuration will be read from environment variables:
+  # - SYNOLOGY_HOST
+  # - SYNOLOGY_USER
+  # - SYNOLOGY_PASSWORD
+  # - SYNOLOGY_OTP_SECRET (optional)
+  # - SYNOLOGY_SKIP_CERT_CHECK (optional)
+  # - SYNOLOGY_SESSION_CACHE (optional)
+}
 ```
 
 ```bash
-# Script to set environment variables
 export SYNOLOGY_HOST="https://nas.example.com:5001"
 export SYNOLOGY_USER="admin"
 export SYNOLOGY_PASSWORD="your-password"
-export SYNOLOGY_OTP_SECRET="YOUR_BASE32_TOTP_SECRET" # (optional)
-export SYNOLOGY_SKIP_CERT_CHECK="true" # (optional)
-export SYNOLOGY_SESSION_CACHE="file" # (optional)
 terraform plan
 ```
 
@@ -102,12 +104,3 @@ The provider includes automatic retry logic with exponential backoff for API rat
 - Some resources require specific DSM packages to be installed
 - Two-factor authentication requires a valid RFC 4648 base32 TOTP secret (16-32 characters, A-Z and 2-7)
 - Session caching significantly reduces authentication overhead for repeated operations
-
-
-{{ if .HasExample -}}
-## Example Usage
-
-{{tffile .ExampleFile }}
-{{- end }}
-
-{{ .SchemaMarkdown | trimspace }}

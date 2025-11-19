@@ -1,11 +1,107 @@
 ---
 page_title: "Synology Provider"
 description: |-
-  
+  The Synology provider enables Terraform to manage resources on Synology DiskStation Manager (DSM) systems.
 ---
 
 # Synology Provider
 
+The Synology provider enables Terraform to manage resources on Synology DiskStation Manager (DSM) systems.
+
+## Authentication
+
+The provider supports multiple authentication methods, prioritizing explicit configuration over environment variables:
+
+1. **Provider Configuration**: Set credentials directly in the provider block
+1. **Environment Variables**: Use `SYNOLOGY_HOST`, `SYNOLOGY_USER`, and `SYNOLOGY_PASSWORD`
+
+### Basic Authentication
+
+```hcl
+provider "synology" {
+  host     = "https://nas.example.com:5001"
+  user     = "admin"
+  password = "your-password"
+}
+```
+
+### With Two-Factor Authentication (OTP)
+
+
+### Using Environment Variables
+
+```hcl
+# Provider configuration can be omitted when all 
+# required settings are configured via environment variables
+provider "synology" {}
+```
+
+```bash
+# Script to set environment variables
+export SYNOLOGY_HOST="https://nas.example.com:5001"
+export SYNOLOGY_USER="admin"
+export SYNOLOGY_PASSWORD="your-password"
+export SYNOLOGY_OTP_SECRET="YOUR_BASE32_TOTP_SECRET" # (optional)
+export SYNOLOGY_SKIP_CERT_CHECK="true" # (optional)
+export SYNOLOGY_SESSION_CACHE="file" # (optional)
+terraform plan
+```
+
+## Session Caching
+
+The provider supports session caching to avoid repeated authentication:
+
+- **`auto`** (default): Tries keyring backends, falls back to file/memory
+- **`keyring`**: Uses OS keyring (Keychain, WinCred, SecretService, KWallet)
+- **`file`**: Stores sessions in a file (requires `session_cache_path`)
+- **`memory`**: In-memory cache (lost on provider restart)
+- **`off`**: No caching (authenticate every time)
+
+### Example with File-based Cache
+
+```hcl
+provider "synology" {
+  host               = "https://nas.example.com:5001"
+  user               = "admin"
+  password           = "your-password"
+  session_cache      = "file"
+  session_cache_path = "/tmp/terraform-synology-sessions"
+}
+```
+
+## SSL Certificate Verification
+
+By default, the provider skips SSL certificate verification (useful for self-signed certificates). To enable verification:
+
+```hcl
+provider "synology" {
+  host            = "https://nas.example.com:5001"
+  user            = "admin"
+  password        = "your-password"
+  skip_cert_check = false
+}
+```
+
+## Supported Resources
+
+The provider supports managing:
+
+- **Container Projects**: Docker Compose projects and containers
+- **Virtual Machines**: Virtualization guests and images
+- **File Station**: Files, folders, and ISO images
+- **Core System**: Packages, tasks, and events
+- **Network Configuration**: Network interfaces and settings
+
+## API Rate Limiting
+
+The provider includes automatic retry logic with exponential backoff for API rate limiting. The default retry limit is 5 attempts.
+
+## Notes
+
+- The provider requires DSM 7.0 or later
+- Some resources require specific DSM packages to be installed
+- Two-factor authentication requires a valid RFC 4648 base32 TOTP secret (16-32 characters, A-Z and 2-7)
+- Session caching significantly reduces authentication overhead for repeated operations
 
 
 ## Example Usage
@@ -47,10 +143,17 @@ provider "synology" {
 
 ### Optional
 
-- `host` (String) Remote Synology URL, e.g. 'https://host:5001'.
+- `host` (String) Remote Synology URL, e.g. `https://host:5001`.
 - `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A-Z, 2-7, optional '=', spaces ignored).
 - `password` (String, Sensitive) Password to use when connecting to Synology station.
-- `session_cache` (String) Session cache mode - one of: auto, keyring, file, memory, off. Default: auto.
-- `session_cache_path` (String) Directory for file-based session cache when session_cache = "file". Defaults to OS user cache dir.
+- `session_cache` (Attributes) Session cache configuration. Supports caching Synology DSM sessions to reduce login frequency. (see [below for nested schema](#nestedatt--session_cache))
 - `skip_cert_check` (Boolean) Whether to skip SSL certificate checks.
 - `user` (String) User to connect to Synology station with.
+
+<a id="nestedatt--session_cache"></a>
+### Nested Schema for `session_cache`
+
+Optional:
+
+- `mode` (String) Session cache mode - one of: auto, keyring, file, memory, off. Default: off. Can be set via SYNOLOGY_SESSION_CACHE environment variable.
+- `path` (String) Directory for file-based session cache when mode = "file". Defaults to OS user cache dir. Can be set via SYNOLOGY_SESSION_CACHE_PATH environment variable.

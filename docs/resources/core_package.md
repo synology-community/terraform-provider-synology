@@ -2,12 +2,50 @@
 page_title: "Core: synology_core_package"
 subcategory: "Core"
 description: |-
-  A Generic API Resource for making calls to the Synology DSM API.
+  Manages packages on a Synology NAS using the Package Center API.
+  Install, configure, and manage Synology packages with optional wizard configuration for initial setup.
+  Example Usage
+  
+  # Install MariaDB with wizard configuration
+  resource "synology_core_package" "mariadb" {
+    name = "MariaDB10"
+    
+    wizard = {
+      port              = "3306"
+      new_root_password = "secure-password"
+    }
+  }
+  
+  # Install Docker package
+  resource "synology_core_package" "docker" {
+    name = "Docker"
+  }
 ---
 
 # Core: Package (Resource)
 
-A Generic API Resource for making calls to the Synology DSM API.
+Manages packages on a Synology NAS using the Package Center API.
+
+Install, configure, and manage Synology packages with optional wizard configuration for initial setup.
+
+## Example Usage
+
+```hcl
+# Install MariaDB with wizard configuration
+resource "synology_core_package" "mariadb" {
+  name = "MariaDB10"
+  
+  wizard = {
+    port              = "3306"
+    new_root_password = "secure-password"
+  }
+}
+
+# Install Docker package
+resource "synology_core_package" "docker" {
+  name = "Docker"
+}
+```
 
 ## Example Usage
 
