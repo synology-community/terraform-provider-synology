@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
-	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api"
 	"github.com/testcontainers/testcontainers-go"
@@ -21,8 +20,6 @@ var providerFactories = map[string]func() (tfprotov6.ProviderServer, error){
 }
 
 var testAccProtoV6ProviderFactories = providerFactories
-
-var testClient *client.Client
 
 func TestMain(m *testing.M) {
 	if os.Getenv("TF_ACC") == "" {
@@ -76,11 +73,8 @@ func runAcceptanceTests(m *testing.M) int {
 	}
 
 	lc := &logConsumer{StdOut: os.Getenv("DSM_STDOUT") != ""}
-	container.FollowOutput(lc)
-	if err := container.StartLogProducer(ctx); err != nil {
-		fmt.Printf("Warning: Could not start log producer: %v\n", err)
-	}
-	defer container.StopLogProducer()
+
+	testcontainers.WithLogConsumers(lc)
 
 	endpoint, err := container.PortEndpoint(ctx, "5000/tcp", "http")
 	if err != nil {
@@ -135,20 +129,6 @@ func runAcceptanceTests(m *testing.M) int {
 	}
 
 	return m.Run()
-}
-
-func importStep(name string, ignore ...string) resource.TestStep {
-	step := resource.TestStep{
-		ResourceName:      name,
-		ImportState:       true,
-		ImportStateVerify: true,
-	}
-
-	if len(ignore) > 0 {
-		step.ImportStateVerifyIgnore = ignore
-	}
-
-	return step
 }
 
 func preCheck(t *testing.T) {
