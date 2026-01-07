@@ -13,7 +13,7 @@ import (
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/compose"
+	testcompose "github.com/testcontainers/testcontainers-go/modules/compose"
 )
 
 var providerFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -52,7 +52,7 @@ func runAcceptanceTests(m *testing.M) int {
 		panic(err)
 	}
 
-	dc, err := compose.NewDockerCompose("../../docker-compose.yaml")
+	dc, err := testcompose.NewDockerCompose("../../docker-compose.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -60,12 +60,12 @@ func runAcceptanceTests(m *testing.M) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err = dc.WithOsEnv().Up(ctx, compose.Wait(true)); err != nil {
+	if err = dc.WithOsEnv().Up(ctx, testcompose.Wait(true)); err != nil {
 		panic(err)
 	}
 
 	defer func() {
-		if err := dc.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal); err != nil {
+		if err := dc.Down(context.Background(), testcompose.RemoveOrphans(true), testcompose.RemoveImagesLocal); err != nil {
 			panic(err)
 		}
 	}()

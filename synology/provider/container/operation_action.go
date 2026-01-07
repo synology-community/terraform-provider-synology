@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/action/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/docker"
@@ -14,16 +16,16 @@ import (
 
 // Ensure the implementation satisfies framework interfaces.
 var (
-	_ action.Action              = &containerOperationAction{}
-	_ action.ActionWithConfigure = &containerOperationAction{}
+	_ action.Action              = &ContainerOperationAction{}
+	_ action.ActionWithConfigure = &ContainerOperationAction{}
 )
 
 // NewContainerOperationAction returns a new instance of the container operation action.
 func NewContainerOperationAction() action.Action {
-	return &containerOperationAction{}
+	return &ContainerOperationAction{}
 }
 
-type containerOperationAction struct {
+type ContainerOperationAction struct {
 	client docker.Api
 }
 
@@ -33,7 +35,7 @@ type containerOperationActionModel struct {
 	Operation types.String `tfsdk:"operation"`
 }
 
-func (a *containerOperationAction) Metadata(
+func (a *ContainerOperationAction) Metadata(
 	ctx context.Context,
 	req action.MetadataRequest,
 	resp *action.MetadataResponse,
@@ -41,7 +43,7 @@ func (a *containerOperationAction) Metadata(
 	resp.TypeName = req.ProviderTypeName + "_container_operation"
 }
 
-func (a *containerOperationAction) Schema(
+func (a *ContainerOperationAction) Schema(
 	ctx context.Context,
 	req action.SchemaRequest,
 	resp *action.SchemaResponse,
@@ -57,12 +59,15 @@ func (a *containerOperationAction) Schema(
 			"operation": schema.StringAttribute{
 				MarkdownDescription: "Operation to perform on the container. Valid values are `start`, `stop`, and `restart`.",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("start", "stop", "restart"),
+				},
 			},
 		},
 	}
 }
 
-func (a *containerOperationAction) Configure(
+func (a *ContainerOperationAction) Configure(
 	ctx context.Context,
 	req action.ConfigureRequest,
 	resp *action.ConfigureResponse,
@@ -86,7 +91,7 @@ func (a *containerOperationAction) Configure(
 	a.client = client.DockerAPI()
 }
 
-func (a *containerOperationAction) Invoke(
+func (a *ContainerOperationAction) Invoke(
 	ctx context.Context,
 	req action.InvokeRequest,
 	resp *action.InvokeResponse,
@@ -94,9 +99,24 @@ func (a *containerOperationAction) Invoke(
 	var config containerOperationActionModel
 
 	// Read the action configuration
-	diags := req.Config.Get(ctx, &config)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.Name.IsNull() || config.Name.IsUnknown() {
+		return
+	}
+
+	if config.Operation.IsNull() || config.Operation.IsUnknown() {
+		return
+	}
+
+	if a.client == nil {
+		// resp.Diagnostics.AddError(
+		// 	"Client Not Configured",
+		// 	"The container operation action has not been properly configured with a client.",
+		// )
 		return
 	}
 
@@ -116,21 +136,19 @@ func (a *containerOperationAction) Invoke(
 
 	containerName := config.Name.ValueString()
 
+	request := docker.ContainerOperationRequest{
+		Name: containerName,
+	}
+
 	// Perform the requested operation
 	var err error
 	switch operation {
 	case "start":
-		_, err = a.client.ContainerStart(ctx, docker.ContainerStartRequest{
-			Name: containerName,
-		})
+		_, err = a.client.ContainerStart(ctx, request)
 	case "stop":
-		_, err = a.client.ContainerStop(ctx, docker.ContainerStopRequest{
-			Name: containerName,
-		})
+		_, err = a.client.ContainerStop(ctx, request)
 	case "restart":
-		_, err = a.client.ContainerRestart(ctx, docker.ContainerRestartRequest{
-			Name: containerName,
-		})
+		_, err = a.client.ContainerRestart(ctx, request)
 	}
 
 	if err != nil {

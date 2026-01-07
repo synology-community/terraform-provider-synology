@@ -1,6 +1,6 @@
 module github.com/synology-community/terraform-provider-synology
 
-go 1.25.0
+go 1.24.9
 
 require (
 	github.com/99designs/keyring v1.2.2
@@ -19,7 +19,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/subpop/go-ini v0.1.5
-	github.com/synology-community/go-synology v0.1.10
+	github.com/synology-community/go-synology v0.1.11
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.40.0
 	github.com/tredoe/osutil v1.5.0

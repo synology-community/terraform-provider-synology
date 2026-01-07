@@ -497,6 +497,7 @@ func (p *SynologyProvider) Configure(
 	if c, ok := v.(*client.Client); ok {
 		resp.DataSourceData = c
 		resp.ResourceData = c
+		resp.ActionData = c
 		return
 	}
 
@@ -511,6 +512,7 @@ func (p *SynologyProvider) Configure(
 	if c, ok := cli.(*client.Client); ok {
 		resp.DataSourceData = c
 		resp.ResourceData = c
+		resp.ActionData = c
 	}
 }
 
