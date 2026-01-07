@@ -1,6 +1,7 @@
 package container
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
@@ -22,4 +23,10 @@ func Resources() []func() resource.Resource {
 
 func DataSources() []func() datasource.DataSource {
 	return []func() datasource.DataSource{}
+}
+
+func Actions() []func() action.Action {
+	return []func() action.Action{
+		NewContainerOperationAction,
+	}
 }

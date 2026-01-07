@@ -16,6 +16,7 @@ import (
 
 	"github.com/99designs/keyring"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -542,6 +543,12 @@ func (p *SynologyProvider) Functions(ctx context.Context) []func() function.Func
 		NewMkPasswdFunction,
 		NewIniEncodeFunction,
 	}
+}
+
+func (p *SynologyProvider) Actions(ctx context.Context) []func() action.Action {
+	var resp []func() action.Action
+	resp = append(resp, container.Actions()...)
+	return resp
 }
 
 func (p *SynologyProvider) ValidateConfig(
