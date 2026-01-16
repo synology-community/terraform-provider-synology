@@ -3,13 +3,13 @@ package container
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/action/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/docker"
 )
@@ -112,33 +112,16 @@ func (a *ContainerOperationAction) Invoke(
 		return
 	}
 
-	if a.client == nil {
-		// resp.Diagnostics.AddError(
-		// 	"Client Not Configured",
-		// 	"The container operation action has not been properly configured with a client.",
-		// )
-		return
-	}
-
 	// Validate operation
 	operation := config.Operation.ValueString()
-	validOperations := []string{"start", "stop", "restart"}
-	if !slices.Contains(validOperations, operation) {
-		resp.Diagnostics.AddError(
-			"Invalid Operation",
-			fmt.Sprintf(
-				"Operation must be one of: start, stop, restart. Got: %s",
-				operation,
-			),
-		)
-		return
-	}
 
 	containerName := config.Name.ValueString()
 
 	request := docker.ContainerOperationRequest{
 		Name: containerName,
 	}
+
+	tflog.Info(ctx, "running container action")
 
 	// Perform the requested operation
 	var err error
@@ -163,6 +146,4 @@ func (a *ContainerOperationAction) Invoke(
 		)
 		return
 	}
-
-	// Action completed successfully - no result data to return for actions
 }

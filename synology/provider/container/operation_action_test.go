@@ -125,10 +125,10 @@ func testAccContainerOperationActionWithTrigger() string {
 	return `
 provider "synology" {}
 
-action "synology_container_operation" "restart" {
+action "synology_container_operation" "start" {
   config {
     name      = "tinkerbell"
-    operation = "restart"
+    operation = "start"
   }
 }
 
@@ -138,7 +138,7 @@ resource "terraform_data" "trigger" {
   lifecycle {
     action_trigger {
       events  = [after_create, after_update]
-      actions = [action.synology_container_operation.restart]
+      actions = [action.synology_container_operation.start]
     }
   }
 }
