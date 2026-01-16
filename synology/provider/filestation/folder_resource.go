@@ -88,7 +88,10 @@ func (f *FolderResource) Create(
 			)
 			return
 		} else {
-			resp.Diagnostics.AddError("Failed to get file", fmt.Sprintf("Unable to get file, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"Failed to get file",
+				fmt.Sprintf("Unable to get file, got error: %s", err),
+			)
 			return
 		}
 	}
@@ -126,7 +129,10 @@ func (f *FolderResource) Delete(
 				fmt.Sprintf("Unable to delete file, got error: %s", e),
 			)
 		} else {
-			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"Failed to delete file",
+				fmt.Sprintf("Unable to delete file, got error: %s", err),
+			)
 		}
 		return
 	}
@@ -153,7 +159,10 @@ func (f *FolderResource) Read(
 			resp.State.RemoveResource(ctx)
 			return
 		} else {
-			resp.Diagnostics.AddError("Failed to get file during read", fmt.Sprintf("Unable to get file, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"Failed to get file during read",
+				fmt.Sprintf("Unable to get file, got error: %s", err),
+			)
 			return
 		}
 	}

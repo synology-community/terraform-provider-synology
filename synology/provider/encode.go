@@ -128,7 +128,9 @@ func encode(v attr.Value) (encoded string, diags diag.Diagnostics) {
 			m, ok := vv.(map[string]any)
 			if !ok {
 				diags.Append(diag.NewErrorDiagnostic(
-					"List of manifests contained an invalid resource", fmt.Sprintf("value doesn't seem to be a manifest: %#v", vv)))
+					"List of manifests contained an invalid resource",
+					fmt.Sprintf("value doesn't seem to be a manifest: %#v", vv),
+				))
 			}
 			s, diags := marshal(m)
 			if diags.HasError() {

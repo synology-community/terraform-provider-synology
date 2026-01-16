@@ -568,7 +568,11 @@ func (m Service) AsComposeConfig(
 				}
 				if !v.Bind.IsNull() && !v.Bind.IsUnknown() {
 					bind := VolumeBind{}
-					if diag := v.Bind.As(ctx, &bind, basetypes.ObjectAsOptions{}); !diag.HasError() {
+					if diag := v.Bind.As(
+						ctx,
+						&bind,
+						basetypes.ObjectAsOptions{},
+					); !diag.HasError() {
 						volume.Bind = &composetypes.ServiceVolumeBind{
 							Propagation:    bind.Propagation.ValueString(),
 							CreateHostPath: bind.CreateHostPath.ValueBool(),
@@ -776,7 +780,11 @@ func (m Service) AsComposeConfig(
 
 				if n.LinkLocalIPs.IsNull() || n.LinkLocalIPs.IsUnknown() {
 					linkLocalIPs := []string{}
-					if diag := n.LinkLocalIPs.ElementsAs(ctx, &linkLocalIPs, true); !diag.HasError() {
+					if diag := n.LinkLocalIPs.ElementsAs(
+						ctx,
+						&linkLocalIPs,
+						true,
+					); !diag.HasError() {
 						network.LinkLocalIPs = linkLocalIPs
 					} else {
 						d = append(d, diag...)

@@ -143,17 +143,17 @@ provider "synology" {
 
 ### Optional
 
-- `host` (String) Remote Synology URL, e.g. `https://host:5001`.
-- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology station (valid RFC 4648 base32 TOTP secret: A-Z, 2-7, optional '=', spaces ignored).
-- `password` (String, Sensitive) Password to use when connecting to Synology station.
+- `host` (String) Remote Synology URL, e.g. `https://host:5001`. Can be specified with the `SYNOLOGY_HOST` environment variable.
+- `otp_secret` (String, Sensitive) OTP secret to use when connecting to Synology DSM. Can be specified with the `SYNOLOGY_OTP_SECRET` environment variable. Format: Valid RFC 4648 base32 TOTP secret: A-Z, 2-7, optional '=', spaces ignored.
+- `password` (String, Sensitive) Password to use when connecting to Synology station. Can be specified with the `SYNOLOGY_PASSWORD` environment variable.
 - `session_cache` (Attributes) Session cache configuration. Supports caching Synology DSM sessions to reduce login frequency. (see [below for nested schema](#nestedatt--session_cache))
-- `skip_cert_check` (Boolean) Whether to skip SSL certificate checks.
-- `user` (String) User to connect to Synology station with.
+- `skip_cert_check` (Boolean) Whether to skip SSL certificate checks. Can be specified with the `SYNOLOGY_SKIP_CERT_CHECK` environment variable.
+- `user` (String) User to connect to Synology station with. Can be specified with the `SYNOLOGY_USER` environment variable.
 
 <a id="nestedatt--session_cache"></a>
 ### Nested Schema for `session_cache`
 
 Optional:
 
-- `mode` (String) Session cache mode - one of: auto, keyring, file, memory, off. Default: off. Can be set via SYNOLOGY_SESSION_CACHE environment variable.
-- `path` (String) Directory for file-based session cache when mode = "file". Defaults to OS user cache dir. Can be set via SYNOLOGY_SESSION_CACHE_PATH environment variable.
+- `mode` (String) Session cache mode - one of: auto, keyring, file, memory, off. Default: off. Can be set via `SYNOLOGY_SESSION_CACHE` environment variable.
+- `path` (String) Directory for file-based session cache when mode = "file". Defaults to OS user cache dir. Can be set via `SYNOLOGY_SESSION_CACHE_PATH` environment variable.

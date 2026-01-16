@@ -143,7 +143,10 @@ func (f *CloudInitResource) Delete(
 				fmt.Sprintf("Unable to delete file, got error: %s", e),
 			)
 		} else {
-			resp.Diagnostics.AddError("Failed to delete file", fmt.Sprintf("Unable to delete file, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"Failed to delete file",
+				fmt.Sprintf("Unable to delete file, got error: %s", err),
+			)
 		}
 		return
 	}

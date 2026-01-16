@@ -419,7 +419,12 @@ func getTaskRequest(data TaskResourceModel) (taskReq core.TaskRequest, err error
 	} else {
 		t := newTaskSchedule()
 		pkgRunTime := time.Now().Local().Add(-time.Minute * 5)
-		t.Date = fmt.Sprintf("%d-%02d-%02d", pkgRunTime.Year(), pkgRunTime.Month(), pkgRunTime.Day())
+		t.Date = fmt.Sprintf(
+			"%d-%02d-%02d",
+			pkgRunTime.Year(),
+			pkgRunTime.Month(),
+			pkgRunTime.Day(),
+		)
 		taskReq.Schedule = t
 	}
 

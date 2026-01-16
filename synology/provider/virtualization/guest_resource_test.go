@@ -107,7 +107,11 @@ func TestGuestResourceValidateConfig_ModuleVariables(t *testing.T) {
 			if tc.expectError && !hasError {
 				t.Errorf("Expected validation error for %s, but got none", tc.description)
 			} else if !tc.expectError && hasError {
-				t.Errorf("Expected no validation error for %s, but got: %v", tc.description, resp.Diagnostics.Errors())
+				t.Errorf(
+					"Expected no validation error for %s, but got: %v",
+					tc.description,
+					resp.Diagnostics.Errors(),
+				)
 			}
 		})
 	}

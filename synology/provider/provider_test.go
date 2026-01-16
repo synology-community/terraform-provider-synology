@@ -62,7 +62,11 @@ func runAcceptanceTests(m *testing.M) int {
 	}
 
 	defer func() {
-		if err := dc.Down(context.Background(), testcompose.RemoveOrphans(true), testcompose.RemoveImagesLocal); err != nil {
+		if err := dc.Down(
+			context.Background(),
+			testcompose.RemoveOrphans(true),
+			testcompose.RemoveImagesLocal,
+		); err != nil {
 			panic(err)
 		}
 	}()

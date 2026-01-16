@@ -314,7 +314,10 @@ func (f *GuestResource) Create(
 				return
 			}
 		} else {
-			resp.Diagnostics.AddError("failed to create guest guest", fmt.Sprintf("unable to create guest guest, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"failed to create guest guest",
+				fmt.Sprintf("unable to create guest guest, got error: %s", err),
+			)
 			return
 		}
 	}
@@ -397,7 +400,10 @@ func (f *GuestResource) Read(
 			resp.State.RemoveResource(ctx)
 			return
 		} else {
-			resp.Diagnostics.AddError("Failed to list guests", fmt.Sprintf("Unable to list guests, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"Failed to list guests",
+				fmt.Sprintf("Unable to list guests, got error: %s", err),
+			)
 			return
 		}
 	}

@@ -140,7 +140,10 @@ func (f *ImageResource) Create(
 				data.ID = types.StringValue(img.ID)
 			}
 		} else {
-			resp.Diagnostics.AddError("failed to create guest image", fmt.Sprintf("unable to create guest image, got error: %s", err))
+			resp.Diagnostics.AddError(
+				"failed to create guest image",
+				fmt.Sprintf("unable to create guest image, got error: %s", err),
+			)
 			return
 		}
 	} else {
