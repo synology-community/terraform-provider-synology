@@ -10,10 +10,10 @@ require (
 	github.com/docker/go-units v0.5.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
-	github.com/hashicorp/terraform-plugin-framework v1.18.0
+	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-timetypes v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
-	github.com/hashicorp/terraform-plugin-go v0.30.0
+	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-testing v1.14.0
 	github.com/kdomanski/iso9660 v0.4.0
 	github.com/mattn/go-shellwords v1.0.12
