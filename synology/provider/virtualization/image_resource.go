@@ -222,9 +222,7 @@ func (f *ImageResource) Create(
 			if len(imageRepos) == 0 {
 				resp.Diagnostics.AddError(
 					"Storage not found",
-					fmt.Sprintf(
-						"Unable to find storage. Specify storage_id directly or ensure VMM has configured storages.",
-					),
+					"Unable to find storage. Specify storage_id directly or ensure VMM has configured storages.",
 				)
 				return
 			}
