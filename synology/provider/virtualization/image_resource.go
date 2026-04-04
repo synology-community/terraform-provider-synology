@@ -3,16 +3,25 @@ package virtualization
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/virtualization"
+	"github.com/synology-community/go-synology/pkg/util/form"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -31,10 +40,13 @@ type ImageResourceModel struct {
 	ID          types.String `tfsdk:"id"`
 	Name        types.String `tfsdk:"name"`
 	Path        types.String `tfsdk:"path"`
+	Content     types.String `tfsdk:"content"`
+	Url         types.String `tfsdk:"url"`
 	AutoClean   types.Bool   `tfsdk:"auto_clean"`
 	ImageType   types.String `tfsdk:"image_type"`
 	StorageID   types.String `tfsdk:"storage_id"`
 	StorageName types.String `tfsdk:"storage_name"`
+	UsedSize    types.Int64  `tfsdk:"used_size"`
 }
 
 // Schema implements resource.Resource.
@@ -56,8 +68,33 @@ func (f *ImageResource) Schema(
 				Required:            true,
 			},
 			"path": schema.StringAttribute{
-				MarkdownDescription: "The file on the DiskStation. Note: the path should begin with a shared folder.",
-				Required:            true,
+				MarkdownDescription: "The file on the DiskStation. Note: the path should begin with a shared folder. Use this to create an image from an existing file on the NAS.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(
+						path.MatchRoot("path"),
+						path.MatchRoot("content"),
+						path.MatchRoot("url"),
+					),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"content": schema.StringAttribute{
+				MarkdownDescription: "The raw file contents to upload as a guest image.",
+				Optional:            true,
+				Sensitive:           true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"url": schema.StringAttribute{
+				MarkdownDescription: "A URL to download and upload as a guest image.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"image_type": schema.StringAttribute{
 				MarkdownDescription: "The image type. (disk/vdsm/iso)",
@@ -81,6 +118,13 @@ func (f *ImageResource) Schema(
 				Computed:            true,
 				Default:             stringdefault.StaticString("default"),
 			},
+			"used_size": schema.Int64Attribute{
+				MarkdownDescription: "The size of the image in bytes as reported by the server. Changes to this value indicate the image needs replacing.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
@@ -100,59 +144,126 @@ func (f *ImageResource) Create(
 		return
 	}
 
-	image := virtualization.Image{
-		Name:      data.Name.ValueString(),
-		FilePath:  data.Path.ValueString(),
-		AutoClean: data.AutoClean.ValueBool(),
-		Type:      virtualization.ImageType(data.ImageType.ValueString()),
-	}
-
-	if !data.StorageID.IsUnknown() && !data.StorageID.IsNull() {
-		image.Storages = append(
-			image.Storages,
-			virtualization.Storage{ID: data.StorageID.ValueString()},
-		)
-	}
-
-	if !data.StorageName.IsUnknown() && !data.StorageName.IsNull() {
-		image.Storages = append(
-			image.Storages,
-			virtualization.Storage{Name: data.StorageName.ValueString()},
-		)
-	}
-
-	// Upload the image
 	c, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
-	res, err := f.client.ImageCreate(c, image)
-	if err != nil {
-		if strings.Contains(err.Error(), "403") {
-			img, err := f.getImage(ctx, data.Name.ValueString())
+	isUpload := (!data.Content.IsNull() && !data.Content.IsUnknown()) ||
+		(!data.Url.IsNull() && !data.Url.IsUnknown())
+
+	if isUpload {
+		// Upload mode: upload file content to create a new guest image
+		var fileContent string
+
+		if !data.Content.IsNull() && !data.Content.IsUnknown() {
+			fileContent = data.Content.ValueString()
+		} else {
+			dresp, err := retryablehttp.NewClient().Get(data.Url.ValueString())
 			if err != nil {
 				resp.Diagnostics.AddError(
-					"Failed to list images",
-					fmt.Sprintf("Unable to list images, got error: %s", err),
+					"Failed to download file",
+					fmt.Sprintf("Unable to download file from URL, got error: %s", err),
 				)
 				return
 			}
-			if img.ID != "" {
-				data.ID = types.StringValue(img.ID)
+			defer func() {
+				_ = dresp.Body.Close()
+			}()
+
+			dbody, err := io.ReadAll(dresp.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to read file",
+					fmt.Sprintf("Unable to read downloaded file, got error: %s", err),
+				)
+				return
 			}
-		} else {
+			fileContent = string(dbody)
+		}
+
+		fileName := data.Name.ValueString() + "." + data.ImageType.ValueString()
+
+		var imageRepos []string
+		if !data.StorageID.IsNull() && !data.StorageID.IsUnknown() &&
+			data.StorageID.ValueString() != "" {
+			imageRepos = []string{data.StorageID.ValueString()}
+		}
+
+		res, err := f.client.ImageUploadAndCreate(c, form.File{
+			Name:    fileName,
+			Content: fileContent,
+		}, imageRepos, data.ImageType.ValueString())
+		if err != nil {
 			resp.Diagnostics.AddError(
-				"failed to create guest image",
-				fmt.Sprintf("unable to create guest image, got error: %s", err),
+				"Failed to upload and create guest image",
+				fmt.Sprintf("Unable to upload and create guest image, got error: %s", err),
 			)
 			return
 		}
-	} else {
+
 		if res.TaskInfo.ImageID != "" {
 			data.ID = types.StringValue(res.TaskInfo.ImageID)
 		} else {
-			resp.Diagnostics.AddError("Failed to upload image", "Unable to get image ID")
+			resp.Diagnostics.AddError("Failed to upload image", "Unable to get image ID from task")
 			return
 		}
+	} else {
+		// Existing file mode: create image from a file already on the DiskStation
+		image := virtualization.Image{
+			Name:      data.Name.ValueString(),
+			FilePath:  data.Path.ValueString(),
+			AutoClean: data.AutoClean.ValueBool(),
+			Type:      virtualization.ImageType(data.ImageType.ValueString()),
+		}
+
+		if !data.StorageID.IsUnknown() && !data.StorageID.IsNull() {
+			image.Storages = append(
+				image.Storages,
+				virtualization.Storage{ID: data.StorageID.ValueString()},
+			)
+		}
+
+		if !data.StorageName.IsUnknown() && !data.StorageName.IsNull() {
+			image.Storages = append(
+				image.Storages,
+				virtualization.Storage{Name: data.StorageName.ValueString()},
+			)
+		}
+
+		res, err := f.client.ImageCreate(c, image)
+		if err != nil {
+			if strings.Contains(err.Error(), "403") {
+				img, err := f.getImage(ctx, data.Name.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError(
+						"Failed to list images",
+						fmt.Sprintf("Unable to list images, got error: %s", err),
+					)
+					return
+				}
+				if img.ID != "" {
+					data.ID = types.StringValue(img.ID)
+				}
+			} else {
+				resp.Diagnostics.AddError(
+					"failed to create guest image",
+					fmt.Sprintf("unable to create guest image, got error: %s", err),
+				)
+				return
+			}
+		} else {
+			if res.TaskInfo.ImageID != "" {
+				data.ID = types.StringValue(res.TaskInfo.ImageID)
+			} else {
+				resp.Diagnostics.AddError("Failed to upload image", "Unable to get image ID")
+				return
+			}
+		}
+	}
+
+	// Read back the image to get used_size
+	img, err := f.getImage(ctx, data.Name.ValueString())
+	if err == nil && img != nil {
+		data.UsedSize = types.Int64Value(img.UsedSize)
 	}
 
 	// Save data into Terraform state
@@ -205,6 +316,8 @@ func (f *ImageResource) Read(
 	if image.ID != "" {
 		data.ID = types.StringValue(image.ID)
 	}
+
+	data.UsedSize = types.Int64Value(image.UsedSize)
 
 	resp.State.Set(ctx, &data)
 }
