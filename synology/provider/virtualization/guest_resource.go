@@ -112,6 +112,10 @@ See [examples/resources/synology_virtualization_guest](https://github.com/synolo
 			"storage_id": schema.StringAttribute{
 				MarkdownDescription: "ID of the storage device.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
@@ -333,28 +337,6 @@ func (f *GuestResource) Create(
 		StorageID: storageID,
 		Disks:     vdisks,
 		Networks:  vnics,
-	}
-
-	tflog.Debug(
-		ctx,
-		fmt.Sprintf(
-			"GuestCreate request: guest_name=%s, storage_id=%s, vdisks_len=%d, vnics_len=%d",
-			createReq.Name,
-			createReq.StorageID,
-			len(createReq.Disks),
-			len(createReq.Networks),
-		),
-	)
-	for i, d := range createReq.Disks {
-		tflog.Debug(
-			ctx,
-			fmt.Sprintf("  vdisk[%d]: create_type=%d, size=%d, image_id=%s, image_name=%s",
-				i, d.CreateType, d.Size, d.ImageID, d.ImageName),
-		)
-	}
-	for i, n := range createReq.Networks {
-		tflog.Debug(ctx, fmt.Sprintf("  vnic[%d]: id=%s, name=%s, mac=%s",
-			i, n.ID, n.Name, n.Mac))
 	}
 
 	res, err := f.client.GuestCreate(c, createReq)

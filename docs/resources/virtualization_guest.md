@@ -103,8 +103,8 @@ resource "synology_virtualization_guest" "foo" {
 - `run` (Boolean) Run the guest.
 - `storage_id` (String) ID of the storage device.
 - `storage_name` (String) Name of the storage device.
-- `vcpu_num` (Number) Number of virtual CPUs.
-- `vram_size` (Number) Size of virtual RAM.
+- `vcpu_num` (Number) Number of virtual CPUs. Set via the API `set` method after creation.
+- `vram_size` (Number) Size of virtual RAM in MB.
 
 ### Read-Only
 
@@ -117,7 +117,7 @@ Optional:
 
 - `image_id` (String) ID of the image.
 - `image_name` (String) Name of the image.
-- `size` (Number) Size of the disk in MB.
+- `size` (Number) Size of the disk in MB. Must be at least 10240 (10 GB).
 
 
 <a id="nestedblock--iso"></a>

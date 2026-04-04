@@ -18,14 +18,17 @@ A image on the Synology NAS Imagestation.
 
 - `image_type` (String) The image type. (disk/vdsm/iso)
 - `name` (String) Name of the image to upload to the Synology DSM.
-- `path` (String) The file on the DiskStation. Note: the path should begin with a shared folder.
 
 ### Optional
 
 - `auto_clean` (Boolean) Determine whether to automatically clean task info when the task finishes. It will be automatically cleaned in a minute after task finishes.
-- `storage_id` (String) ID of the storage device.
+- `content` (String, Sensitive) The raw file contents to upload as a guest image.
+- `path` (String) The file on the DiskStation. Note: the path should begin with a shared folder. Use this to create an image from an existing file on the NAS.
+- `storage_id` (String) ID of the storage device. If not specified, it will be resolved from storage_name.
 - `storage_name` (String) Name of the storage device.
+- `url` (String) A URL to download and upload as a guest image.
 
 ### Read-Only
 
 - `id` (String) The ID of the image.
+- `used_size` (Number) The size of the image in bytes as reported by the server. Changes to this value indicate the image needs replacing.
