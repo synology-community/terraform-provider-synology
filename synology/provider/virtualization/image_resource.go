@@ -107,10 +107,12 @@ func (f *ImageResource) Schema(
 				Default:             booldefault.StaticBool(true),
 			},
 			"storage_id": schema.StringAttribute{
-				MarkdownDescription: "ID of the storage device.",
+				MarkdownDescription: "ID of the storage device. If not specified, it will be resolved from storage_name.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
@@ -186,6 +188,46 @@ func (f *ImageResource) Create(
 		if !data.StorageID.IsNull() && !data.StorageID.IsUnknown() &&
 			data.StorageID.ValueString() != "" {
 			imageRepos = []string{data.StorageID.ValueString()}
+		} else {
+			// Resolve storage name to storage ID
+			storageName := "default"
+			if !data.StorageName.IsNull() && !data.StorageName.IsUnknown() &&
+				data.StorageName.ValueString() != "" {
+				storageName = data.StorageName.ValueString()
+			}
+			storages, err := f.client.StorageList(ctx)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to list storages",
+					fmt.Sprintf(
+						"Unable to list storages to resolve storage name, got error: %s",
+						err,
+					),
+				)
+				return
+			}
+			for _, s := range storages.Storages {
+				if s.Name == storageName {
+					imageRepos = []string{s.ID}
+					data.StorageID = types.StringValue(s.ID)
+					break
+				}
+			}
+			if len(imageRepos) == 0 && len(storages.Storages) > 0 {
+				// Fall back to first available storage
+				s := storages.Storages[0]
+				imageRepos = []string{s.ID}
+				data.StorageID = types.StringValue(s.ID)
+			}
+			if len(imageRepos) == 0 {
+				resp.Diagnostics.AddError(
+					"Storage not found",
+					fmt.Sprintf(
+						"Unable to find storage. Specify storage_id directly or ensure VMM has configured storages.",
+					),
+				)
+				return
+			}
 		}
 
 		res, err := f.client.ImageUploadAndCreate(c, form.File{
@@ -203,8 +245,19 @@ func (f *ImageResource) Create(
 		if res.TaskInfo.ImageID != "" {
 			data.ID = types.StringValue(res.TaskInfo.ImageID)
 		} else {
-			resp.Diagnostics.AddError("Failed to upload image", "Unable to get image ID from task")
-			return
+			// Task completed but image_id not in task info; look up by name
+			img, err := f.getImage(ctx, data.Name.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to find uploaded image",
+					fmt.Sprintf(
+						"Image upload task completed but image not found by name, got error: %s",
+						err,
+					),
+				)
+				return
+			}
+			data.ID = types.StringValue(img.ID)
 		}
 	} else {
 		// Existing file mode: create image from a file already on the DiskStation
