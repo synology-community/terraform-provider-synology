@@ -3,17 +3,19 @@ package virtualization
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -72,14 +74,11 @@ Create and configure virtual machines with custom CPU, memory, disk, and network
 ` + "```hcl" + `
 resource "synology_virtualization_guest" "ubuntu_vm" {
   name         = "ubuntu-server"
-  storage_name = "default"
   
   vcpu_num  = 2
   vram_size = 2048
   
-  network {
-    name = "default"
-  }
+  network {}
   
   disk {
     size = 20000  # 20GB
@@ -116,12 +115,20 @@ See [examples/resources/synology_virtualization_guest](https://github.com/synolo
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("storage_name")),
+				},
 			},
 			"storage_name": schema.StringAttribute{
 				MarkdownDescription: "Name of the storage device.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("default"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("storage_id")),
+				},
 			},
 			"vcpu_num": schema.Int64Attribute{
 				MarkdownDescription: "Number of virtual CPUs. Set via the API `set` method after creation.",
@@ -173,6 +180,9 @@ See [examples/resources/synology_virtualization_guest](https://github.com/synolo
 				PlanModifiers: []planmodifier.Set{
 					setplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.Set{
+					setvalidator.SizeBetween(1, 8),
+				},
 			},
 			"network": schema.SetNestedBlock{
 				MarkdownDescription: "Networks of the guest.",
@@ -181,18 +191,30 @@ See [examples/resources/synology_virtualization_guest](https://github.com/synolo
 						"id": schema.StringAttribute{
 							MarkdownDescription: "ID of the network.",
 							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"name": schema.StringAttribute{
 							MarkdownDescription: "Name of the network.",
 							Optional:            true,
-							Default:             stringdefault.StaticString("default"),
 							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"mac": schema.StringAttribute{
 							MarkdownDescription: "MAC address.",
 							Optional:            true,
 						},
 					},
+				},
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.Set{
+					setvalidator.SizeBetween(1, 8),
 				},
 			},
 			"iso": schema.SetNestedBlock{
@@ -209,6 +231,12 @@ See [examples/resources/synology_virtualization_guest](https://github.com/synolo
 						},
 					},
 				},
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.Set{
+					setvalidator.SizeAtMost(2),
+				},
 			},
 		},
 	}
@@ -220,9 +248,9 @@ func (f *GuestResource) Create(
 	req resource.CreateRequest,
 	resp *resource.CreateResponse,
 ) {
-	var data GuestResourceModel
+	var plan GuestResourceModel
 
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -231,29 +259,32 @@ func (f *GuestResource) Create(
 	defer cancel()
 
 	// Step 1: Resolve storage_name → storage_id via StorageList API.
-	// The API accepts storage_id or storage_name, but the user-friendly
-	// "default" name must be resolved to the actual VMM storage name/ID.
-	storageID := data.StorageID.ValueString()
-	if storageID == "" {
-		storageName := data.StorageName.ValueString()
-		if storageName == "" {
-			storageName = "default"
-		}
-		resolvedID, resolvedName, err := f.resolveStorageID(c, storageName)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to resolve storage", err.Error())
-			return
-		}
-		storageID = resolvedID
-		data.StorageID = types.StringValue(resolvedID)
-		data.StorageName = types.StringValue(resolvedName)
+	storages, err := f.client.StorageList(c)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to list storages",
+			fmt.Sprintf("Unable to list storages, got error: %s", err),
+		)
+		return
 	}
+	storage, diags := resolveStorage(
+		storages.Storages,
+		plan.StorageID.ValueString(),
+		plan.StorageName.ValueString(),
+	)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.StorageID = types.StringValue(storage.ID)
+	plan.StorageName = types.StringValue(storage.Name)
+	storageID := storage.ID
 
 	// Step 2: Build vdisks array from config.
 	var vdisks virtualization.VDisks
-	if !data.Disks.IsNull() && !data.Disks.IsUnknown() {
+	if !plan.Disks.IsNull() && !plan.Disks.IsUnknown() {
 		var elements []VDiskModel
-		diags := data.Disks.ElementsAs(ctx, &elements, true)
+		diags := plan.Disks.ElementsAs(ctx, &elements, true)
 		if diags.HasError() {
 			resp.Diagnostics.AddError("Failed to read disks", "Unable to read disk configuration")
 			return
@@ -275,9 +306,9 @@ func (f *GuestResource) Create(
 
 	// Step 3: Build vnics array from config, resolving network names.
 	var vnics virtualization.VNICs
-	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
+	if !plan.Networks.IsNull() && !plan.Networks.IsUnknown() {
 		var elements []models.VNic
-		diags := data.Networks.ElementsAs(ctx, &elements, true)
+		diags := plan.Networks.ElementsAs(ctx, &elements, true)
 		if diags.HasError() {
 			resp.Diagnostics.AddError(
 				"Failed to read networks",
@@ -296,6 +327,7 @@ func (f *GuestResource) Create(
 			return
 		}
 
+		var resolvedNics []models.VNic
 		for _, v := range elements {
 			nic := virtualization.VNIC{
 				ID:  v.ID.ValueString(),
@@ -304,7 +336,7 @@ func (f *GuestResource) Create(
 
 			// Resolve network name: "default" → first available, or exact/case-insensitive match.
 			netName := v.Name.ValueString()
-			if nic.ID == "" && netName != "" {
+			if nic.ID == "" {
 				resolvedID, resolvedName := resolveNetworkName(netName, networks.Networks)
 				if resolvedID == "" {
 					available := make([]string, 0, len(networks.Networks))
@@ -325,7 +357,20 @@ func (f *GuestResource) Create(
 			}
 
 			vnics = append(vnics, nic)
+			resolvedNics = append(resolvedNics, models.VNic{
+				ID:   types.StringValue(nic.ID),
+				Name: types.StringValue(nic.Name),
+				Mac:  v.Mac,
+			})
 		}
+
+		// Write resolved network values back into the plan so state has known values.
+		resolvedSet, d := types.SetValueFrom(ctx, plan.Networks.ElementType(ctx), resolvedNics)
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		plan.Networks = resolvedSet
 	}
 
 	// Step 4: Create the guest with ONLY the documented create parameters.
@@ -333,7 +378,7 @@ func (f *GuestResource) Create(
 	// guest_name, storage_id/storage_name, vdisks, vnics, auto_clean_task.
 	// Sending additional params like vcpu_num or vram_size causes error 401 (Bad parameter).
 	createReq := virtualization.Guest{
-		Name:      data.Name.ValueString(),
+		Name:      plan.Name.ValueString(),
 		StorageID: storageID,
 		Disks:     vdisks,
 		Networks:  vnics,
@@ -343,13 +388,13 @@ func (f *GuestResource) Create(
 	if err != nil {
 		// Error 403 = "Name conflict" — the guest already exists.
 		if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "Name conflict") {
-			res, err = f.client.GuestGet(c, virtualization.Guest{Name: data.Name.ValueString()})
+			res, err = f.client.GuestGet(c, virtualization.Guest{Name: plan.Name.ValueString()})
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Failed to get existing guest",
 					fmt.Sprintf(
 						"Guest with name %q may already exist but could not be retrieved: %s",
-						data.Name.ValueString(),
+						plan.Name.ValueString(),
 						err,
 					),
 				)
@@ -358,7 +403,7 @@ func (f *GuestResource) Create(
 		} else {
 			resp.Diagnostics.AddError(
 				"Failed to create guest",
-				fmt.Sprintf("Unable to create guest %q: %s", data.Name.ValueString(), err),
+				fmt.Sprintf("Unable to create guest %q: %s", plan.Name.ValueString(), err),
 			)
 			return
 		}
@@ -368,12 +413,12 @@ func (f *GuestResource) Create(
 		resp.Diagnostics.AddError("Failed to create guest", "API returned empty guest ID")
 		return
 	}
-	data.ID = types.StringValue(res.ID)
+	plan.ID = types.StringValue(res.ID)
 
 	// Step 5: Set vcpu_num and vram_size via the documented "set" method.
 	// These are not create parameters per the API guide.
-	vcpuNum := data.VcpuNum.ValueInt64()
-	vramSize := data.VramSize.ValueInt64()
+	vcpuNum := plan.VcpuNum.ValueInt64()
+	vramSize := plan.VramSize.ValueInt64()
 	if vcpuNum > 0 || vramSize > 0 {
 		setReq := virtualization.GuestUpdate{
 			ID: res.ID,
@@ -394,10 +439,10 @@ func (f *GuestResource) Create(
 	}
 
 	// Step 6: Mount ISO images if configured (via the internal set API).
-	isoImages := f.buildIsoImages(ctx, data)
+	isoImages := f.buildIsoImages(ctx, plan)
 	if len(isoImages) == 2 {
 		err = f.client.GuestUpdate(c, virtualization.GuestUpdate{
-			ID:        data.ID.ValueString(),
+			ID:        plan.ID.ValueString(),
 			IsoImages: isoImages,
 		})
 		if err != nil {
@@ -410,62 +455,17 @@ func (f *GuestResource) Create(
 	}
 
 	// Step 7: Power on if requested.
-	if data.Run.ValueBool() {
+	if plan.Run.ValueBool() {
 		if err := f.client.GuestPowerOn(
 			c,
-			virtualization.Guest{ID: data.ID.ValueString()},
+			virtualization.Guest{ID: plan.ID.ValueString()},
 		); err != nil {
 			tflog.Warn(ctx, fmt.Sprintf("Guest created but failed to power on: %s", err))
 		}
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	tflog.Trace(ctx, "Guest created")
-}
-
-// resolveStorageID resolves a user-friendly storage name (like "default") to
-// the actual VMM storage ID and name by querying the StorageList API.
-func (f *GuestResource) resolveStorageID(
-	ctx context.Context,
-	storageName string,
-) (string, string, error) {
-	storages, err := f.client.StorageList(ctx)
-	if err != nil {
-		return "", "", fmt.Errorf("unable to list storages: %s", err)
-	}
-	if len(storages.Storages) == 0 {
-		return "", "", fmt.Errorf(
-			"no storages found in VMM — ensure Virtual Machine Manager has at least one storage configured",
-		)
-	}
-
-	// Try exact match first.
-	for _, s := range storages.Storages {
-		if s.Name == storageName {
-			return s.ID, s.Name, nil
-		}
-	}
-
-	// Try case-insensitive substring match (e.g. "default" matches "Synology - VM Storage 1"
-	// only if that's the first/only storage, or matches "Default VM Storage").
-	for _, s := range storages.Storages {
-		if strings.EqualFold(s.Name, storageName) {
-			return s.ID, s.Name, nil
-		}
-	}
-
-	// If "default" was requested, fall back to first available storage.
-	if strings.EqualFold(storageName, "default") && len(storages.Storages) > 0 {
-		s := storages.Storages[0]
-		return s.ID, s.Name, nil
-	}
-
-	available := make([]string, 0, len(storages.Storages))
-	for _, s := range storages.Storages {
-		available = append(available, fmt.Sprintf("%q (id: %s)", s.Name, s.ID))
-	}
-	return "", "", fmt.Errorf("storage %q not found. Available storages: %s",
-		storageName, strings.Join(available, ", "))
 }
 
 // buildIsoImages converts the ISO block config into the ["image_id", "unmounted"] array
@@ -495,20 +495,17 @@ func (f *GuestResource) buildIsoImages(ctx context.Context, data GuestResourceMo
 // resolveNetworkName resolves a user-friendly network name (like "default") to the
 // actual VMM network ID and name from a pre-fetched list of networks.
 func resolveNetworkName(name string, networks []virtualization.Network) (string, string) {
-	// Exact match.
-	for _, n := range networks {
-		if n.Name == name {
-			return n.ID, n.Name
-		}
-	}
 	// Case-insensitive match.
-	for _, n := range networks {
-		if strings.EqualFold(n.Name, name) {
-			return n.ID, n.Name
+	if name != "" {
+		i := slices.IndexFunc(networks, func(n virtualization.Network) bool {
+			return strings.EqualFold(n.Name, name)
+		})
+		if i != -1 {
+			return networks[i].ID, networks[i].Name
 		}
 	}
-	// "default" → first available network.
-	if strings.EqualFold(name, "default") && len(networks) > 0 {
+	// first available network
+	if name == "" && len(networks) > 0 {
 		return networks[0].ID, networks[0].Name
 	}
 	return "", ""
@@ -682,15 +679,6 @@ func (f *GuestResource) ValidateConfig(
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	// Storage: at least one of storage_id or storage_name must be set.
-	if data.StorageID.IsNull() && data.StorageName.IsNull() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("storage_id"),
-			"Missing storage configuration",
-			"At least one of storage_id or storage_name must be set.",
-		)
-	}
-
 	// ISO: maximum 2 ISO images (boot + secondary).
 	if !data.IsoImages.IsNull() && !data.IsoImages.IsUnknown() {
 		if len(data.IsoImages.Elements()) > 2 {
@@ -721,25 +709,6 @@ func (f *GuestResource) ValidateConfig(
 							"Disk size must be greater than 0 MB when creating an empty disk.",
 						)
 					}
-				}
-			}
-		}
-	}
-
-	// Network validation: at least network_id or network_name per vnic.
-	if !data.Networks.IsNull() && !data.Networks.IsUnknown() {
-		var nics []models.VNic
-		diags := data.Networks.ElementsAs(ctx, &nics, true)
-		if !diags.HasError() {
-			for i, n := range nics {
-				hasID := !n.ID.IsNull() && !n.ID.IsUnknown() && n.ID.ValueString() != ""
-				hasName := !n.Name.IsNull() && !n.Name.IsUnknown() && n.Name.ValueString() != ""
-				if !hasID && !hasName {
-					resp.Diagnostics.AddAttributeError(
-						path.Root("network"),
-						fmt.Sprintf("Missing network identifier (network %d)", i),
-						"Each network block must specify at least one of id or name.",
-					)
 				}
 			}
 		}

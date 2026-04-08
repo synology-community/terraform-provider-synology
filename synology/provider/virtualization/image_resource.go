@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -58,7 +57,7 @@ func (f *ImageResource) Schema(
 	resp *resource.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A image on the Synology NAS Imagestation.",
+		MarkdownDescription: "A guest image on the Synology NAS.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -126,10 +125,12 @@ func (f *ImageResource) Schema(
 				},
 			},
 			"storage_name": schema.StringAttribute{
-				MarkdownDescription: "Name of the storage device.",
+				MarkdownDescription: "Name of the storage device. If not specified, the first available storage is used.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("default"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"used_size": schema.Int64Attribute{
 				MarkdownDescription: "The size of the image in bytes as reported by the server. Changes to this value indicate the image needs replacing.",
@@ -206,49 +207,26 @@ func (f *ImageResource) Create(
 
 		fileName := data.Name.ValueString() + "." + data.ImageType.ValueString()
 
-		var imageRepos []string
-		if !data.StorageID.IsNull() && !data.StorageID.IsUnknown() &&
-			data.StorageID.ValueString() != "" {
-			imageRepos = []string{data.StorageID.ValueString()}
-		} else {
-			// Resolve storage name to storage ID
-			storageName := "default"
-			if !data.StorageName.IsNull() && !data.StorageName.IsUnknown() &&
-				data.StorageName.ValueString() != "" {
-				storageName = data.StorageName.ValueString()
-			}
-			storages, err := f.client.StorageList(ctx)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Failed to list storages",
-					fmt.Sprintf(
-						"Unable to list storages to resolve storage name, got error: %s",
-						err,
-					),
-				)
-				return
-			}
-			for _, s := range storages.Storages {
-				if s.Name == storageName {
-					imageRepos = []string{s.ID}
-					data.StorageID = types.StringValue(s.ID)
-					break
-				}
-			}
-			if len(imageRepos) == 0 && len(storages.Storages) > 0 {
-				// Fall back to first available storage
-				s := storages.Storages[0]
-				imageRepos = []string{s.ID}
-				data.StorageID = types.StringValue(s.ID)
-			}
-			if len(imageRepos) == 0 {
-				resp.Diagnostics.AddError(
-					"Storage not found",
-					"Unable to find storage. Specify storage_id directly or ensure VMM has configured storages.",
-				)
-				return
-			}
+		storageList, err := f.client.StorageList(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to list storages",
+				fmt.Sprintf("Unable to list storages, got error: %s", err),
+			)
+			return
 		}
+		storage, diags := resolveStorage(
+			storageList.Storages,
+			data.StorageID.ValueString(),
+			data.StorageName.ValueString(),
+		)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		data.StorageID = types.StringValue(storage.ID)
+		data.StorageName = types.StringValue(storage.Name)
+		imageRepos := []string{storage.ID}
 
 		res, err := f.client.ImageUploadAndCreate(c, form.File{
 			Name:    fileName,
@@ -288,19 +266,26 @@ func (f *ImageResource) Create(
 			Type:      virtualization.ImageType(data.ImageType.ValueString()),
 		}
 
-		if !data.StorageID.IsUnknown() && !data.StorageID.IsNull() {
-			image.Storages = append(
-				image.Storages,
-				virtualization.Storage{ID: data.StorageID.ValueString()},
+		storageList, err := f.client.StorageList(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to list storages",
+				fmt.Sprintf("Unable to list storages, got error: %s", err),
 			)
+			return
 		}
-
-		if !data.StorageName.IsUnknown() && !data.StorageName.IsNull() {
-			image.Storages = append(
-				image.Storages,
-				virtualization.Storage{Name: data.StorageName.ValueString()},
-			)
+		storage, diags := resolveStorage(
+			storageList.Storages,
+			data.StorageID.ValueString(),
+			data.StorageName.ValueString(),
+		)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
+		data.StorageID = types.StringValue(storage.ID)
+		data.StorageName = types.StringValue(storage.Name)
+		image.Storages = []virtualization.Storage{storage}
 
 		res, err := f.client.ImageCreate(c, image)
 		if err != nil {
@@ -388,6 +373,11 @@ func (f *ImageResource) Read(
 
 	if image.ID != "" {
 		data.ID = types.StringValue(image.ID)
+	}
+
+	if len(image.Storages) > 0 {
+		data.StorageID = types.StringValue(image.Storages[0].ID)
+		data.StorageName = types.StringValue(image.Storages[0].Name)
 	}
 
 	data.UsedSize = types.Int64Value(image.UsedSize)
