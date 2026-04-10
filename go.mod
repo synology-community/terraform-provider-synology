@@ -22,7 +22,7 @@ require (
 	github.com/subpop/go-ini v0.1.5
 	github.com/synology-community/go-synology v0.1.12-0.20260407222905-83ae2f703b1c
 	github.com/testcontainers/testcontainers-go v0.42.0
-	github.com/testcontainers/testcontainers-go/modules/compose v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/compose v0.42.0
 	github.com/tredoe/osutil v1.5.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
@@ -50,20 +50,20 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/console v1.0.5 // indirect
 	github.com/containerd/containerd/api v1.10.0 // indirect
-	github.com/containerd/containerd/v2 v2.2.1 // indirect
+	github.com/containerd/containerd/v2 v2.2.2 // indirect
 	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/platforms v1.0.0-rc.2 // indirect
-	github.com/containerd/ttrpc v1.2.7 // indirect
+	github.com/containerd/platforms v1.0.0-rc.4 // indirect
+	github.com/containerd/ttrpc v1.2.8 // indirect
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/docker/buildx v0.31.1 // indirect
-	github.com/docker/cli v29.2.1+incompatible // indirect
-	github.com/docker/compose/v5 v5.1.0 // indirect
+	github.com/docker/buildx v0.33.0 // indirect
+	github.com/docker/cli v29.4.0+incompatible // indirect
+	github.com/docker/compose/v5 v5.1.2 // indirect
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.5 // indirect
 	github.com/dvsekhvalnov/jose2go v1.7.0 // indirect
@@ -97,7 +97,7 @@ require (
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
-	github.com/moby/buildkit v0.28.1 // indirect
+	github.com/moby/buildkit v0.29.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
 	github.com/moby/locker v1.0.1 // indirect
@@ -115,7 +115,6 @@ require (
 	github.com/morikuni/aec v1.1.0 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
@@ -155,10 +154,10 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.63.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0 // indirect
 	go.opentelemetry.io/otel v1.43.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.38.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.42.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.43.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.42.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
