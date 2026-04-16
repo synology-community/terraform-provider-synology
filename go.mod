@@ -7,7 +7,7 @@ require (
 	github.com/compose-spec/compose-go/v2 v2.10.2
 	github.com/distribution/reference v0.6.0
 	github.com/docker/compose/v2 v2.40.3
-	github.com/docker/go-connections v0.6.0
+	github.com/docker/go-connections v0.7.0
 	github.com/docker/go-units v0.5.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
