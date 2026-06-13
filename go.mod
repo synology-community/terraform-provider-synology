@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/subpop/go-ini v0.1.5
-	github.com/synology-community/go-synology v0.1.12-0.20260407222905-83ae2f703b1c
+	github.com/synology-community/go-synology v0.1.12-0.20260408030515-b49c7b1d4150
 	github.com/testcontainers/testcontainers-go v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.41.0
 	github.com/tredoe/osutil v1.5.0

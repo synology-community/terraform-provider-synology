@@ -42,11 +42,10 @@ func (m VDiskModel) Value() attr.Value {
 }
 
 type VNicModel struct {
-	ID  types.String `tfsdk:"id"`
-	Mac types.String `tfsdk:"mac"`
-	// Model  types.Int64  `tfsdk:"model"`
-	Name types.String `tfsdk:"name"`
-	// VNicID types.String `tfsdk:"vnic_id"`
+	ID    types.String `tfsdk:"id"`
+	Mac   types.String `tfsdk:"mac"`
+	Model types.String `tfsdk:"model"`
+	Name  types.String `tfsdk:"name"`
 }
 
 func (m VNicModel) ModelType() attr.Type {
@@ -55,20 +54,18 @@ func (m VNicModel) ModelType() attr.Type {
 
 func (m VNicModel) AttrType() map[string]attr.Type {
 	return map[string]attr.Type{
-		"id":   types.StringType,
-		"name": types.StringType,
-		"mac":  types.StringType,
-		// "model":   types.Int64Type,
-		// "vnic_id": types.StringType,
+		"id":    types.StringType,
+		"name":  types.StringType,
+		"mac":   types.StringType,
+		"model": types.StringType,
 	}
 }
 
 func (m VNicModel) Value() attr.Value {
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"id":   types.StringValue(m.ID.ValueString()),
-		"name": types.StringValue(m.Name.ValueString()),
-		"mac":  types.StringValue(m.Mac.ValueString()),
-		// "model":   types.Int64Value(m.Model.ValueInt64()),
-		// "vnic_id": types.StringValue(m.VNicID.ValueString()),
+		"id":    types.StringValue(m.ID.ValueString()),
+		"name":  types.StringValue(m.Name.ValueString()),
+		"mac":   types.StringValue(m.Mac.ValueString()),
+		"model": types.StringValue(m.Model.ValueString()),
 	})
 }

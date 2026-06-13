@@ -208,6 +208,17 @@ See [examples/resources/synology_virtualization_guest](https://github.com/synolo
 							MarkdownDescription: "MAC address.",
 							Optional:            true,
 						},
+						"model": schema.StringAttribute{
+							MarkdownDescription: "Network adapter model (`virtio`, `e1000`, or `rtl8139`).",
+							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.OneOf("virtio", "e1000", "rtl8139"),
+							},
+						},
 					},
 				},
 				PlanModifiers: []planmodifier.Set{
@@ -330,8 +341,9 @@ func (f *GuestResource) Create(
 		var resolvedNics []models.VNic
 		for _, v := range elements {
 			nic := virtualization.VNIC{
-				ID:  v.ID.ValueString(),
-				Mac: v.Mac.ValueString(),
+				ID:    v.ID.ValueString(),
+				Mac:   v.Mac.ValueString(),
+				Model: vnicModelToInt(v.Model.ValueString()),
 			}
 
 			// Resolve network name: "default" → first available, or exact/case-insensitive match.
@@ -358,9 +370,10 @@ func (f *GuestResource) Create(
 
 			vnics = append(vnics, nic)
 			resolvedNics = append(resolvedNics, models.VNic{
-				ID:   types.StringValue(nic.ID),
-				Name: types.StringValue(nic.Name),
-				Mac:  v.Mac,
+				ID:    types.StringValue(nic.ID),
+				Name:  types.StringValue(nic.Name),
+				Mac:   v.Mac,
+				Model: types.StringValue(vnicModelToString(nic.Model)),
 			})
 		}
 
@@ -490,6 +503,30 @@ func (f *GuestResource) buildIsoImages(ctx context.Context, data GuestResourceMo
 		isoImages[i] = v.ID.ValueString()
 	}
 	return isoImages
+}
+
+// vnicModelToInt converts a human-readable NIC model name to its API integer.
+func vnicModelToInt(model string) int64 {
+	switch model {
+	case "e1000":
+		return 2
+	case "rtl8139":
+		return 3
+	default:
+		return 1 // virtio
+	}
+}
+
+// vnicModelToString converts an API NIC model integer to its human-readable name.
+func vnicModelToString(model int64) string {
+	switch model {
+	case 2:
+		return "e1000"
+	case 3:
+		return "rtl8139"
+	default:
+		return "virtio"
+	}
 }
 
 // resolveNetworkName resolves a user-friendly network name (like "default") to the
