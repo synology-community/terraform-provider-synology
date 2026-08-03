@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -244,8 +245,14 @@ func (p *TaskResource) Schema(
 				Required:            true,
 			},
 			"schedule": schema.StringAttribute{
-				MarkdownDescription: "Schedule expressed in cron.",
-				Optional:            true,
+				MarkdownDescription: "Schedule expressed in cron, mapped onto DSM's scheduler: a fixed time " +
+					"(`17 3 * * *`) becomes a daily task, a day-of-week restriction " +
+					"(`17 3 * * 1-5`) becomes a weekly one, and an even interval (`*/15 * * * *`, " +
+					"`30 */6 * * *`) becomes DSM's repeat_min/repeat_hour. Schedules DSM cannot " +
+					"represent are rejected rather than silently mis-stored: day-of-month or month " +
+					"restrictions, bounded windows (`0 9-17 * * *`), and unevenly spaced lists " +
+					"(`0,7,30`).",
+				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(
@@ -366,6 +373,104 @@ func newTaskSchedule() core.TaskSchedule {
 	}
 }
 
+// DSM's Task Scheduler expresses a schedule with a small set of fields whose
+// meanings were established by probing a live DSM 7.4:
+//
+//	repeat_date 1001                  daily at hour:minute
+//	repeat_date 1002 + week_day       weekly, on those weekdays, at hour:minute
+//	repeat_hour N  (hour = start)     every N hours, beginning at hour:minute
+//	repeat_min  N  (minute = start)   every N minutes, beginning at :minute
+//
+// Two properties of that model drive everything below. First, hour and minute
+// are LITERAL values -- DSM writes them straight into /etc/crontab. Second,
+// DSM validates none of it: a schedule of hour=128 is stored verbatim and
+// yields a task that is created, reported as enabled, and can never fire. All
+// validation therefore has to happen here.
+const (
+	dsmRepeatDaily  = 1001
+	dsmRepeatWeekly = 1002
+
+	// util.ParseStandard sets the top bit of a field that contained "*".
+	cronStarBit = uint64(1) << 63
+)
+
+// cronFieldValues returns the values a cron bitfield encodes, ascending.
+func cronFieldValues(mask int64, max int64) []int64 {
+	u := uint64(mask) &^ cronStarBit
+	values := make([]int64, 0, 8)
+	for i := int64(0); i <= max; i++ {
+		if u&(uint64(1)<<uint(i)) != 0 {
+			values = append(values, i)
+		}
+	}
+	return values
+}
+
+// cronField is one parsed cron field expressed in DSM's terms: a starting
+// value, plus an interval when the field repeats.
+type cronField struct {
+	start int64
+	step  int64 // 0 when the field names a single point in time
+}
+
+// classifyCronField maps one cron field onto DSM's model.
+//
+// A single value ("17") becomes a start with no step. An even progression that
+// runs to the end of the field ("*", "*/15", "5/15") becomes a start plus a
+// step, which DSM stores as repeat_min/repeat_hour. Anything else -- a list
+// ("0,30"), a bounded range ("9-17"), or a stepped range that stops early
+// ("0-45/15") -- selects a set of times DSM has no way to represent, so it is
+// rejected rather than approximated.
+func classifyCronField(mask int64, max int64, name string) (cronField, error) {
+	values := cronFieldValues(mask, max)
+
+	switch len(values) {
+	case 0:
+		// Unset: how the "@every ..." descriptors arrive, carrying only the
+		// repeat_* counters.
+		return cronField{}, nil
+	case 1:
+		return cronField{start: values[0]}, nil
+	}
+
+	step := values[1] - values[0]
+	for i := 2; i < len(values); i++ {
+		if values[i]-values[i-1] != step {
+			return cronField{}, fmt.Errorf(
+				"schedule field %s: %q selects an uneven set of values; DSM can express a "+
+					"single %s or an even interval, not an arbitrary list",
+				name, cronFieldString(values), name)
+		}
+	}
+
+	// An interval must run to the end of the field. A progression that stops
+	// early is a bounded window ("0-45/15" fires at :00 :15 :30 :45 and then
+	// waits), and DSM has no field for the window.
+	if last := values[len(values)-1]; last+step <= max {
+		return cronField{}, fmt.Errorf(
+			"schedule field %s: %q stops at %d rather than repeating through %d; DSM "+
+				"repeats an interval for the whole %s range",
+			name, cronFieldString(values), last, max, name)
+	}
+
+	return cronField{start: values[0], step: step}, nil
+}
+
+// cronFieldString renders values for an error message without dragging in a
+// formatting dependency.
+func cronFieldString(values []int64) string {
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		parts = append(parts, strconv.FormatInt(v, 10))
+	}
+	return strings.Join(parts, ",")
+}
+
+// weekDayString renders DSM's week_day field.
+func weekDayString(values []int64) string {
+	return cronFieldString(values)
+}
+
 func parseSchedule(c string) (res core.TaskSchedule, err error) {
 	if c == "" {
 		return
@@ -378,15 +483,79 @@ func parseSchedule(c string) (res core.TaskSchedule, err error) {
 
 	t := newTaskSchedule()
 
-	t.Minute = s.Minute
-	t.Hour = s.Hour
-	t.RepeatDate = s.RepeatDate
-	t.RepeatHour = s.RepeatHour
-	t.RepeatMin = s.RepeatMin
-
-	if t.DateType == 0 && t.RepeatDate == 0 {
-		t.RepeatDate = 1001
+	// "@every ..." sets only the repeat_* counters and leaves every cron field
+	// empty; pass it through untouched.
+	if s.Minute == 0 && s.Hour == 0 && s.Dom == 0 && s.Month == 0 && s.Dow == 0 {
+		t.RepeatDate = s.RepeatDate
+		t.RepeatHour = s.RepeatHour
+		t.RepeatMin = s.RepeatMin
+		if t.DateType == 0 && t.RepeatDate == 0 {
+			t.RepeatDate = dsmRepeatDaily
+		}
+		return t, nil
 	}
+
+	// DSM schedules recur daily or weekly. Restricting the day of the month or
+	// the month has no representation, and silently ignoring the restriction
+	// would run the task far more often than asked.
+	if dom := cronFieldValues(s.Dom, 31); len(dom) != 31 {
+		return res, fmt.Errorf(
+			"schedule: day-of-month restrictions are not supported; DSM repeats daily or "+
+				"weekly, so %q cannot be expressed", c)
+	}
+	if months := cronFieldValues(s.Month, 12); len(months) != 12 {
+		return res, fmt.Errorf(
+			"schedule: month restrictions are not supported; DSM repeats daily or weekly, "+
+				"so %q cannot be expressed", c)
+	}
+
+	minute, err := classifyCronField(s.Minute, 59, "minute")
+	if err != nil {
+		return res, err
+	}
+	hour, err := classifyCronField(s.Hour, 23, "hour")
+	if err != nil {
+		return res, err
+	}
+
+	// DSM carries one interval per task, in either repeat_min or repeat_hour.
+	// A minute interval repeats across the whole day, so the hour field has to
+	// be unrestricted -- "every 15 minutes, but only during hour 3" has no
+	// representation. An unrestricted hour is not itself an interval here: it
+	// is the absence of a restriction.
+	hourUnrestricted := len(cronFieldValues(s.Hour, 23)) == 24
+
+	switch {
+	case minute.step != 0:
+		if !hourUnrestricted {
+			return res, fmt.Errorf(
+				"schedule: %q repeats every %d minutes but also restricts the hour; DSM "+
+					"repeats a minute interval across the whole day",
+				c, minute.step)
+		}
+		t.Minute = minute.start
+		t.Hour = 0
+		t.RepeatMin = minute.step
+	case hour.step != 0:
+		t.Minute = minute.start
+		t.Hour = hour.start
+		t.RepeatHour = hour.step
+	default:
+		t.Minute = minute.start
+		t.Hour = hour.start
+	}
+
+	// Day of week: all seven days is DSM's daily mode; any subset is its weekly
+	// mode. The provider used to discard this field entirely, which turned
+	// "0 3 * * 1" into a task that ran every morning instead of on Mondays.
+	weekDays := cronFieldValues(s.Dow, 6)
+	if len(weekDays) == 7 {
+		t.RepeatDate = dsmRepeatDaily
+	} else {
+		t.RepeatDate = dsmRepeatWeekly
+		t.WeekDay = weekDayString(weekDays)
+	}
+
 	return t, nil
 }
 
