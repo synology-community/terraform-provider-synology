@@ -22,7 +22,7 @@ A Generic API Resource for making calls to the Synology DSM API.
 ### Optional
 
 - `run` (Boolean) Whether to run the task after creation.
-- `schedule` (String) Schedule expressed in cron.
+- `schedule` (String) Schedule expressed in cron, mapped onto DSM's scheduler: a fixed time (`17 3 * * *`) becomes a daily task, a day-of-week restriction (`17 3 * * 1-5`) becomes a weekly one, and an even interval (`*/15 * * * *`, `30 */6 * * *`) becomes DSM's repeat_min/repeat_hour. Schedules DSM cannot represent are rejected rather than silently mis-stored: day-of-month or month restrictions, bounded windows (`0 9-17 * * *`), and unevenly spaced lists (`0,7,30`).
 - `script` (String) Script content to run in the task.
 - `service` (String) Systemctl service to change state.
 - `when` (String) When to run the task. Valid values are `apply` and `destroy`.
