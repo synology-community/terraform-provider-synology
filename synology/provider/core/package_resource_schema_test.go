@@ -78,7 +78,12 @@ func TestPackageSchema_AttributesDSMCannotChangeInPlaceRequireReplacement(t *tes
 	// version/url/file/beta: all require a reinstall on DSM.
 	// wizard: consumed only during installation, so a change is inert
 	//         without one.
-	for _, name := range []string{"name", "version", "url", "file", "beta", "wizard"} {
+	// volume_path: DSM cannot move an installed package between volumes, so
+	//         changing it must reinstall rather than silently keep the data
+	//         where it already is.
+	for _, name := range []string{
+		"name", "version", "url", "file", "beta", "wizard", "volume_path",
+	} {
 		if !requiresReplace(t, s, name) {
 			t.Errorf(
 				"attribute %q has no RequiresReplace plan modifier; "+
@@ -122,5 +127,64 @@ func TestPackageSchema_NameDocumentsThatReplacementCanRemoveData(t *testing.T) {
 			`attribute "name" does not document that changing it uninstalls the current ` +
 				`package; that consequence only reaches users through the generated docs`,
 		)
+	}
+}
+
+// TestPackageSchema_VolumePathIsOptionalNotComputed pins a choice that looks
+// like an oversight and is not.
+//
+// Every other optional attribute on this resource is Optional+Computed with a
+// default. volume_path is Optional alone, because the volume a package was
+// installed onto is not reported back by the package list. A Computed
+// attribute the provider cannot populate after apply produces "Provider
+// produced inconsistent result after apply" -- the framework requires a known
+// value for it, and there is none to be had.
+//
+// Null therefore means "not specified", and the client resolves the volume at
+// install time. That is honest about what the provider knows.
+func TestPackageSchema_VolumePathIsOptionalNotComputed(t *testing.T) {
+	t.Parallel()
+	s := packageSchema(t)
+
+	attr, ok := s.Attributes["volume_path"].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf(`attribute "volume_path" is not a StringAttribute`)
+	}
+	if !attr.Optional {
+		t.Error(`attribute "volume_path" must be Optional: DSM resolves a volume when none is given`)
+	}
+	if attr.Computed {
+		t.Error(
+			`attribute "volume_path" must NOT be Computed. DSM does not report which ` +
+				`volume a package was installed onto, so the provider cannot supply a ` +
+				`known value after apply, and the framework fails with "inconsistent ` +
+				`result after apply"`,
+		)
+	}
+}
+
+// TestPackageSchema_VolumePathDocumentsTheMultiVolumeCase guards the one thing
+// a practitioner cannot discover from the plan: on a multi-volume NAS with no
+// DSM default, omitting volume_path fails rather than picking a volume. Being
+// refused is the intended behaviour, but only if the reason is discoverable
+// before the apply that hits it.
+func TestPackageSchema_VolumePathDocumentsTheMultiVolumeCase(t *testing.T) {
+	t.Parallel()
+	s := packageSchema(t)
+
+	attr, ok := s.Attributes["volume_path"].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf(`attribute "volume_path" is not a StringAttribute`)
+	}
+	doc := strings.ToLower(attr.MarkdownDescription)
+	for _, want := range []string{"multi-volume", "error"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf(
+				`attribute "volume_path" does not document %q; a user on a multi-volume `+
+					`NAS meets this as an apply failure with no hint that naming a volume `+
+					`is the fix`,
+				want,
+			)
+		}
 	}
 }

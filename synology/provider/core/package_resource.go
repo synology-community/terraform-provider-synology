@@ -22,12 +22,13 @@ import (
 )
 
 type PackageResourceModel struct {
-	Name    types.String `tfsdk:"name"`
-	Version types.String `tfsdk:"version"`
-	File    types.String `tfsdk:"file"`
-	URL     types.String `tfsdk:"url"`
-	Wizard  types.Map    `tfsdk:"wizard"`
-	Beta    types.Bool   `tfsdk:"beta"`
+	Name       types.String `tfsdk:"name"`
+	Version    types.String `tfsdk:"version"`
+	File       types.String `tfsdk:"file"`
+	URL        types.String `tfsdk:"url"`
+	Wizard     types.Map    `tfsdk:"wizard"`
+	Beta       types.Bool   `tfsdk:"beta"`
+	VolumePath types.String `tfsdk:"volume_path"`
 
 	Run types.Bool `tfsdk:"run"`
 }
@@ -90,9 +91,11 @@ func (p *PackageResource) Create(
 	}
 
 	err := p.client.PackageInstallCompound(ctx, core.PackageInstallCompoundRequest{
-		Name:        data.Name.ValueString(),
-		URL:         data.URL.ValueString(),
-		Size:        size,
+		Name: data.Name.ValueString(),
+		URL:  data.URL.ValueString(),
+		Size: size,
+		// Empty when unset, which is what asks the client to resolve a volume.
+		VolumePath:  data.VolumePath.ValueString(),
 		ExtraValues: wizardConf,
 		Run:         data.Run.ValueBool(),
 	})
@@ -347,6 +350,27 @@ resource "synology_core_package" "docker" {
 				Default:             booldefault.StaticBool(false),
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
+				},
+			},
+			"volume_path": schema.StringAttribute{
+				MarkdownDescription: "The volume to install the package onto, for example " +
+					"`/volume1`. Optional. When omitted the volume is resolved from DSM's " +
+					"package settings: its configured default if it has one, otherwise the " +
+					"NAS's only volume. On a multi-volume NAS with no configured default, " +
+					"leaving this unset is an error rather than an arbitrary choice — which " +
+					"volume a package lands on decides where its data lives, and DSM offers " +
+					"no way to move it afterwards. Changing this reinstalls the package for " +
+					"the same reason.",
+				Optional: true,
+				// Deliberately not Computed. The resolved volume is not reported
+				// back by the package list, so a Computed attribute would leave
+				// the framework unable to reconcile state after apply. Null here
+				// honestly means "not specified", and the client resolves it.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"run": schema.BoolAttribute{
