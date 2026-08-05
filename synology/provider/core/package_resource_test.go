@@ -37,15 +37,10 @@ func TestAccPackageResource_basic(t *testing.T) {
 		// 	}`,
 		// },
 		{
-			"mariadb",
+			"texteditor",
 			`
-			resource "synology_core_package" "mariadb" {
-				name = "MariaDB10"
-
-				wizard = {
-					pkgwizard_port              = 3306
-					pkgwizard_new_root_password = "T3stP@ssw0rd"
-				}
+			resource "synology_core_package" "texteditor" {
+				name = "TextEditor"
 			}`,
 		},
 	}
@@ -58,7 +53,7 @@ func TestAccPackageResource_basic(t *testing.T) {
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
 							r.TestCheckResourceAttrWith(
-								"synology_core_package.mariadb",
+								"synology_core_package.texteditor",
 								"version",
 								func(attr string) error {
 									if attr == "" {
@@ -114,20 +109,28 @@ func TestAccPackageResource_url(t *testing.T) {
 	}
 }
 
-// packageConfig renders the MariaDB10 test package with a given `run` value.
-// The wizard block is only consumed at install time, but it has to stay in
-// every step's config: dropping it would register as an attribute change and
-// plan a replacement rather than the in-place update under test.
+// packageConfig renders the acceptance-test fixture package with a given `run`
+// value.
+//
+// The fixture is TextEditor, deliberately, and NOT MariaDB10 as it was
+// originally. Three reasons, in order of weight:
+//
+//  1. MariaDB10 is installed on the target NAS as a real database the operator
+//     intends to keep. A test that installs and uninstalls it would collide
+//     with live data.
+//  2. TextEditor is ~2 MB with no dependencies and no install wizard, so a run
+//     costs seconds rather than minutes and leaves nothing behind.
+//  3. What this test asserts is the `run` toggle reaching DSM. That is
+//     package-agnostic; the fixture only has to be something installable.
+//
+// Wizard coverage is not lost by the change. It lives where it belongs, as a
+// deterministic encoding test in go-synology (extra_values_test.go), after a
+// malformed wizard payload cost a full investigation under PLAT-498.
 func packageConfig(run bool) string {
 	return fmt.Sprintf(`
-	resource "synology_core_package" "mariadb" {
-		name = "MariaDB10"
+	resource "synology_core_package" "texteditor" {
+		name = "TextEditor"
 		run  = %t
-
-		wizard = {
-			pkgwizard_port              = 3306
-			pkgwizard_new_root_password = "T3stP@ssw0rd"
-		}
 	}`, run)
 }
 
@@ -138,8 +141,8 @@ func packageConfig(run bool) string {
 //
 // The plan check is the real assertion. If `run` ever regains a
 // RequiresReplace -- or Update quietly stops handling it -- the plan becomes a
-// destroy-then-create, which on this resource means uninstalling MariaDB and
-// taking its databases with it.
+// destroy-then-create, which on this resource means uninstalling the package
+// and can take the data it owns with it.
 func TestAccPackageResource_runTogglesInPlace(t *testing.T) {
 	r.Test(t, r.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
@@ -147,20 +150,20 @@ func TestAccPackageResource_runTogglesInPlace(t *testing.T) {
 			{
 				Config: packageConfig(true),
 				Check: r.TestCheckResourceAttr(
-					"synology_core_package.mariadb", "run", "true"),
+					"synology_core_package.texteditor", "run", "true"),
 			},
 			{
 				Config: packageConfig(false),
 				ConfigPlanChecks: r.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(
-							"synology_core_package.mariadb",
+							"synology_core_package.texteditor",
 							plancheck.ResourceActionUpdate,
 						),
 					},
 				},
 				Check: r.TestCheckResourceAttr(
-					"synology_core_package.mariadb", "run", "false"),
+					"synology_core_package.texteditor", "run", "false"),
 			},
 		},
 	})

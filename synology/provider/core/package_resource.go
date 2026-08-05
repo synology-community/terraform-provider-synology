@@ -316,6 +316,15 @@ resource "synology_core_package" "docker" {
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					// Without this, an Optional+Computed attribute the config
+					// does not set is planned as "(known after apply)" on every
+					// plan -- and an unknown value on a RequiresReplace
+					// attribute forces replacement. `run` could then never be
+					// updated in place, which is the one thing this resource is
+					// supposed to allow. Keeping the prior state value is
+					// correct here: the version only changes when the package is
+					// actually reinstalled.
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"url": schema.StringAttribute{
@@ -324,6 +333,10 @@ resource "synology_core_package" "docker" {
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					// See `version`: RequiresReplace on an Optional+Computed
+					// attribute is unusable without this, because the unset
+					// value plans as unknown and unknown forces replacement.
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"wizard": schema.MapAttribute{

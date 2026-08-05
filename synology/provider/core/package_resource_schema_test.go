@@ -188,3 +188,61 @@ func TestPackageSchema_VolumePathDocumentsTheMultiVolumeCase(t *testing.T) {
 		}
 	}
 }
+
+// TestPackageSchema_ComputedReplaceAttributesKeepTheirStateValue guards the
+// defect that made RequiresReplace unusable on this resource.
+//
+// An Optional+Computed attribute the configuration does not set is planned as
+// "(known after apply)" -- unknown. An unknown value on a RequiresReplace
+// attribute forces replacement. So `version` and `url` forced a destroy-create
+// on EVERY plan that changed anything, including a plain `run` toggle:
+//
+//	~ url     = "https://..." # forces replacement -> (known after apply)
+//	~ version = "1.2.6-0260"  # forces replacement -> (known after apply)
+//
+// That defeats the whole point of the carve-out. `run` is meant to be the one
+// attribute updatable in place, and it could not be, because two attributes
+// nobody touched went unknown alongside it. On this resource replacement means
+// uninstalling the package.
+//
+// UseStateForUnknown keeps the prior value instead. It is correct here rather
+// than merely convenient: `version` and `url` only change when the package is
+// actually reinstalled, which is itself a replacement.
+func TestPackageSchema_ComputedReplaceAttributesKeepTheirStateValue(t *testing.T) {
+	t.Parallel()
+	s := packageSchema(t)
+
+	for _, name := range []string{"version", "url"} {
+		attr, ok := s.Attributes[name].(schema.StringAttribute)
+		if !ok {
+			t.Fatalf("attribute %q is not a StringAttribute", name)
+		}
+		if !attr.Computed {
+			continue // only Computed attributes can plan as unknown
+		}
+
+		// Matched on the modifier's own Description, "Once set, the value of
+		// this attribute in state will not change." Not on the word "unknown",
+		// which does not appear in it, and not on a type assertion: the
+		// concrete type is unexported.
+		var found bool
+		for _, m := range attr.PlanModifiers {
+			if strings.Contains(
+				strings.ToLower(m.Description(context.Background())),
+				"will not change",
+			) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf(
+				"attribute %q is Optional+Computed with RequiresReplace but has no "+
+					"UseStateForUnknown; unset in config it plans as unknown, and unknown "+
+					"on a RequiresReplace attribute forces replacement -- so `run` could "+
+					"never be updated in place",
+				name,
+			)
+		}
+	}
+}
