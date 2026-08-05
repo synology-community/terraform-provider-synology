@@ -28,7 +28,10 @@ func TestAccCloudInitResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest is a misleading name for "r.Test but skip the TF_ACC
+			// opt-in check" — this wrote a real cloud-init ISO to the NAS on
+			// a plain `go test ./...` run. r.Test enforces the intended gate.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
