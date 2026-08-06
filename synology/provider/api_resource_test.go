@@ -30,7 +30,12 @@ func TestAccApiResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest sets IsUnitTest but still calls r.Test underneath, and
+			// its only real effect is bypassing the TF_ACC environment check —
+			// so despite the name this ran real API calls against live hardware
+			// with no opt-in. Use r.Test so TF_ACC gates it like every other
+			// acceptance test.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{

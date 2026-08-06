@@ -9,7 +9,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
@@ -18,12 +22,13 @@ import (
 )
 
 type PackageResourceModel struct {
-	Name    types.String `tfsdk:"name"`
-	Version types.String `tfsdk:"version"`
-	File    types.String `tfsdk:"file"`
-	URL     types.String `tfsdk:"url"`
-	Wizard  types.Map    `tfsdk:"wizard"`
-	Beta    types.Bool   `tfsdk:"beta"`
+	Name       types.String `tfsdk:"name"`
+	Version    types.String `tfsdk:"version"`
+	File       types.String `tfsdk:"file"`
+	URL        types.String `tfsdk:"url"`
+	Wizard     types.Map    `tfsdk:"wizard"`
+	Beta       types.Bool   `tfsdk:"beta"`
+	VolumePath types.String `tfsdk:"volume_path"`
 
 	Run types.Bool `tfsdk:"run"`
 }
@@ -86,9 +91,11 @@ func (p *PackageResource) Create(
 	}
 
 	err := p.client.PackageInstallCompound(ctx, core.PackageInstallCompoundRequest{
-		Name:        data.Name.ValueString(),
-		URL:         data.URL.ValueString(),
-		Size:        size,
+		Name: data.Name.ValueString(),
+		URL:  data.URL.ValueString(),
+		Size: size,
+		// Empty when unset, which is what asks the client to resolve a volume.
+		VolumePath:  data.VolumePath.ValueString(),
 		ExtraValues: wizardConf,
 		Run:         data.Run.ValueBool(),
 	})
@@ -105,11 +112,66 @@ func (p *PackageResource) Create(
 }
 
 // Update implements resource.Resource.
+//
+// Only `run` is updatable. Every other attribute carries RequiresReplace, so
+// the framework destroys and recreates rather than routing here -- DSM has no
+// in-place upgrade or rename through this API, and pretending otherwise is how
+// this function came to be an empty body that reported success while changing
+// nothing on the NAS.
 func (p *PackageResource) Update(
-	context.Context,
-	resource.UpdateRequest,
-	*resource.UpdateResponse,
+	ctx context.Context,
+	req resource.UpdateRequest,
+	resp *resource.UpdateResponse,
 ) {
+	var plan, state PackageResourceModel
+
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	name := plan.Name.ValueString()
+
+	// Guard rather than assume: if anything other than `run` differs here, a
+	// RequiresReplace modifier is missing and this would silently skip the
+	// change -- the exact defect this rewrite exists to remove.
+	if !plan.Name.Equal(state.Name) ||
+		!plan.Version.Equal(state.Version) ||
+		!plan.URL.Equal(state.URL) ||
+		!plan.File.Equal(state.File) ||
+		!plan.Beta.Equal(state.Beta) ||
+		!plan.Wizard.Equal(state.Wizard) {
+		resp.Diagnostics.AddError(
+			"Unsupported in-place package update",
+			fmt.Sprintf(
+				"Package %q: only `run` can be changed in place; every other attribute "+
+					"requires replacement. Reaching this point means a RequiresReplace plan "+
+					"modifier is missing from the schema. Refusing rather than reporting a "+
+					"success that would not reach the NAS.",
+				name,
+			),
+		)
+		return
+	}
+
+	if !plan.Run.Equal(state.Run) {
+		var err error
+		if plan.Run.ValueBool() {
+			_, err = p.client.PackageStart(ctx, core.PackageControlRequest{ID: name})
+		} else {
+			_, err = p.client.PackageStop(ctx, core.PackageControlRequest{ID: name})
+		}
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to set run state for package %q", name),
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Read implements resource.Resource.
@@ -139,16 +201,16 @@ func (p *PackageResource) Read(
 		resp.State.SetAttribute(ctx, path.Root("beta"), false)
 	}
 
-	if data.Version.IsNull() || data.Version.IsUnknown() {
-		var version string
-		if pkg != nil && pkg.Version != "" {
-			version = pkg.Version
-		} else if pkgInfo.Version != "" {
-			version = pkgInfo.Version
-		}
-		data.Version = types.StringValue(version)
-		resp.State.SetAttribute(ctx, path.Root("version"), version)
+	// Set unconditionally, not only when null or unknown. Backfilling only the
+	// empty case meant a Package Center auto-update left state asserting the old
+	// version forever, and `tofu plan` stayed clean while the NAS had moved on.
+	var version string
+	if pkg != nil && pkg.Version != "" {
+		version = pkg.Version
+	} else if pkgInfo.Version != "" {
+		version = pkgInfo.Version
 	}
+	data.Version = types.StringValue(version)
 
 	if data.URL.IsNull() || data.URL.IsUnknown() {
 		if pkgInfo.Link != "" {
@@ -157,7 +219,9 @@ func (p *PackageResource) Read(
 		}
 	}
 
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// The single state write for this Read. It was commented out, so every
+	// value computed above was discarded and no drift could ever surface.
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Delete implements resource.Resource.
@@ -233,44 +297,103 @@ resource "synology_core_package" "docker" {
 
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the package to install.",
-				Required:            true,
+				MarkdownDescription: "The Package Center identifier of the package to install, " +
+					"for example `MariaDB10` or `ContainerManager`. DSM has no rename operation, " +
+					"so changing this uninstalls the current package and installs a different one. " +
+					"Uninstalling a package can remove the data it owns.",
+				Required: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"version": schema.StringAttribute{
-				MarkdownDescription: "The package version.",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The package version. Changing it reinstalls the package, " +
+					"because DSM offers no in-place upgrade through this API.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+					// Without this, an Optional+Computed attribute the config
+					// does not set is planned as "(known after apply)" on every
+					// plan -- and an unknown value on a RequiresReplace
+					// attribute forces replacement. `run` could then never be
+					// updated in place, which is the one thing this resource is
+					// supposed to allow. Keeping the prior state value is
+					// correct here: the version only changes when the package is
+					// actually reinstalled.
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"url": schema.StringAttribute{
 				MarkdownDescription: "The URL to the package to install.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+					// See `version`: RequiresReplace on an Optional+Computed
+					// attribute is unusable without this, because the unset
+					// value plans as unknown and unknown forces replacement.
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"wizard": schema.MapAttribute{
-				MarkdownDescription: "Wizard configuration values.",
+				MarkdownDescription: "Wizard configuration values, consumed only during installation.",
 				Optional:            true,
 				ElementType:         types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.RequiresReplace(),
+				},
 			},
 			"file": schema.StringAttribute{
 				MarkdownDescription: "The file to install.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"beta": schema.BoolAttribute{
 				MarkdownDescription: "Whether to install beta versions of the package.",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
+			"volume_path": schema.StringAttribute{
+				MarkdownDescription: "The volume to install the package onto, for example " +
+					"`/volume1`. Optional. When omitted the volume is resolved from DSM's " +
+					"package settings: its configured default if it has one, otherwise the " +
+					"NAS's only volume. On a multi-volume NAS with no configured default, " +
+					"leaving this unset is an error rather than an arbitrary choice — which " +
+					"volume a package lands on decides where its data lives, and DSM offers " +
+					"no way to move it afterwards. Changing this reinstalls the package for " +
+					"the same reason.",
+				Optional: true,
+				// Deliberately not Computed. The resolved volume is not reported
+				// back by the package list, so a Computed attribute would leave
+				// the framework unable to reconcile state after apply. Null here
+				// honestly means "not specified", and the client resolves it.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"run": schema.BoolAttribute{
-				MarkdownDescription: "Whether to run the package after installation.",
-				Optional:            true,
-				Computed:            true,
-				Default:             booldefault.StaticBool(true),
+				MarkdownDescription: "Whether the package should be running. Toggling this starts " +
+					"or stops the package in place via `SYNO.Core.Package.Control`; it does not " +
+					"reinstall it. This is the only attribute on this resource that can be updated " +
+					"without replacement.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(true),
 			},
 		},
 	}

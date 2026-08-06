@@ -148,7 +148,11 @@ func TestAccGuestResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest's body is just "set IsUnitTest, call r.Test" — the
+			// flag only bypasses the TF_ACC gate, so despite the name this
+			// provisioned a real virtual machine on the NAS with no opt-in.
+			// r.Test requires TF_ACC to be set before it runs.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{

@@ -21,7 +21,10 @@ func TestAccGuestListDataSource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest's only effect versus r.Test is skipping the TF_ACC
+			// check, so this listed real VM guests off the live NAS on any
+			// `go test ./...`, unit-test name notwithstanding.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
