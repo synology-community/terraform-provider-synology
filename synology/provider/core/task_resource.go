@@ -395,10 +395,10 @@ const (
 )
 
 // cronFieldValues returns the values a cron bitfield encodes, ascending.
-func cronFieldValues(mask int64, max int64) []int64 {
+func cronFieldValues(mask int64, fieldMax int64) []int64 {
 	u := uint64(mask) &^ cronStarBit
 	values := make([]int64, 0, 8)
-	for i := int64(0); i <= max; i++ {
+	for i := int64(0); i <= fieldMax; i++ {
 		if u&(uint64(1)<<uint(i)) != 0 {
 			values = append(values, i)
 		}
@@ -421,8 +421,8 @@ type cronField struct {
 // ("0,30"), a bounded range ("9-17"), or a stepped range that stops early
 // ("0-45/15") -- selects a set of times DSM has no way to represent, so it is
 // rejected rather than approximated.
-func classifyCronField(mask int64, max int64, name string) (cronField, error) {
-	values := cronFieldValues(mask, max)
+func classifyCronField(mask int64, fieldMax int64, name string) (cronField, error) {
+	values := cronFieldValues(mask, fieldMax)
 
 	switch len(values) {
 	case 0:
@@ -446,11 +446,11 @@ func classifyCronField(mask int64, max int64, name string) (cronField, error) {
 	// An interval must run to the end of the field. A progression that stops
 	// early is a bounded window ("0-45/15" fires at :00 :15 :30 :45 and then
 	// waits), and DSM has no field for the window.
-	if last := values[len(values)-1]; last+step <= max {
+	if last := values[len(values)-1]; last+step <= fieldMax {
 		return cronField{}, fmt.Errorf(
 			"schedule field %s: %q stops at %d rather than repeating through %d; DSM "+
 				"repeats an interval for the whole %s range",
-			name, cronFieldString(values), last, max, name)
+			name, cronFieldString(values), last, fieldMax, name)
 	}
 
 	return cronField{start: values[0], step: step}, nil
