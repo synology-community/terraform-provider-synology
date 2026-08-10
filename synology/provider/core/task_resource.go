@@ -30,6 +30,7 @@ type TaskResourceModel struct {
 
 	Schedule types.String `tfsdk:"schedule"`
 	User     types.String `tfsdk:"user"`
+	Enable   types.Bool   `tfsdk:"enable"`
 
 	Run  types.Bool   `tfsdk:"run"`
 	When types.String `tfsdk:"when"`
@@ -218,12 +219,21 @@ func (p *TaskResource) Read(
 	}
 
 	taskID := data.ID.ValueInt64()
-	_, err := p.client.TaskGet(ctx, taskID)
+	task, err := p.client.TaskGet(ctx, taskID)
 	if err != nil {
 		resp.State.RemoveResource(ctx)
+		return
 	}
 
-	// resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// enable is DSM's own schedule state, refreshed unconditionally (not only
+	// when null/unknown) so an out-of-band change -- e.g. toggling the task in
+	// DSM's Task Scheduler UI -- produces a plan diff instead of staying
+	// permanently invisible. TaskResult.Enable's `omitempty` json tag only
+	// affects marshalling, not unmarshalling, so it does not suppress a
+	// `false` value read back here.
+	data.Enable = types.BoolValue(task.Enable)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Schema implements resource.Resource.
@@ -273,6 +283,18 @@ func (p *TaskResource) Schema(
 			"user": schema.StringAttribute{
 				MarkdownDescription: "The user that will execute the task.",
 				Required:            true,
+			},
+			"enable": schema.BoolAttribute{
+				MarkdownDescription: "Whether the task's schedule is enabled in DSM. DSM only " +
+					"writes a crontab row for enabled tasks, so a disabled task never fires " +
+					"regardless of `schedule`. This is the schedule's on/off state, and is " +
+					"distinct from `run`: `run` triggers one immediate, one-shot execution at " +
+					"`when` and has no effect on whether the schedule itself is active. " +
+					"Defaults to `true`, since a scheduled task that does not schedule is not " +
+					"a useful default.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(true),
 			},
 			"run": schema.BoolAttribute{
 				MarkdownDescription: "Whether to run the task after creation.",
@@ -573,6 +595,7 @@ func getTaskRequest(data TaskResourceModel) (taskReq core.TaskRequest, err error
 		RealOwner: "root",
 		Owner:     user,
 		Type:      taskType,
+		Enable:    data.Enable.ValueBool(),
 		Extra: core.TaskExtra{
 			Script: data.Script.ValueString(),
 		},
