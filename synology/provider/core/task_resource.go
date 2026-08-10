@@ -134,6 +134,15 @@ func (p *TaskResource) Update(
 		return
 	}
 
+	// PLAT-522: unconditional, unlike the neighbouring attributes below.
+	// resp.State starts out equal to the prior state (not the plan), so any
+	// attribute left unwritten here keeps its old value; Terraform then sees
+	// the apply's actual new value diverge from what the provider reported
+	// and fails with an inconsistent-result error. Guarding this on
+	// plan != state would still be correct, but unconditional is simpler and
+	// costs nothing.
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("enable"), plan.Enable)...)
+
 	if plan.Run.ValueBool() != state.Run.ValueBool() {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("run"), plan.Run)...)
 	}
