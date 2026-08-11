@@ -18,6 +18,8 @@ func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		NewProjectResource,
 		NewNetworkResource,
+		NewContainerResource,
+		NewRegistryResource,
 	}
 }
 
