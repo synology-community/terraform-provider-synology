@@ -31,8 +31,8 @@ github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEV
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
 github.com/ProtonMail/go-crypto v1.4.1 h1:9RfcZHqEQUvP8RzecWEUafnZVtEvrBVL9BiF67IQOfM=
 github.com/ProtonMail/go-crypto v1.4.1/go.mod h1:e1OaTyu5SYVrO9gKOEhTc+5UcXtTUa+P3uLudwcgPqo=
-github.com/TMAtwood/go-synology v0.1.12-fcg.6 h1:wXF72uVajVcp9wZ/jF+E49fdFYNVZjAhVyYS3D+rero=
-github.com/TMAtwood/go-synology v0.1.12-fcg.6/go.mod h1:3Im3Qou3yRp9bfyJlakmjyz3ZNk3oVBYVAIL30QVpYo=
+github.com/TMAtwood/go-synology v0.1.12-fcg.7 h1:ODvH4lxOrELGFa9lMBxJ1HxZPQ1nsGwQ1Ctox5NRL/A=
+github.com/TMAtwood/go-synology v0.1.12-fcg.7/go.mod h1:3Im3Qou3yRp9bfyJlakmjyz3ZNk3oVBYVAIL30QVpYo=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d/go.mod h1:asat636LX7Bqt5lYEZ27JNDcqxfjdBQuJ/MM4CN/Lzo=
 github.com/agext/levenshtein v1.2.3 h1:YB2fHEn0UJagG8T1rrWknE3ZQzWM06O8AMAatNn7lmo=
