@@ -786,8 +786,9 @@ func (f *ProjectResource) Schema(
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
+					// Prefer state when config omits content (import freeze).
+					stringplanmodifier.UseStateForUnknown(),
 					modifier.UseSchemaForUnknownContent(),
-					// stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"metadata": schema.MapAttribute{
