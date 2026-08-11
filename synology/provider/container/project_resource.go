@@ -649,64 +649,62 @@ func (f *ProjectResource) Update(
 	}
 
 	if servicesChanged || configChanged || secretChanged {
+		// Always rebuild compose from structured attributes when they change.
+		// Preferring plan.Content freezes stale YAML after PLAT-552's
+		// UseSchemaForUnknownContent (it keeps state content when config omits
+		// content, so service/secret edits never reached ProjectUpdate).
 		var content string
-		if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
-			content = plan.Content.ValueString()
-		} else {
-			resp.Diagnostics.Append(
-				models.NewComposeContentBuilder(
-					ctx,
-				).SetServices(
-					&plan.Services,
-				).SetNetworks(
-					&plan.Networks,
-				).SetVolumes(
-					&plan.Volumes,
-				).SetConfigs(
-					&plan.Configs,
-				).SetSecrets(
-					&plan.Secrets,
-				).Build(
-					&content,
-				)...)
+		resp.Diagnostics.Append(
+			models.NewComposeContentBuilder(
+				ctx,
+			).SetServices(
+				&plan.Services,
+			).SetNetworks(
+				&plan.Networks,
+			).SetVolumes(
+				&plan.Volumes,
+			).SetConfigs(
+				&plan.Configs,
+			).SetSecrets(
+				&plan.Secrets,
+			).Build(
+				&content,
+			)...)
 
-			if resp.Diagnostics.HasError() {
-				resp.Diagnostics.AddError("Failed to build project content", "")
-				return
-			}
+		if resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Failed to build project content", "")
+			return
 		}
 
-		if servicesChanged {
-			proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError("Failed to get project on update", err.Error())
-				return
-			}
+		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get project on update", err.Error())
+			return
+		}
 
-			if proj.Content != content {
-				if proj.IsRunning() {
-					_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
-						ID: plan.ID.ValueString(),
-					})
-					if err != nil {
-						resp.Diagnostics.AddError("Failed to stop project", err.Error())
-						return
-					}
-					time.Sleep(2 * time.Second) // Wait for the project to stop
-				}
-
-				_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-					ID:                    plan.ID.ValueString(),
-					Content:               content,
-					EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
-					ServicePortalName:     servicePortal.Name.ValueString(),
-					ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
-					ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+		if proj.Content != content {
+			if proj.IsRunning() {
+				_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+					ID: plan.ID.ValueString(),
 				})
 				if err != nil {
-					resp.Diagnostics.AddError("Failed to update project", err.Error())
+					resp.Diagnostics.AddError("Failed to stop project", err.Error())
 					return
 				}
+				time.Sleep(2 * time.Second) // Wait for the project to stop
+			}
+
+			_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+				ID:                    plan.ID.ValueString(),
+				Content:               content,
+				EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+				ServicePortalName:     servicePortal.Name.ValueString(),
+				ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+				ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to update project", err.Error())
+				return
 			}
 		}
 	}
