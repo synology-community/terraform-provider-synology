@@ -24,7 +24,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
 	"github.com/synology-community/go-synology/pkg/api/docker"
@@ -146,7 +145,11 @@ func (f *ProjectResource) handleConfigs(
 	}
 
 	for _, v := range elements {
-		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+		// Upload only when content is actually provided. A null/unknown content
+		// with a host-path `file` (e.g. /volume1/platform/secrets/...) must not
+		// hit File Station — the compose secret already points at the path.
+		// The previous `|| !IsUnknown()` form treated null content as "upload".
+		if !v.Content.IsNull() && !v.Content.IsUnknown() {
 			// Upload the file
 			_, err := f.fsClient.Upload(
 				ctx,
@@ -184,7 +187,9 @@ func (f *ProjectResource) handleSecrets(
 	}
 
 	for _, v := range elements {
-		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+		// Same as handleConfigs: only upload when content is set. Host-path
+		// secrets (file= on the NAS) skip File Station entirely.
+		if !v.Content.IsNull() && !v.Content.IsUnknown() {
 			// Upload the file
 			_, err := f.fsClient.Upload(
 				ctx,
@@ -256,7 +261,16 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 				return err
 			}
 		default:
-			return err
+			// File Station may refuse with privilege_not_enough (DSM 160) when the
+			// service account deliberately lacks the File Station application
+			// privilege (see ap100298 acceptance-test isolation). In that case
+			// the operator pre-creates sharePath on the NAS; ProjectCreate will
+			// still fail loudly if the path is unusable. Do not treat a
+			// privilege error as a hard stop here.
+			if !strings.Contains(err.Error(), "error_privilege_not_enough") &&
+				!strings.Contains(err.Error(), "[160]") {
+				return err
+			}
 		}
 	}
 
@@ -418,6 +432,30 @@ func (f *ProjectResource) Create(
 	data.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
 	// data.Content = types.StringValue(proj.Content)
+
+	// secrets.content is Optional+Computed; when the config only sets `file`,
+	// content is planned as unknown and never written. OpenTofu rejects
+	// unknown after apply, so pin null content to a known null here.
+	if !data.Secrets.IsNull() && !data.Secrets.IsUnknown() {
+		elements := map[string]models.Secret{}
+		if diags := data.Secrets.ElementsAs(ctx, &elements, false); !diags.HasError() {
+			changed := false
+			for k, v := range elements {
+				if v.Content.IsUnknown() {
+					v.Content = types.StringNull()
+					elements[k] = v
+					changed = true
+				}
+			}
+			if changed {
+				mv, d := types.MapValueFrom(ctx, models.Secret{}.ModelType(), elements)
+				resp.Diagnostics.Append(d...)
+				if !d.HasError() {
+					data.Secrets = mv
+				}
+			}
+		}
+	}
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -583,8 +621,12 @@ func (f *ProjectResource) Update(
 		secretChanged = true
 	}
 
-	if !servicesChanged && !configChanged && !secretChanged {
-		tflog.Info(ctx, "No changes detected in services or configs, skipping update")
+	runDesired := !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool()
+	runOnly := !servicesChanged && !configChanged && !secretChanged
+
+	if runOnly && !runDesired {
+		// Nothing to do, but still persist planned attrs (especially run=false).
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		return
 	}
 
@@ -606,86 +648,70 @@ func (f *ProjectResource) Update(
 		f.handleSecrets(ctx, plan)
 	}
 
-	var content string
-	if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
-		content = plan.Content.ValueString()
-	} else {
-		resp.Diagnostics.Append(
-			models.NewComposeContentBuilder(
-				ctx,
-			).SetServices(
-				&plan.Services,
-			).SetNetworks(
-				&plan.Networks,
-			).SetVolumes(
-				&plan.Volumes,
-			).SetConfigs(
-				&plan.Configs,
-			).SetSecrets(
-				&plan.Secrets,
-			).Build(
-				&content,
-			)...)
-
-		if resp.Diagnostics.HasError() {
-			resp.Diagnostics.AddError("Failed to build project content", "")
-			return
-		}
-	}
-
-	if servicesChanged {
-
-		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to get project on update", err.Error())
-			return
-		}
-
-		if proj.Content == content {
-			tflog.Info(ctx, "No changes detected in project, skipping update")
+	if servicesChanged || configChanged || secretChanged {
+		var content string
+		if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
+			content = plan.Content.ValueString()
+		} else {
 			resp.Diagnostics.Append(
-				resp.State.SetAttribute(
+				models.NewComposeContentBuilder(
 					ctx,
-					path.Root("status"),
-					types.StringValue(proj.Status),
+				).SetServices(
+					&plan.Services,
+				).SetNetworks(
+					&plan.Networks,
+				).SetVolumes(
+					&plan.Volumes,
+				).SetConfigs(
+					&plan.Configs,
+				).SetSecrets(
+					&plan.Secrets,
+				).Build(
+					&content,
 				)...)
-			return
-		}
 
-		if proj.IsRunning() {
-			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
-				ID: plan.ID.ValueString(),
-			})
-			if err != nil {
-				resp.Diagnostics.AddError("Failed to stop project", err.Error())
+			if resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError("Failed to build project content", "")
 				return
 			}
-			time.Sleep(2 * time.Second) // Wait for the project to stop
 		}
 
-		// _, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
-		// 	ID: plan.ID.ValueString(),
-		// })
-		// if err != nil {
-		// 	resp.Diagnostics.AddError("Failed to clean project", err.Error())
-		// 	return
-		// }
+		if servicesChanged {
+			proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get project on update", err.Error())
+				return
+			}
 
-		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-			ID:                    plan.ID.ValueString(),
-			Content:               content,
-			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
-			ServicePortalName:     servicePortal.Name.ValueString(),
-			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
-			ServicePortalProtocol: servicePortal.Protocol.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to update project", err.Error())
-			return
+			if proj.Content != content {
+				if proj.IsRunning() {
+					_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+						ID: plan.ID.ValueString(),
+					})
+					if err != nil {
+						resp.Diagnostics.AddError("Failed to stop project", err.Error())
+						return
+					}
+					time.Sleep(2 * time.Second) // Wait for the project to stop
+				}
+
+				_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+					ID:                    plan.ID.ValueString(),
+					Content:               content,
+					EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+					ServicePortalName:     servicePortal.Name.ValueString(),
+					ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+					ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+				})
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to update project", err.Error())
+					return
+				}
+			}
 		}
 	}
 
-	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
+	if runDesired {
 		_, err := f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 			ID: plan.ID.ValueString(),
 		})
@@ -693,9 +719,7 @@ func (f *ProjectResource) Update(
 			resp.Diagnostics.AddError("Failed to build project", err.Error())
 			return
 		}
-	}
-	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
-		_, err := f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
+		_, err = f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
 			ID: plan.ID.ValueString(),
 		})
 		if err != nil {
@@ -713,17 +737,17 @@ func (f *ProjectResource) Update(
 	plan.Status = types.StringValue(proj.Status)
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
-	plan.Content = types.StringValue(proj.Content)
+	if proj.Content != "" {
+		plan.Content = types.StringValue(proj.Content)
+	}
+	// Persist planned run value — DSM has no "run" attribute to re-read.
+	// Without this, OpenTofu reports "was true, but now false" after apply.
+	// (Same class of bug as PLAT-522 for synology_core_task.enable.)
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("content"), plan.Content)...)
-	if resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Failed to set content", "")
-		return
+	if plan.Metadata.IsNull() || plan.Metadata.IsUnknown() {
+		plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}
 
-	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
-
-	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
