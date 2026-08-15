@@ -388,6 +388,16 @@ func (f *ImageResource) Delete(
 
 	imageName := data.Name.ValueString()
 
+	// The image may already be gone (e.g. a prior delete whose API response
+	// timed out client-side but succeeded server-side). Deleting an image
+	// that DSM no longer has record of errors, so skip the call entirely
+	// when getImage confirms it's already absent.
+	if _, err := f.getImage(ctx, imageName); err != nil {
+		if errors.Is(err, ErrImageNotFound) {
+			return
+		}
+	}
+
 	// Start Delete the image
 	if err := f.client.ImageDelete(ctx, imageName); err != nil {
 		resp.Diagnostics.AddError(
