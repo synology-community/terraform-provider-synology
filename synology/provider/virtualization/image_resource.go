@@ -3,6 +3,7 @@ package virtualization
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -302,6 +303,37 @@ func (f *ImageResource) Create(
 			)
 		}
 
+		// storage_id is Computed and must be known after apply. In this
+		// (existing-file) mode it's only ever set above when the caller
+		// already supplied it explicitly; when only storage_name is given
+		// (the common case), resolve it the same way the upload branch
+		// does, or Terraform errors with "invalid result object after
+		// apply" once the plan has no more unknowns to fall back on.
+		if (data.StorageID.IsUnknown() || data.StorageID.IsNull()) &&
+			!data.StorageName.IsUnknown() && !data.StorageName.IsNull() &&
+			data.StorageName.ValueString() != "" {
+			storages, err := f.client.StorageList(ctx)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to list storages",
+					fmt.Sprintf(
+						"Unable to list storages to resolve storage name, got error: %s",
+						err,
+					),
+				)
+				return
+			}
+			for _, s := range storages.Storages {
+				if s.Name == data.StorageName.ValueString() {
+					data.StorageID = types.StringValue(s.ID)
+					break
+				}
+			}
+		}
+		if data.StorageID.IsUnknown() {
+			data.StorageID = types.StringNull()
+		}
+
 		res, err := f.client.ImageCreate(c, image)
 		if err != nil {
 			if strings.Contains(err.Error(), "403") {
@@ -379,6 +411,11 @@ func (f *ImageResource) Read(
 
 	image, err := f.getImage(ctx, data.Name.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrImageNotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+
 		resp.Diagnostics.AddError(
 			"Failed to list images",
 			fmt.Sprintf("Unable to list images, got error: %s", err),
@@ -395,6 +432,9 @@ func (f *ImageResource) Read(
 	resp.State.Set(ctx, &data)
 }
 
+// ErrImageNotFound indicates the requested image no longer exists on the NAS.
+var ErrImageNotFound = errors.New("image not found")
+
 func (f *ImageResource) getImage(ctx context.Context, name string) (*virtualization.Image, error) {
 	images, err := f.client.ImageList(ctx)
 	if err != nil {
@@ -407,7 +447,7 @@ func (f *ImageResource) getImage(ctx context.Context, name string) (*virtualizat
 		}
 	}
 
-	return nil, fmt.Errorf("image %s not found", name)
+	return nil, fmt.Errorf("image %s not found: %w", name, ErrImageNotFound)
 }
 
 // Update implements resource.Resource.
