@@ -67,7 +67,15 @@ func IsoFromCloudInit(ctx context.Context, ci CloudInit) ([]byte, error) {
 		fileMap[metaDataFileName] = ""
 	}
 	if ci.UserData != "" {
-		if match, _ := regexp.MatchString(`^#cloud-config`, ci.UserData); !match {
+		// cloud-init identifies its user-data format from a magic first line:
+		// "#cloud-config" for a single YAML document, or a MIME multipart
+		// message (e.g. produced by Terraform's cloudinit_config data source,
+		// which always renders multipart/mixed even for a single part) that
+		// already declares its own "Content-Type"/"MIME-Version" header.
+		// Blindly prepending "#cloud-config" to an already-multipart document
+		// corrupts it: cloud-init then reads the whole MIME envelope as one
+		// YAML doc and silently skips user-data processing entirely.
+		if match, _ := regexp.MatchString(`(?i)^(#cloud-config|content-type:|mime-version:)`, ci.UserData); !match {
 			ci.UserData = fmt.Sprintf("#cloud-config\n%s", ci.UserData)
 		}
 
