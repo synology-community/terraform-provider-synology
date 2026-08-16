@@ -386,20 +386,26 @@ func (f *ImageResource) Delete(
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	imageName := data.Name.ValueString()
-
-	// The image may already be gone (e.g. a prior delete whose API response
-	// timed out client-side but succeeded server-side). Deleting an image
-	// that DSM no longer has record of errors, so skip the call entirely
-	// when getImage confirms it's already absent.
-	if _, err := f.getImage(ctx, imageName); err != nil {
+	// Look up by ID, not by name: a deposed instance's stored name can collide
+	// with a live replacement's name (e.g. when the name is derived from a pet
+	// name that didn't rotate between replace cycles). Matching by ID ensures
+	// this delete targets the exact image this resource instance owns, even if
+	// another live image currently shares the same name.
+	image, err := f.getImageByID(ctx, data.ID.ValueString())
+	if err != nil {
 		if errors.Is(err, ErrImageNotFound) {
 			return
 		}
+
+		resp.Diagnostics.AddError(
+			"Failed to list images",
+			fmt.Sprintf("Unable to list images, got error: %s", err),
+		)
+		return
 	}
 
 	// Start Delete the image
-	if err := f.client.ImageDelete(ctx, imageName); err != nil {
+	if err := f.client.ImageDelete(ctx, image.Name); err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to delete image",
 			fmt.Sprintf("Unable to delete image, got error: %s", err),
@@ -419,7 +425,10 @@ func (f *ImageResource) Read(
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	image, err := f.getImage(ctx, data.Name.ValueString())
+	// Look up by ID, not by name: a deposed instance's stored name can collide
+	// with a live replacement's name, and matching by name would silently
+	// attach this Read to the wrong (live) image.
+	image, err := f.getImageByID(ctx, data.ID.ValueString())
 	if err != nil {
 		if errors.Is(err, ErrImageNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -433,10 +442,7 @@ func (f *ImageResource) Read(
 		return
 	}
 
-	if image.ID != "" {
-		data.ID = types.StringValue(image.ID)
-	}
-
+	data.Name = types.StringValue(image.Name)
 	data.UsedSize = types.Int64Value(image.UsedSize)
 
 	resp.State.Set(ctx, &data)
@@ -458,6 +464,24 @@ func (f *ImageResource) getImage(ctx context.Context, name string) (*virtualizat
 	}
 
 	return nil, fmt.Errorf("image %s not found: %w", name, ErrImageNotFound)
+}
+
+// getImageByID looks up an image by its unique ID rather than its name.
+// Unlike Name, ID never collides between a deposed instance and its live
+// replacement, so Read/Delete must use this instead of getImage.
+func (f *ImageResource) getImageByID(ctx context.Context, id string) (*virtualization.Image, error) {
+	images, err := f.client.ImageList(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, image := range images.Images {
+		if image.ID == id {
+			return &image, nil
+		}
+	}
+
+	return nil, fmt.Errorf("image with id %s not found: %w", id, ErrImageNotFound)
 }
 
 // Update implements resource.Resource.
