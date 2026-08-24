@@ -23,6 +23,7 @@ import (
 var (
 	_ resource.Resource                = &SharePermissionResource{}
 	_ resource.ResourceWithImportState = &SharePermissionResource{}
+	_ resource.ResourceWithModifyPlan  = &SharePermissionResource{}
 )
 
 func NewSharePermissionResource() resource.Resource {
@@ -183,6 +184,117 @@ func (r *SharePermissionResource) Configure(
 		return
 	}
 	r.client = client.CoreAPI()
+}
+
+// ModifyPlan rebuilds the planned `permission` set directly from
+// configuration, overwriting whatever Terraform Core proposed for it.
+//
+// terraform-plugin-framework's schema.Default only fires when the *raw
+// config* value at a path is null (see TransformDefaults), and it locates
+// that raw config value by walking the plan's own tree and using each Set
+// element's *entire* object value as that element's identity -- Sets have no
+// other notion of "which element is this." Because is_readonly/is_writable/
+// is_deny/is_custom are all Optional+Computed, a row where the practitioner
+// sets any one of them away from its default no longer matches its
+// prior-state counterpart byte for byte, so Terraform Core's own
+// proposed-new-value computation (which runs *before* this provider is even
+// invoked, and which this method cannot see or influence) fails to correlate
+// the two: it treats the row as a brand-new element with no prior value.
+// Verified end-to-end against a real DSM (PLAT-705): a config declaring
+// `is_writable = true` for an existing row planned `is_writable = false` --
+// silently, with no diagnostic -- which would have revoked a real grant. A
+// row where every flag is left at its false default round-trips fine, which
+// is why the defect only shows up once a flag is set to true.
+//
+// Config is not subject to any of the above: Terraform always hands it over
+// intact, with no per-element correlation involved. So instead of trusting
+// the plan Core proposed, decode the row values straight from req.Config,
+// resolve the four settable flags' un-set (null) case to their documented
+// default of false ourselves, and write the corrected set into resp.Plan.
+func (r *SharePermissionResource) ModifyPlan(
+	ctx context.Context,
+	req resource.ModifyPlanRequest,
+	resp *resource.ModifyPlanResponse,
+) {
+	// Nothing to fix on a destroy plan: there is no new permission set.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var configPermission types.Set
+	resp.Diagnostics.Append(
+		req.Config.GetAttribute(ctx, path.Root("permission"), &configPermission)...,
+	)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if configPermission.IsNull() || configPermission.IsUnknown() {
+		return
+	}
+
+	var rows []sharePermissionEntryModel
+	if diags := configPermission.ElementsAs(ctx, &rows, false); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	// is_admin is Computed-only: config can never supply it. Preserve it
+	// from prior state for a row that already exists there (that value came
+	// from DSM, not from this plan); a row with no prior-state counterpart
+	// is genuinely unknown until Create/Update runs and refresh() reads it
+	// back from DSM.
+	priorAdmin := map[string]types.Bool{}
+	if !req.State.Raw.IsNull() {
+		var statePermission types.Set
+		diags := req.State.GetAttribute(ctx, path.Root("permission"), &statePermission)
+		if !diags.HasError() && !statePermission.IsNull() && !statePermission.IsUnknown() {
+			var stateRows []sharePermissionEntryModel
+			if d := statePermission.ElementsAs(ctx, &stateRows, false); !d.HasError() {
+				for _, row := range stateRows {
+					priorAdmin[row.Name.ValueString()] = row.IsAdmin
+				}
+			}
+		}
+	}
+
+	objs := make([]attr.Value, 0, len(rows))
+	for _, row := range rows {
+		isAdmin, ok := priorAdmin[row.Name.ValueString()]
+		if !ok || isAdmin.IsNull() || isAdmin.IsUnknown() {
+			isAdmin = types.BoolUnknown()
+		}
+		obj, diags := types.ObjectValue(sharePermissionEntryAttrTypes(), map[string]attr.Value{
+			"name":        row.Name,
+			"is_readonly": boolOrFalse(row.IsReadonly),
+			"is_writable": boolOrFalse(row.IsWritable),
+			"is_deny":     boolOrFalse(row.IsDeny),
+			"is_custom":   boolOrFalse(row.IsCustom),
+			"is_admin":    isAdmin,
+		})
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		objs = append(objs, obj)
+	}
+
+	set, diags := types.SetValue(types.ObjectType{AttrTypes: sharePermissionEntryAttrTypes()}, objs)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("permission"), set)...)
+}
+
+// boolOrFalse resolves a permission flag that may be null (unset in config)
+// to its documented schema default of false, leaving any concrete value
+// (including an explicit false) untouched.
+func boolOrFalse(v types.Bool) types.Bool {
+	if v.IsNull() {
+		return types.BoolValue(false)
+	}
+	return v
 }
 
 // planEntries decodes the plan's permission set into client entries, in a
