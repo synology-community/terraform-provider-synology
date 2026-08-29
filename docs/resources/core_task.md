@@ -21,6 +21,9 @@ A Generic API Resource for making calls to the Synology DSM API.
 
 ### Optional
 
+- `notify_enable` (Boolean) Whether DSM emails the task's run details.
+- `notify_if_error` (Boolean) Whether DSM sends run details only when the task fails.
+- `notify_mail` (String) Email address that receives task run details. Required when `notify_enable` is true.
 - `run` (Boolean) Whether to run the task after creation.
 - `schedule` (String) Schedule expressed in cron, mapped onto DSM's scheduler: a fixed time (`17 3 * * *`) becomes a daily task, a day-of-week restriction (`17 3 * * 1-5`) becomes a weekly one, and an even interval (`*/15 * * * *`, `30 */6 * * *`) becomes DSM's repeat_min/repeat_hour. Schedules DSM cannot represent are rejected rather than silently mis-stored: day-of-month or month restrictions, bounded windows (`0 9-17 * * *`), and unevenly spaced lists (`0,7,30`).
 - `script` (String) Script content to run in the task.
