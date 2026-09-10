@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -56,7 +57,11 @@ func (p *PackageResource) Create(
 	}
 
 	size := int64(0)
-	if data.URL.ValueString() == "" {
+	file := data.File.ValueString()
+	// A configured local file is the install source. Do not fall through to
+	// the catalog URL lookup — that installed the wrong package while still
+	// recording `file` in state.
+	if file == "" && data.URL.ValueString() == "" {
 		pkg, err := p.client.PackageFind(ctx, data.Name.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to find package", err.Error())
@@ -76,7 +81,7 @@ func (p *PackageResource) Create(
 		}
 	}
 
-	if size == 0 {
+	if size == 0 && data.URL.ValueString() != "" {
 		s, err := p.client.ContentLength(context.Background(), data.URL.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to get file size", err.Error())
@@ -92,6 +97,7 @@ func (p *PackageResource) Create(
 
 	err := p.client.PackageInstallCompound(ctx, core.PackageInstallCompoundRequest{
 		Name: data.Name.ValueString(),
+		File: file,
 		URL:  data.URL.ValueString(),
 		Size: size,
 		// Empty when unset, which is what asks the client to resolve a volume.
@@ -141,7 +147,8 @@ func (p *PackageResource) Update(
 		!plan.URL.Equal(state.URL) ||
 		!plan.File.Equal(state.File) ||
 		!plan.Beta.Equal(state.Beta) ||
-		!plan.Wizard.Equal(state.Wizard) {
+		!plan.Wizard.Equal(state.Wizard) ||
+		!plan.VolumePath.Equal(state.VolumePath) {
 		resp.Diagnostics.AddError(
 			"Unsupported in-place package update",
 			fmt.Sprintf(
@@ -189,6 +196,7 @@ func (p *PackageResource) Read(
 	pkg, err := p.client.PackageGet(ctx, name)
 	if err != nil {
 		resp.State.RemoveResource(ctx)
+		return
 	}
 
 	pkgInfo, err := p.client.PackageFind(ctx, name)
@@ -198,7 +206,11 @@ func (p *PackageResource) Read(
 	}
 
 	if data.Beta.IsNull() || data.Beta.IsUnknown() {
-		resp.State.SetAttribute(ctx, path.Root("beta"), false)
+		data.Beta = types.BoolValue(false)
+	}
+
+	if pkg.Additional.Status != "" {
+		data.Run = types.BoolValue(strings.EqualFold(pkg.Additional.Status, "running"))
 	}
 
 	// Set unconditionally, not only when null or unknown. Backfilling only the
@@ -241,15 +253,14 @@ func (p *PackageResource) Delete(
 		ID: packageName,
 	})
 	if err != nil {
-		_, err := p.client.PackageGet(ctx, packageName)
-		switch err.(type) {
-		case api.NotFoundError:
+		uninstallErr := err
+		_, getErr := p.client.PackageGet(ctx, packageName)
+		if _, ok := getErr.(api.NotFoundError); ok {
 			resp.State.RemoveResource(ctx)
 			return
-		default:
-			resp.Diagnostics.AddError("Failed to uninstall package", err.Error())
-			return
 		}
+		resp.Diagnostics.AddError("Failed to uninstall package", uninstallErr.Error())
+		return
 	}
 
 	resp.State.RemoveResource(ctx)

@@ -130,6 +130,28 @@ func projectExists(err error) bool {
 	return false
 }
 
+// shouldUploadFileContent is true only when the nested content is a known,
+// non-empty string. Null, unknown, or "" means a host-path file that must
+// not be uploaded through File Station.
+func shouldUploadFileContent(content types.String) bool {
+	return !content.IsNull() && !content.IsUnknown() && content.ValueString() != ""
+}
+
+// projectSpecChanged reports whether any attribute that must reach DSM
+// (compose content, portal, share, name) differs. `run` is excluded so a
+// run-only plan does not take the content-update path.
+func projectSpecChanged(plan, state models.ProjectResourceModel) bool {
+	return !reflect.DeepEqual(plan.Services, state.Services) ||
+		!reflect.DeepEqual(plan.Configs, state.Configs) ||
+		!reflect.DeepEqual(plan.Secrets, state.Secrets) ||
+		!reflect.DeepEqual(plan.Networks, state.Networks) ||
+		!reflect.DeepEqual(plan.Volumes, state.Volumes) ||
+		!plan.Content.Equal(state.Content) ||
+		!plan.ServicePortal.Equal(state.ServicePortal) ||
+		!plan.SharePath.Equal(state.SharePath) ||
+		!plan.Name.Equal(state.Name)
+}
+
 func (f *ProjectResource) handleConfigs(
 	ctx context.Context,
 	data models.ProjectResourceModel,
@@ -145,11 +167,7 @@ func (f *ProjectResource) handleConfigs(
 	}
 
 	for _, v := range elements {
-		// Upload only when content is actually provided. A null/unknown content
-		// with a host-path `file` (e.g. /volume1/platform/secrets/...) must not
-		// hit File Station — the compose secret already points at the path.
-		// The previous `|| !IsUnknown()` form treated null content as "upload".
-		if !v.Content.IsNull() && !v.Content.IsUnknown() {
+		if shouldUploadFileContent(v.Content) {
 			// Upload the file
 			_, err := f.fsClient.Upload(
 				ctx,
@@ -187,9 +205,7 @@ func (f *ProjectResource) handleSecrets(
 	}
 
 	for _, v := range elements {
-		// Same as handleConfigs: only upload when content is set. Host-path
-		// secrets (file= on the NAS) skip File Station entirely.
-		if !v.Content.IsNull() && !v.Content.IsUnknown() {
+		if shouldUploadFileContent(v.Content) {
 			// Upload the file
 			_, err := f.fsClient.Upload(
 				ctx,
@@ -607,26 +623,18 @@ func (f *ProjectResource) Update(
 		return
 	}
 
-	var servicesChanged, configChanged, secretChanged bool
-
-	if !reflect.DeepEqual(plan.Services, state.Services) {
-		servicesChanged = true
-	}
-
-	if !reflect.DeepEqual(plan.Configs, state.Configs) {
-		configChanged = true
-	}
-
-	if !reflect.DeepEqual(plan.Secrets, state.Secrets) {
-		secretChanged = true
-	}
+	configChanged := !reflect.DeepEqual(plan.Configs, state.Configs)
+	secretChanged := !reflect.DeepEqual(plan.Secrets, state.Secrets)
+	specChanged := projectSpecChanged(plan, state)
 
 	runDesired := !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool()
-	runOnly := !servicesChanged && !configChanged && !secretChanged
+	runOnly := !specChanged
 
 	if runOnly && !runDesired {
-		// Nothing to do, but still persist planned attrs (especially run=false).
-		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		// Persist only `run`. The plan can still carry unknown computed
+		// values (status, timestamps); writing the whole plan here produced
+		// an inconsistent-result error.
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("run"), plan.Run)...)
 		return
 	}
 
@@ -648,7 +656,15 @@ func (f *ProjectResource) Update(
 		f.handleSecrets(ctx, plan)
 	}
 
-	if servicesChanged || configChanged || secretChanged {
+	if specChanged {
+		if !plan.SharePath.Equal(state.SharePath) &&
+			!plan.SharePath.IsNull() && !plan.SharePath.IsUnknown() {
+			if err := f.ensureProjectShare(ctx, plan.SharePath.ValueString()); err != nil {
+				resp.Diagnostics.AddError("Failed to create project share", err.Error())
+				return
+			}
+		}
+
 		var content string
 		if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
 			content = plan.Content.ValueString()
@@ -676,37 +692,35 @@ func (f *ProjectResource) Update(
 			}
 		}
 
-		if servicesChanged {
-			proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError("Failed to get project on update", err.Error())
-				return
-			}
+		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get project on update", err.Error())
+			return
+		}
 
-			if proj.Content != content {
-				if proj.IsRunning() {
-					_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
-						ID: plan.ID.ValueString(),
-					})
-					if err != nil {
-						resp.Diagnostics.AddError("Failed to stop project", err.Error())
-						return
-					}
-					time.Sleep(2 * time.Second) // Wait for the project to stop
-				}
-
-				_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-					ID:                    plan.ID.ValueString(),
-					Content:               content,
-					EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
-					ServicePortalName:     servicePortal.Name.ValueString(),
-					ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
-					ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+		if proj.Content != content {
+			if proj.IsRunning() {
+				_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+					ID: plan.ID.ValueString(),
 				})
 				if err != nil {
-					resp.Diagnostics.AddError("Failed to update project", err.Error())
+					resp.Diagnostics.AddError("Failed to stop project", err.Error())
 					return
 				}
+				time.Sleep(2 * time.Second) // Wait for the project to stop
+			}
+
+			_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+				ID:                    plan.ID.ValueString(),
+				Content:               content,
+				EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+				ServicePortalName:     servicePortal.Name.ValueString(),
+				ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+				ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to update project", err.Error())
+				return
 			}
 		}
 	}

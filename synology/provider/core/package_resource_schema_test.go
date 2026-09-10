@@ -17,7 +17,7 @@ import (
 // place, and a real Update for `run` alone.
 //
 // These assertions pin that contract without touching a NAS. The acceptance
-// test in package_resource_test.go installs MariaDB10 on real hardware, so it
+// test in package_resource_test.go installs TextEditor on real hardware, so it
 // cannot be the only guard on this behaviour.
 
 func packageSchema(t *testing.T) schema.Schema {
