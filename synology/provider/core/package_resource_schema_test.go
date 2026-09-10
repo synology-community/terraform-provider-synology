@@ -151,7 +151,9 @@ func TestPackageSchema_VolumePathIsOptionalNotComputed(t *testing.T) {
 		t.Fatalf(`attribute "volume_path" is not a StringAttribute`)
 	}
 	if !attr.Optional {
-		t.Error(`attribute "volume_path" must be Optional: DSM resolves a volume when none is given`)
+		t.Error(
+			`attribute "volume_path" must be Optional: DSM resolves a volume when none is given`,
+		)
 	}
 	if attr.Computed {
 		t.Error(
