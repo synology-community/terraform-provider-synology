@@ -314,7 +314,7 @@ func structValue(v reflect.Value) (attr.Value, error) {
 		switch attrKind {
 		case reflect.String:
 			attrValues[attrFieldName] = types.StringValue(v.Field(i).String())
-		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
+		case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
 			attrValues[attrFieldName] = types.Int64Value(v.Field(i).Int())
 		case reflect.Uint,
 			reflect.Uint32,
