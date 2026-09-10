@@ -68,13 +68,13 @@ func (h HostsList) AsList(sep string) []string {
 }
 
 func (h HostsList) MarshalYAML() (any, error) {
-	list := h.AsList(":")
+	list := h.AsList("=")
 	sort.Strings(list)
 	return list, nil
 }
 
 func (h HostsList) MarshalJSON() ([]byte, error) {
-	list := h.AsList(":")
+	list := h.AsList("=")
 	sort.Strings(list)
 	return json.Marshal(list)
 }

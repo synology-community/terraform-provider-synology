@@ -1,6 +1,7 @@
 package acctest
 
 import (
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -8,16 +9,23 @@ import (
 	"github.com/synology-community/terraform-provider-synology/synology/provider"
 )
 
-// ProtoV5ProviderFactories returns a muxed ProviderServer that uses the provider code from this repo (SDK and plugin-framework).
-// Used to set ProtoV5ProviderFactories in a resource.TestStep within an acceptance test.
+// ProtoV6ProviderFactories is used to set ProtoV6ProviderFactories in a
+// resource.TestCase. It skips when the NAS credentials are unset: community CI
+// always sets TF_ACC=1, but fork PRs do not receive repository secrets, so
+// every TestAcc* otherwise fails with "host information is not provided".
 func ProtoV6ProviderFactories(t *testing.T) map[string]func() (tfprotov6.ProviderServer, error) {
+	t.Helper()
+	TestAccPreCheck(t)
 	return map[string]func() (tfprotov6.ProviderServer, error){
 		"synology": providerserver.NewProtocol6WithError(provider.New()()),
 	}
 }
 
 func TestAccPreCheck(t *testing.T) {
-	// You can add code here to run prior to any test case execution, for example assertions
-	// about the appropriate environment variables being set are common to see in a pre-check
-	// function.
+	t.Helper()
+	for _, variable := range []string{"SYNOLOGY_HOST", "SYNOLOGY_USER", "SYNOLOGY_PASSWORD"} {
+		if os.Getenv(variable) == "" {
+			t.Skipf("%s is not set; skipping acceptance tests", variable)
+		}
+	}
 }

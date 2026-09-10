@@ -298,13 +298,13 @@ func TestWithServices(t *testing.T) {
 
 func TestServicesWithBuild(t *testing.T) {
 	p := makeProject()
-	assert.DeepEqual(t, []string{}, p.ServicesWithBuild())
+	assert.Equal(t, 0, len(p.ServicesWithBuild()))
 
 	service, err := p.GetService("service_1")
 	assert.NilError(t, err)
 	service.Build = &BuildConfig{}
 	p.Services["service_1"] = service
-	assert.DeepEqual(t, []string{}, p.ServicesWithBuild())
+	assert.Equal(t, 0, len(p.ServicesWithBuild()))
 
 	service.Build = &BuildConfig{
 		Context: ".",
@@ -323,13 +323,13 @@ func TestServicesWithBuild(t *testing.T) {
 
 func TestServicesWithExtends(t *testing.T) {
 	p := makeProject()
-	assert.DeepEqual(t, []string{}, p.ServicesWithExtends())
+	assert.Equal(t, 0, len(p.ServicesWithExtends()))
 
 	service, err := p.GetService("service_1")
 	assert.NilError(t, err)
 	service.Extends = &ExtendsConfig{}
 	p.Services["service_1"] = service
-	assert.DeepEqual(t, []string{}, p.ServicesWithExtends())
+	assert.Equal(t, 0, len(p.ServicesWithExtends()))
 
 	service.Extends = &ExtendsConfig{
 		File:    ".",

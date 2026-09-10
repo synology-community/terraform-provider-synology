@@ -32,7 +32,11 @@ func TestTaskSchema_EnableDefaultsTrue(t *testing.T) {
 		t.Fatalf(`attribute "enable" is not a BoolAttribute`)
 	}
 	if !attr.Optional || !attr.Computed {
-		t.Errorf("attribute \"enable\" Optional=%v Computed=%v, want both true", attr.Optional, attr.Computed)
+		t.Errorf(
+			"attribute \"enable\" Optional=%v Computed=%v, want both true",
+			attr.Optional,
+			attr.Computed,
+		)
 	}
 	if attr.Default == nil {
 		t.Fatal(`attribute "enable" has no Default`)

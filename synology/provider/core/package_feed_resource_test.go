@@ -33,7 +33,11 @@ func TestAccPackageFeedResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest's name suggests a unit test, but it just sets a flag
+			// that skips the TF_ACC check inside r.Test — everything else is
+			// identical, including registering a real package feed on the
+			// NAS. Use r.Test so the acceptance-test gate actually applies.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
@@ -73,7 +77,7 @@ func TestAccPackageFeedResource_url(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{

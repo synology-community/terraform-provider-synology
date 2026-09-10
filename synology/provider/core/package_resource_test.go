@@ -5,8 +5,15 @@ import (
 	"testing"
 
 	r "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/synology-community/terraform-provider-synology/synology/acctest"
 )
+
+// These tests install and uninstall real packages on a real NAS. They use
+// r.Test, which skips unless TF_ACC is set. r.UnitTest -- used here
+// previously -- sets IsUnitTest, and that flag's only effect is to bypass that
+// very check, so `go test ./...` attempted a package install against whatever
+// host happened to be configured.
 
 type PackageResource struct{}
 
@@ -30,28 +37,23 @@ func TestAccPackageResource_basic(t *testing.T) {
 		// 	}`,
 		// },
 		{
-			"mariadb",
+			"texteditor",
 			`
-			resource "synology_core_package" "mariadb" {
-				name = "MariaDB10"
-
-				wizard = {
-					pkgwizard_port              = 3306
-					pkgwizard_new_root_password = "T3stP@ssw0rd"
-				}
+			resource "synology_core_package" "texteditor" {
+				name = "TextEditor"
 			}`,
 		},
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
 						Config: tt.ResourceBlock,
 						Check: r.ComposeTestCheckFunc(
 							r.TestCheckResourceAttrWith(
-								"synology_core_package.foo",
+								"synology_core_package.texteditor",
 								"version",
 								func(attr string) error {
 									if attr == "" {
@@ -84,24 +86,20 @@ func TestAccPackageResource_url(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
 						Config: tt.ResourceBlock,
+						// The expected value has to be the URL the config above
+						// actually sets. It previously asserted an Ubuntu cloud
+						// image URL that appears nowhere in this test, so the
+						// check could only ever fail.
 						Check: r.ComposeTestCheckFunc(
-							r.TestCheckResourceAttrWith(
+							r.TestCheckResourceAttr(
 								"synology_core_package.noble",
 								"url",
-								func(attr string) error {
-									if attr != "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" {
-										return fmt.Errorf(
-											"expected package url to be 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img', got %s",
-											attr,
-										)
-									}
-									return nil
-								},
+								"https://synology-community.github.io/spksrc/packages/vault_1.17.2_linux_amd64.spk",
 							),
 						),
 					},
@@ -109,4 +107,95 @@ func TestAccPackageResource_url(t *testing.T) {
 			})
 		})
 	}
+}
+
+// packageConfig renders the acceptance-test fixture package with a given `run`
+// value.
+//
+// The fixture is TextEditor, deliberately, and NOT MariaDB10 as it was
+// originally. Three reasons, in order of weight:
+//
+//  1. MariaDB10 is installed on the target NAS as a real database the operator
+//     intends to keep. A test that installs and uninstalls it would collide
+//     with live data.
+//  2. TextEditor is ~2 MB with no dependencies and no install wizard, so a run
+//     costs seconds rather than minutes and leaves nothing behind.
+//  3. What this test asserts is the `run` toggle reaching DSM. That is
+//     package-agnostic; the fixture only has to be something installable.
+//
+// Wizard coverage is not lost by the change. It lives where it belongs, as a
+// deterministic encoding test in go-synology (extra_values_test.go), after a
+// malformed wizard payload cost a full investigation under PLAT-498.
+func packageConfig(run bool) string {
+	return fmt.Sprintf(`
+	resource "synology_core_package" "texteditor" {
+		name = "TextEditor"
+		run  = %t
+	}`, run)
+}
+
+// TestAccPackageResource_runTogglesInPlace is the end-to-end half of the
+// carve-out. The schema test proves `run` carries no RequiresReplace; only
+// this one proves the resulting Update actually reaches DSM and that the
+// package survives it.
+//
+// The plan check is the real assertion. If `run` ever regains a
+// RequiresReplace -- or Update quietly stops handling it -- the plan becomes a
+// destroy-then-create, which on this resource means uninstalling the package
+// and can take the data it owns with it.
+func TestAccPackageResource_runTogglesInPlace(t *testing.T) {
+	r.Test(t, r.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
+		Steps: []r.TestStep{
+			{
+				Config: packageConfig(true),
+				Check: r.TestCheckResourceAttr(
+					"synology_core_package.texteditor", "run", "true"),
+			},
+			{
+				Config: packageConfig(false),
+				ConfigPlanChecks: r.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(
+							"synology_core_package.texteditor",
+							plancheck.ResourceActionUpdate,
+						),
+					},
+				},
+				Check: r.TestCheckResourceAttr(
+					"synology_core_package.texteditor", "run", "false"),
+			},
+		},
+	})
+}
+
+// TestAccPackageResource_readIsFaithful guards the other half of the defect.
+// Read previously left `version` unset on one path and never wrote its result
+// back to state at all, so state kept whatever the last apply had put there.
+//
+// A PlanOnly step re-plans the config that was just applied and requires the
+// plan to be empty. That fails if Read invents a value, drops one, or reports
+// something the device does not hold -- which is what let a wrong version sit
+// in state and still plan clean.
+//
+// There is deliberately no acceptance test asserting that a version change
+// plans a replacement. ConfigPlanChecks has no plan-only hook -- PreApply,
+// PostApplyPreRefresh and PostApplyPostRefresh are all apply-relative -- so
+// asserting it here would mean applying the replacement, and this resource
+// replaces by uninstalling. That contract is covered instead by
+// TestPackageSchema_AttributesDSMCannotChangeInPlaceRequireReplacement, which
+// reads the plan modifier off the schema and costs no data.
+func TestAccPackageResource_readIsFaithful(t *testing.T) {
+	r.Test(t, r.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
+		Steps: []r.TestStep{
+			{
+				Config: packageConfig(true),
+			},
+			{
+				Config:   packageConfig(true),
+				PlanOnly: true,
+			},
+		},
+	})
 }

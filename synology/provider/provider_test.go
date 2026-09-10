@@ -171,7 +171,7 @@ func preCheck(t *testing.T) {
 	for _, variable := range variables {
 		value := os.Getenv(variable)
 		if value == "" {
-			t.Fatalf("`%s` must be set for acceptance tests!", variable)
+			t.Skipf("`%s` is not set; skipping acceptance tests", variable)
 		}
 	}
 }
