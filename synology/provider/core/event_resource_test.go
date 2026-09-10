@@ -29,7 +29,11 @@ func TestAccEventResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest only skips the TF_ACC gate that r.Test enforces; it
+			// does not make this a unit test. Left as-is, this would schedule
+			// and run a real DSM event/script against live hardware on every
+			// `go test ./...`. Switch to r.Test to require explicit opt-in.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
