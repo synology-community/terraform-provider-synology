@@ -69,7 +69,12 @@ func runAcceptanceTests(m *testing.M) int {
 	// The health check may have a long start_period which can cause timeouts in testcontainers
 	if err = dc.WithOsEnv().
 		Up(ctx, testcompose.Wait(true), testcompose.WithRecreate(api.RecreateDiverged)); err != nil {
-		panic(err)
+		// Community CI sets TF_ACC=1 on every PR. Fork runs have no virtual-DSM
+		// image and no NAS secrets; compose then reports dsm-test unhealthy and
+		// a panic here fails the whole `go test ./...` job. Individual TestAcc*
+		// cases skip via TestAccPreCheck when SYNOLOGY_* are unset.
+		fmt.Fprintf(os.Stderr, "virtual DSM compose up failed: %v; running without it\n", err)
+		return m.Run()
 	}
 
 	defer func() {
