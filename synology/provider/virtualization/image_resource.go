@@ -469,7 +469,10 @@ func (f *ImageResource) getImage(ctx context.Context, name string) (*virtualizat
 // getImageByID looks up an image by its unique ID rather than its name.
 // Unlike Name, ID never collides between a deposed instance and its live
 // replacement, so Read/Delete must use this instead of getImage.
-func (f *ImageResource) getImageByID(ctx context.Context, id string) (*virtualization.Image, error) {
+func (f *ImageResource) getImageByID(
+	ctx context.Context,
+	id string,
+) (*virtualization.Image, error) {
 	images, err := f.client.ImageList(ctx)
 	if err != nil {
 		return nil, err

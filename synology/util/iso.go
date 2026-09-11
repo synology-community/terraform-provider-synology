@@ -75,7 +75,10 @@ func IsoFromCloudInit(ctx context.Context, ci CloudInit) ([]byte, error) {
 		// Blindly prepending "#cloud-config" to an already-multipart document
 		// corrupts it: cloud-init then reads the whole MIME envelope as one
 		// YAML doc and silently skips user-data processing entirely.
-		if match, _ := regexp.MatchString(`(?i)^(#cloud-config|content-type:|mime-version:)`, ci.UserData); !match {
+		if match, _ := regexp.MatchString(
+			`(?i)^(#cloud-config|content-type:|mime-version:)`,
+			ci.UserData,
+		); !match {
 			ci.UserData = fmt.Sprintf("#cloud-config\n%s", ci.UserData)
 		}
 
