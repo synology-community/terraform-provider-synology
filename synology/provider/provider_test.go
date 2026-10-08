@@ -69,7 +69,23 @@ func runAcceptanceTests(m *testing.M) int {
 	// The health check may have a long start_period which can cause timeouts in testcontainers
 	if err = dc.WithOsEnv().
 		Up(ctx, testcompose.Wait(true), testcompose.WithRecreate(api.RecreateDiverged)); err != nil {
-		panic(err)
+		// Community CI sets TF_ACC=1 on every PR. Compose then reports
+		// dsm-test unhealthy and a panic here used to fail the whole
+		// `go test ./...` job. Tear down whatever compose created, and
+		// drop SYNOLOGY_* so TestAccPreCheck skips instead of aiming
+		// remaining acceptance tests at a workflow-secret NAS.
+		fmt.Fprintf(os.Stderr, "virtual DSM compose up failed: %v; running without it\n", err)
+		if downErr := dc.Down(
+			context.Background(),
+			testcompose.RemoveOrphans(true),
+			testcompose.RemoveImagesLocal,
+		); downErr != nil {
+			fmt.Fprintf(os.Stderr, "virtual DSM compose down failed: %v\n", downErr)
+		}
+		for _, k := range []string{"SYNOLOGY_HOST", "SYNOLOGY_USER", "SYNOLOGY_PASSWORD"} {
+			_ = os.Unsetenv(k)
+		}
+		return m.Run()
 	}
 
 	defer func() {
