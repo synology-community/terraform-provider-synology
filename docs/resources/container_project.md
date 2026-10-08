@@ -197,7 +197,7 @@ resource "synology_container_project" "foo" {
 ### Optional
 
 - `configs` (Attributes Map) Docker compose configs. (see [below for nested schema](#nestedatt--configs))
-- `content` (String) The content of the project.
+- `content` (String) The project's compose file. Set it to write the file directly; leave it unset to have it built from `services`, `networks`, `volumes`, `configs` and `secrets`. Import reads it back from DSM.
 - `extensions` (Attributes Map) Docker compose extensions. (see [below for nested schema](#nestedatt--extensions))
 - `metadata` (Map of String) The metadata of the project.
 - `networks` (Attributes Map) Docker compose networks. (see [below for nested schema](#nestedatt--networks))
@@ -481,3 +481,13 @@ Optional:
 - `external` (Boolean) Whether the volume is external.
 - `labels` (Map of String) The labels of the volume.
 - `name` (String) The name of the volume.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import by project name (or by DSM's project id). The compose file is read
+# back into `content`, and `run` is set from whether the project is running.
+terraform import synology_container_project.example my-web-app
+```
