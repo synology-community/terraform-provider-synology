@@ -559,14 +559,30 @@ func (f *ProjectResource) Read(
 		}
 	}
 
-	servicePortalType := map[string]attr.Type{
-		"enable":   types.BoolType,
-		"name":     types.StringType,
-		"port":     types.Int64Type,
-		"protocol": types.StringType,
+	resp.Diagnostics.Append(projectToState(ctx, proj, &state)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// projectToState copies everything DSM reports about a project into the
+// model: id, name, share path, compose content, run status, timestamps and
+// the service portal. Read and ImportState both use it, so an imported
+// project holds the same values a later refresh would.
+func projectToState(
+	ctx context.Context,
+	proj *docker.Project,
+	state *models.ProjectResourceModel,
+) (diags diag.Diagnostics) {
+	if proj.ID != "" {
+		state.ID = types.StringValue(proj.ID)
+	}
+	if proj.Name != "" {
+		state.Name = types.StringValue(proj.Name)
+	}
+	if proj.SharePath != "" {
+		state.SharePath = types.StringValue(proj.SharePath)
 	}
 
-	servicePortalValues := types.ObjectNull(servicePortalType)
+	servicePortalType := models.ServicePortal{}.AttrType()
 	if proj.EnableServicePortal || proj.ServicePortalName != "" || proj.ServicePortalPort != 0 ||
 		proj.ServicePortalProtocol != "" {
 		servicePortal := models.ServicePortal{
@@ -576,15 +592,11 @@ func (f *ProjectResource) Read(
 			Protocol: types.StringValue(proj.ServicePortalProtocol),
 		}
 
-		svcPortalValues, diags := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-		} else {
-			servicePortalValues = svcPortalValues
+		svcPortalValues, d := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
+		diags.Append(d...)
+		if !d.HasError() {
+			state.ServicePortal = svcPortalValues
 		}
-	}
-	if !servicePortalValues.IsNull() {
-		state.ServicePortal = servicePortalValues
 	}
 
 	state.Status = types.StringValue(proj.Status)
@@ -595,8 +607,7 @@ func (f *ProjectResource) Read(
 	} else {
 		state.Content = types.StringNull()
 	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	return diags
 }
 
 // Update implements resource.Resource.
@@ -796,9 +807,14 @@ func (f *ProjectResource) Schema(
 				Required:            true,
 			},
 			"content": schema.StringAttribute{
-				MarkdownDescription: "The content of the project.",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The project's compose file. Set it to write the file directly; " +
+					"leave it unset to have it built from `services`, `networks`, `volumes`, `configs` and `secrets`. " +
+					"Import reads it back from DSM.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("services")),
+				},
 				PlanModifiers: []planmodifier.String{
 					modifier.UseSchemaForUnknownContent(),
 					// stringplanmodifier.UseStateForUnknown(),
@@ -1500,43 +1516,68 @@ func (f *ProjectResource) Configure(
 	f.coreClient = client.CoreAPI()
 }
 
+// ImportState looks the project up by name (or by its DSM id) and reads it
+// back in full, so the first plan after an import compares the declared
+// project with what is on the NAS instead of with an empty one.
+//
+// The compose file is imported as `content`, which holds every service's
+// image, environment, ports and volumes exactly as DSM stores them. The
+// structured `services`, `networks`, `volumes`, `configs` and `secrets`
+// maps stay null: they are an alternative way of writing that file, and
+// filling them from it would show a diff for every configuration written as
+// `content`. `run` is imported as whether the project is running now.
 func (f *ProjectResource) ImportState(
 	ctx context.Context,
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
-	resource.ImportStatePassthroughID(
-		ctx,
-		path.Root("name"),
-		req,
-		resp,
-	)
+	proj, err := f.findProject(ctx, req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Cannot import project",
+			fmt.Sprintf("No Container Manager project named or with id %q: %s", req.ID, err),
+		)
+		return
+	}
 
-	// project := models.ProjectResourceModel{
-	// 	ID:        types.StringValue(res.ID),
-	// 	Content:   types.StringValue(res.Content),
-	// 	Status:    types.StringValue(res.Status),
-	// 	CreatedAt: timetypes.NewRFC3339TimeValue(res.CreatedAt),
-	// 	UpdatedAt: timetypes.NewRFC3339TimeValue(res.UpdatedAt),
-	// 	Name:      types.StringValue(res.Name),
-	// 	SharePath: types.StringValue(res.SharePath),
-	// 	Services:  types.MapValueMust(models.Service{}.ModelType(), map[string]attr.Value{}),
-	// 	Volumes:   types.MapValueMust(models.Volume{}.ModelType(), map[string]attr.Value{}),
-	// 	Secrets:   types.MapValueMust(models.Secret{}.ModelType(), map[string]attr.Value{}),
-	// 	Configs:   types.MapValueMust(models.Config{}.ModelType(), map[string]attr.Value{}),
-	// 	Networks:  types.MapValueMust(models.Network{}.ModelType(), map[string]attr.Value{}),
-	// 	// Secrets:   types.MapNull(models.Secret{}.ModelType()),
-	// 	// Configs:   types.MapNull(models.Config{}.ModelType()),
-	// 	// Networks:  types.MapNull(models.Network{}.ModelType()),
-	// 	Extensions: types.MapNull(types.ObjectType{
-	// 		AttrTypes: map[string]attr.Type{
-	// 			"name": types.StringType,
-	// 		},
-	// 	}),
-	// 	Run:           types.BoolValue(false),
-	// 	Metadata:      types.MapNull(types.StringType),
-	// 	ServicePortal: servicePortalValues,
-	// }
+	// Only the attributes DSM reports are set; the others stay null with the
+	// schema's own types.
+	state := models.ProjectResourceModel{}
+	resp.Diagnostics.Append(projectToState(ctx, proj, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	for name, v := range map[string]attr.Value{
+		"id":             state.ID,
+		"name":           state.Name,
+		"share_path":     state.SharePath,
+		"content":        state.Content,
+		"status":         state.Status,
+		"created_at":     state.CreatedAt,
+		"updated_at":     state.UpdatedAt,
+		"service_portal": state.ServicePortal,
+		"run":            types.BoolValue(proj.IsRunning()),
+		"metadata":       types.MapValueMust(types.StringType, map[string]attr.Value{}),
+	} {
+		if v == nil || v.IsNull() {
+			continue
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(name), v)...)
+	}
+}
 
-	// resp.Diagnostics.Append(resp.State.Set(ctx, project)...)
+// findProject resolves an import id. `list` does not reliably carry the
+// compose content, so the match is fetched again with `get`.
+func (f *ProjectResource) findProject(ctx context.Context, id string) (*docker.Project, error) {
+	proj, err := f.client.ProjectGetByName(ctx, id)
+	if err != nil {
+		if _, notFound := err.(docker.ProjectNotFoundError); !notFound {
+			return nil, err
+		}
+		return f.client.ProjectGet(ctx, id)
+	}
+	if full, err := f.client.ProjectGet(ctx, proj.ID); err == nil {
+		return full, nil
+	}
+	return proj, nil
 }
