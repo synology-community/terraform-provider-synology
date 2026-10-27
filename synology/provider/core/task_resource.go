@@ -32,6 +32,10 @@ type TaskResourceModel struct {
 	User     types.String `tfsdk:"user"`
 	Enable   types.Bool   `tfsdk:"enable"`
 
+	NotifyEnable  types.Bool   `tfsdk:"notify_enable"`
+	NotifyIfError types.Bool   `tfsdk:"notify_if_error"`
+	NotifyMail    types.String `tfsdk:"notify_mail"`
+
 	Run  types.Bool   `tfsdk:"run"`
 	When types.String `tfsdk:"when"`
 }
@@ -134,6 +138,15 @@ func (p *TaskResource) Update(
 		return
 	}
 
+	resp.Diagnostics.Append(
+		resp.State.SetAttribute(ctx, path.Root("notify_enable"), plan.NotifyEnable)...,
+	)
+	resp.Diagnostics.Append(
+		resp.State.SetAttribute(ctx, path.Root("notify_if_error"), plan.NotifyIfError)...,
+	)
+	resp.Diagnostics.Append(
+		resp.State.SetAttribute(ctx, path.Root("notify_mail"), plan.NotifyMail)...,
+	)
 	// PLAT-522: unconditional, unlike the neighbouring attributes below.
 	// resp.State starts out equal to the prior state (not the plan), so any
 	// attribute left unwritten here keeps its old value; Terraform then sees
@@ -293,6 +306,23 @@ func (p *TaskResource) Schema(
 				MarkdownDescription: "The user that will execute the task.",
 				Required:            true,
 			},
+			"notify_enable": schema.BoolAttribute{
+				MarkdownDescription: "Whether DSM emails the task's run details.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+			},
+			"notify_if_error": schema.BoolAttribute{
+				MarkdownDescription: "Whether DSM sends run details only when the task fails.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+			},
+			"notify_mail": schema.StringAttribute{
+				MarkdownDescription: "Email address that receives task run details. Required when `notify_enable` is true.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
 			"enable": schema.BoolAttribute{
 				MarkdownDescription: "Whether the task's schedule is enabled in DSM. DSM only " +
 					"writes a crontab row for enabled tasks, so a disabled task never fires " +
@@ -321,6 +351,27 @@ func (p *TaskResource) Schema(
 				},
 			},
 		},
+	}
+}
+
+func (p *TaskResource) ValidateConfig(
+	ctx context.Context,
+	req resource.ValidateConfigRequest,
+	resp *resource.ValidateConfigResponse,
+) {
+	var data TaskResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() || data.NotifyEnable.IsNull() || data.NotifyEnable.IsUnknown() ||
+		!data.NotifyEnable.ValueBool() || data.NotifyMail.IsUnknown() {
+		return
+	}
+
+	if data.NotifyMail.IsNull() || data.NotifyMail.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("notify_mail"),
+			"Missing notification email",
+			"notify_mail must be set when notify_enable is true.",
+		)
 	}
 }
 
@@ -606,7 +657,10 @@ func getTaskRequest(data TaskResourceModel) (taskReq core.TaskRequest, err error
 		Type:      taskType,
 		Enable:    data.Enable.ValueBool(),
 		Extra: core.TaskExtra{
-			Script: data.Script.ValueString(),
+			Script:        data.Script.ValueString(),
+			NotifyEnable:  data.NotifyEnable.ValueBool(),
+			NotifyIfError: data.NotifyIfError.ValueBool(),
+			NotifyMail:    data.NotifyMail.ValueString(),
 		},
 	}
 
