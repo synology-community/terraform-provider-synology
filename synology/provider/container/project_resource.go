@@ -24,7 +24,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	client "github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
 	"github.com/synology-community/go-synology/pkg/api/docker"
@@ -131,6 +130,28 @@ func projectExists(err error) bool {
 	return false
 }
 
+// shouldUploadFileContent is true only when the nested content is a known,
+// non-empty string. Null, unknown, or "" means a host-path file that must
+// not be uploaded through File Station.
+func shouldUploadFileContent(content types.String) bool {
+	return !content.IsNull() && !content.IsUnknown() && content.ValueString() != ""
+}
+
+// projectSpecChanged reports whether any attribute that must reach DSM
+// (compose content, portal, share, name) differs. `run` is excluded so a
+// run-only plan does not take the content-update path.
+func projectSpecChanged(plan, state models.ProjectResourceModel) bool {
+	return !reflect.DeepEqual(plan.Services, state.Services) ||
+		!reflect.DeepEqual(plan.Configs, state.Configs) ||
+		!reflect.DeepEqual(plan.Secrets, state.Secrets) ||
+		!reflect.DeepEqual(plan.Networks, state.Networks) ||
+		!reflect.DeepEqual(plan.Volumes, state.Volumes) ||
+		!plan.Content.Equal(state.Content) ||
+		!plan.ServicePortal.Equal(state.ServicePortal) ||
+		!plan.SharePath.Equal(state.SharePath) ||
+		!plan.Name.Equal(state.Name)
+}
+
 func (f *ProjectResource) handleConfigs(
 	ctx context.Context,
 	data models.ProjectResourceModel,
@@ -146,7 +167,7 @@ func (f *ProjectResource) handleConfigs(
 	}
 
 	for _, v := range elements {
-		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+		if shouldUploadFileContent(v.Content) {
 			// Upload the file
 			_, err := f.fsClient.Upload(
 				ctx,
@@ -184,7 +205,7 @@ func (f *ProjectResource) handleSecrets(
 	}
 
 	for _, v := range elements {
-		if !v.Content.IsNull() || !v.Content.IsUnknown() {
+		if shouldUploadFileContent(v.Content) {
 			// Upload the file
 			_, err := f.fsClient.Upload(
 				ctx,
@@ -256,7 +277,16 @@ func (f *ProjectResource) ensureProjectShare(ctx context.Context, sharePath stri
 				return err
 			}
 		default:
-			return err
+			// File Station may refuse with privilege_not_enough (DSM 160) when the
+			// service account deliberately lacks the File Station application
+			// privilege (see ap100298 acceptance-test isolation). In that case
+			// the operator pre-creates sharePath on the NAS; ProjectCreate will
+			// still fail loudly if the path is unusable. Do not treat a
+			// privilege error as a hard stop here.
+			if !strings.Contains(err.Error(), "error_privilege_not_enough") &&
+				!strings.Contains(err.Error(), "[160]") {
+				return err
+			}
 		}
 	}
 
@@ -419,6 +449,30 @@ func (f *ProjectResource) Create(
 
 	// data.Content = types.StringValue(proj.Content)
 
+	// secrets.content is Optional+Computed; when the config only sets `file`,
+	// content is planned as unknown and never written. OpenTofu rejects
+	// unknown after apply, so pin null content to a known null here.
+	if !data.Secrets.IsNull() && !data.Secrets.IsUnknown() {
+		elements := map[string]models.Secret{}
+		if diags := data.Secrets.ElementsAs(ctx, &elements, false); !diags.HasError() {
+			changed := false
+			for k, v := range elements {
+				if v.Content.IsUnknown() {
+					v.Content = types.StringNull()
+					elements[k] = v
+					changed = true
+				}
+			}
+			if changed {
+				mv, d := types.MapValueFrom(ctx, models.Secret{}.ModelType(), elements)
+				resp.Diagnostics.Append(d...)
+				if !d.HasError() {
+					data.Secrets = mv
+				}
+			}
+		}
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -505,14 +559,30 @@ func (f *ProjectResource) Read(
 		}
 	}
 
-	servicePortalType := map[string]attr.Type{
-		"enable":   types.BoolType,
-		"name":     types.StringType,
-		"port":     types.Int64Type,
-		"protocol": types.StringType,
+	resp.Diagnostics.Append(projectToState(ctx, proj, &state)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// projectToState copies everything DSM reports about a project into the
+// model: id, name, share path, compose content, run status, timestamps and
+// the service portal. Read and ImportState both use it, so an imported
+// project holds the same values a later refresh would.
+func projectToState(
+	ctx context.Context,
+	proj *docker.Project,
+	state *models.ProjectResourceModel,
+) (diags diag.Diagnostics) {
+	if proj.ID != "" {
+		state.ID = types.StringValue(proj.ID)
+	}
+	if proj.Name != "" {
+		state.Name = types.StringValue(proj.Name)
+	}
+	if proj.SharePath != "" {
+		state.SharePath = types.StringValue(proj.SharePath)
 	}
 
-	servicePortalValues := types.ObjectNull(servicePortalType)
+	servicePortalType := models.ServicePortal{}.AttrType()
 	if proj.EnableServicePortal || proj.ServicePortalName != "" || proj.ServicePortalPort != 0 ||
 		proj.ServicePortalProtocol != "" {
 		servicePortal := models.ServicePortal{
@@ -522,15 +592,11 @@ func (f *ProjectResource) Read(
 			Protocol: types.StringValue(proj.ServicePortalProtocol),
 		}
 
-		svcPortalValues, diags := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-		} else {
-			servicePortalValues = svcPortalValues
+		svcPortalValues, d := types.ObjectValueFrom(ctx, servicePortalType, servicePortal)
+		diags.Append(d...)
+		if !d.HasError() {
+			state.ServicePortal = svcPortalValues
 		}
-	}
-	if !servicePortalValues.IsNull() {
-		state.ServicePortal = servicePortalValues
 	}
 
 	state.Status = types.StringValue(proj.Status)
@@ -541,8 +607,7 @@ func (f *ProjectResource) Read(
 	} else {
 		state.Content = types.StringNull()
 	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	return diags
 }
 
 // Update implements resource.Resource.
@@ -569,22 +634,18 @@ func (f *ProjectResource) Update(
 		return
 	}
 
-	var servicesChanged, configChanged, secretChanged bool
+	configChanged := !reflect.DeepEqual(plan.Configs, state.Configs)
+	secretChanged := !reflect.DeepEqual(plan.Secrets, state.Secrets)
+	specChanged := projectSpecChanged(plan, state)
 
-	if !reflect.DeepEqual(plan.Services, state.Services) {
-		servicesChanged = true
-	}
+	runDesired := !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool()
+	runOnly := !specChanged
 
-	if !reflect.DeepEqual(plan.Configs, state.Configs) {
-		configChanged = true
-	}
-
-	if !reflect.DeepEqual(plan.Secrets, state.Secrets) {
-		secretChanged = true
-	}
-
-	if !servicesChanged && !configChanged && !secretChanged {
-		tflog.Info(ctx, "No changes detected in services or configs, skipping update")
+	if runOnly && !runDesired {
+		// Persist only `run`. The plan can still carry unknown computed
+		// values (status, timestamps); writing the whole plan here produced
+		// an inconsistent-result error.
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("run"), plan.Run)...)
 		return
 	}
 
@@ -606,34 +667,41 @@ func (f *ProjectResource) Update(
 		f.handleSecrets(ctx, plan)
 	}
 
-	var content string
-	if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
-		content = plan.Content.ValueString()
-	} else {
-		resp.Diagnostics.Append(
-			models.NewComposeContentBuilder(
-				ctx,
-			).SetServices(
-				&plan.Services,
-			).SetNetworks(
-				&plan.Networks,
-			).SetVolumes(
-				&plan.Volumes,
-			).SetConfigs(
-				&plan.Configs,
-			).SetSecrets(
-				&plan.Secrets,
-			).Build(
-				&content,
-			)...)
-
-		if resp.Diagnostics.HasError() {
-			resp.Diagnostics.AddError("Failed to build project content", "")
-			return
+	if specChanged {
+		if !plan.SharePath.Equal(state.SharePath) &&
+			!plan.SharePath.IsNull() && !plan.SharePath.IsUnknown() {
+			if err := f.ensureProjectShare(ctx, plan.SharePath.ValueString()); err != nil {
+				resp.Diagnostics.AddError("Failed to create project share", err.Error())
+				return
+			}
 		}
-	}
 
-	if servicesChanged {
+		var content string
+		if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
+			content = plan.Content.ValueString()
+		} else {
+			resp.Diagnostics.Append(
+				models.NewComposeContentBuilder(
+					ctx,
+				).SetServices(
+					&plan.Services,
+				).SetNetworks(
+					&plan.Networks,
+				).SetVolumes(
+					&plan.Volumes,
+				).SetConfigs(
+					&plan.Configs,
+				).SetSecrets(
+					&plan.Secrets,
+				).Build(
+					&content,
+				)...)
+
+			if resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError("Failed to build project content", "")
+				return
+			}
+		}
 
 		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
 		if err != nil {
@@ -641,51 +709,34 @@ func (f *ProjectResource) Update(
 			return
 		}
 
-		if proj.Content == content {
-			tflog.Info(ctx, "No changes detected in project, skipping update")
-			resp.Diagnostics.Append(
-				resp.State.SetAttribute(
-					ctx,
-					path.Root("status"),
-					types.StringValue(proj.Status),
-				)...)
-			return
-		}
+		if proj.Content != content {
+			if proj.IsRunning() {
+				_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+					ID: plan.ID.ValueString(),
+				})
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to stop project", err.Error())
+					return
+				}
+				time.Sleep(2 * time.Second) // Wait for the project to stop
+			}
 
-		if proj.IsRunning() {
-			_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
-				ID: plan.ID.ValueString(),
+			_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+				ID:                    plan.ID.ValueString(),
+				Content:               content,
+				EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+				ServicePortalName:     servicePortal.Name.ValueString(),
+				ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+				ServicePortalProtocol: servicePortal.Protocol.ValueString(),
 			})
 			if err != nil {
-				resp.Diagnostics.AddError("Failed to stop project", err.Error())
+				resp.Diagnostics.AddError("Failed to update project", err.Error())
 				return
 			}
-			time.Sleep(2 * time.Second) // Wait for the project to stop
-		}
-
-		// _, err = f.client.ProjectCleanStream(ctx, docker.ProjectStreamRequest{
-		// 	ID: plan.ID.ValueString(),
-		// })
-		// if err != nil {
-		// 	resp.Diagnostics.AddError("Failed to clean project", err.Error())
-		// 	return
-		// }
-
-		_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-			ID:                    plan.ID.ValueString(),
-			Content:               content,
-			EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
-			ServicePortalName:     servicePortal.Name.ValueString(),
-			ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
-			ServicePortalProtocol: servicePortal.Protocol.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to update project", err.Error())
-			return
 		}
 	}
 
-	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
+	if runDesired {
 		_, err := f.client.ProjectBuildStream(ctx, docker.ProjectStreamRequest{
 			ID: plan.ID.ValueString(),
 		})
@@ -693,9 +744,7 @@ func (f *ProjectResource) Update(
 			resp.Diagnostics.AddError("Failed to build project", err.Error())
 			return
 		}
-	}
-	if !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool() {
-		_, err := f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
+		_, err = f.client.ProjectRestartStream(ctx, docker.ProjectStreamRequest{
 			ID: plan.ID.ValueString(),
 		})
 		if err != nil {
@@ -713,17 +762,17 @@ func (f *ProjectResource) Update(
 	plan.Status = types.StringValue(proj.Status)
 	plan.CreatedAt = timetypes.NewRFC3339TimeValue(proj.CreatedAt)
 	plan.UpdatedAt = timetypes.NewRFC3339TimeValue(proj.UpdatedAt)
-	plan.Content = types.StringValue(proj.Content)
+	if proj.Content != "" {
+		plan.Content = types.StringValue(proj.Content)
+	}
+	// Persist planned run value — DSM has no "run" attribute to re-read.
+	// Without this, OpenTofu reports "was true, but now false" after apply.
+	// (Same class of bug as PLAT-522 for synology_core_task.enable.)
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("content"), plan.Content)...)
-	if resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Failed to set content", "")
-		return
+	if plan.Metadata.IsNull() || plan.Metadata.IsUnknown() {
+		plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}
 
-	plan.Metadata = types.MapValueMust(types.StringType, map[string]attr.Value{})
-
-	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -758,9 +807,14 @@ func (f *ProjectResource) Schema(
 				Required:            true,
 			},
 			"content": schema.StringAttribute{
-				MarkdownDescription: "The content of the project.",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The project's compose file. Set it to write the file directly; " +
+					"leave it unset to have it built from `services`, `networks`, `volumes`, `configs` and `secrets`. " +
+					"Import reads it back from DSM.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("services")),
+				},
 				PlanModifiers: []planmodifier.String{
 					modifier.UseSchemaForUnknownContent(),
 					// stringplanmodifier.UseStateForUnknown(),
@@ -1462,43 +1516,68 @@ func (f *ProjectResource) Configure(
 	f.coreClient = client.CoreAPI()
 }
 
+// ImportState looks the project up by name (or by its DSM id) and reads it
+// back in full, so the first plan after an import compares the declared
+// project with what is on the NAS instead of with an empty one.
+//
+// The compose file is imported as `content`, which holds every service's
+// image, environment, ports and volumes exactly as DSM stores them. The
+// structured `services`, `networks`, `volumes`, `configs` and `secrets`
+// maps stay null: they are an alternative way of writing that file, and
+// filling them from it would show a diff for every configuration written as
+// `content`. `run` is imported as whether the project is running now.
 func (f *ProjectResource) ImportState(
 	ctx context.Context,
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
-	resource.ImportStatePassthroughID(
-		ctx,
-		path.Root("name"),
-		req,
-		resp,
-	)
+	proj, err := f.findProject(ctx, req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Cannot import project",
+			fmt.Sprintf("No Container Manager project named or with id %q: %s", req.ID, err),
+		)
+		return
+	}
 
-	// project := models.ProjectResourceModel{
-	// 	ID:        types.StringValue(res.ID),
-	// 	Content:   types.StringValue(res.Content),
-	// 	Status:    types.StringValue(res.Status),
-	// 	CreatedAt: timetypes.NewRFC3339TimeValue(res.CreatedAt),
-	// 	UpdatedAt: timetypes.NewRFC3339TimeValue(res.UpdatedAt),
-	// 	Name:      types.StringValue(res.Name),
-	// 	SharePath: types.StringValue(res.SharePath),
-	// 	Services:  types.MapValueMust(models.Service{}.ModelType(), map[string]attr.Value{}),
-	// 	Volumes:   types.MapValueMust(models.Volume{}.ModelType(), map[string]attr.Value{}),
-	// 	Secrets:   types.MapValueMust(models.Secret{}.ModelType(), map[string]attr.Value{}),
-	// 	Configs:   types.MapValueMust(models.Config{}.ModelType(), map[string]attr.Value{}),
-	// 	Networks:  types.MapValueMust(models.Network{}.ModelType(), map[string]attr.Value{}),
-	// 	// Secrets:   types.MapNull(models.Secret{}.ModelType()),
-	// 	// Configs:   types.MapNull(models.Config{}.ModelType()),
-	// 	// Networks:  types.MapNull(models.Network{}.ModelType()),
-	// 	Extensions: types.MapNull(types.ObjectType{
-	// 		AttrTypes: map[string]attr.Type{
-	// 			"name": types.StringType,
-	// 		},
-	// 	}),
-	// 	Run:           types.BoolValue(false),
-	// 	Metadata:      types.MapNull(types.StringType),
-	// 	ServicePortal: servicePortalValues,
-	// }
+	// Only the attributes DSM reports are set; the others stay null with the
+	// schema's own types.
+	state := models.ProjectResourceModel{}
+	resp.Diagnostics.Append(projectToState(ctx, proj, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	for name, v := range map[string]attr.Value{
+		"id":             state.ID,
+		"name":           state.Name,
+		"share_path":     state.SharePath,
+		"content":        state.Content,
+		"status":         state.Status,
+		"created_at":     state.CreatedAt,
+		"updated_at":     state.UpdatedAt,
+		"service_portal": state.ServicePortal,
+		"run":            types.BoolValue(proj.IsRunning()),
+		"metadata":       types.MapValueMust(types.StringType, map[string]attr.Value{}),
+	} {
+		if v == nil || v.IsNull() {
+			continue
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(name), v)...)
+	}
+}
 
-	// resp.Diagnostics.Append(resp.State.Set(ctx, project)...)
+// findProject resolves an import id. `list` does not reliably carry the
+// compose content, so the match is fetched again with `get`.
+func (f *ProjectResource) findProject(ctx context.Context, id string) (*docker.Project, error) {
+	proj, err := f.client.ProjectGetByName(ctx, id)
+	if err != nil {
+		if _, notFound := err.(docker.ProjectNotFoundError); !notFound {
+			return nil, err
+		}
+		return f.client.ProjectGet(ctx, id)
+	}
+	if full, err := f.client.ProjectGet(ctx, proj.ID); err == nil {
+		return full, nil
+	}
+	return proj, nil
 }

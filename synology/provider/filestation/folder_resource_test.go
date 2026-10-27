@@ -27,7 +27,11 @@ func TestAccFolderResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// Despite the name, r.UnitTest is not a unit test: it only skips
+			// the TF_ACC check inside r.Test, so this created a real folder
+			// on the NAS filesystem without requiring the usual opt-in.
+			// Use r.Test so the acceptance gate applies here too.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{

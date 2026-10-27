@@ -26,7 +26,10 @@ func TestAccGuestDataSource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest only skips the TF_ACC check that r.Test performs; it
+			// is not a lightweight unit test. This queries a real VM guest on
+			// the NAS, so it needs the same opt-in as any acceptance test.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{

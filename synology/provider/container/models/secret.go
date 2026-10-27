@@ -41,10 +41,14 @@ func (m Secret) AttrType() map[string]attr.Type {
 }
 
 func (m Secret) Value() attr.Value {
+	// Pass the typed values through. Converting with ValueString() turned
+	// null/unknown content into a known empty string, which then looked like
+	// "upload this file" in handleSecrets and hit File Station for host-path
+	// secrets (PLAT-511 / DSM 160).
 	return types.ObjectValueMust(m.AttrType(), map[string]attr.Value{
-		"name":    types.StringValue(m.Name.ValueString()),
-		"content": types.StringValue(m.Content.ValueString()),
-		"file":    types.StringValue(m.File.ValueString()),
+		"name":    m.Name,
+		"content": m.Content,
+		"file":    m.File,
 	})
 }
 

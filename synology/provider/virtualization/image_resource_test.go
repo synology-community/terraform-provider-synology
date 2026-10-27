@@ -28,7 +28,10 @@ func TestAccImageResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest is really r.Test with the TF_ACC opt-in check
+			// removed, not a unit test — this uploaded a real virtualization
+			// image to the NAS with no gate. r.Test puts that gate back.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{

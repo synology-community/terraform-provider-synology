@@ -38,6 +38,13 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 		return
 	}
 
+	// A compose file given as `content` is used as written. Replacing it
+	// with one built from the (empty) structured attributes planned
+	// "services: {}" and made OpenTofu reject the plan.
+	if !req.ConfigValue.IsNull() {
+		return
+	}
+
 	// Get the current plan value - Should run after config modification
 	var config models.ProjectResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &config)...)

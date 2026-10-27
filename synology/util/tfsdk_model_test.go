@@ -1,7 +1,6 @@
 package util
 
 import (
-	"math/big"
 	"reflect"
 	"testing"
 
@@ -17,7 +16,7 @@ var (
 
 	testType = map[string]attr.Type{
 		"name":   types.StringType,
-		"age":    types.NumberType,
+		"age":    types.Int64Type,
 		"states": types.ListType{}.WithElementType(types.StringType),
 		"addresses": types.ListType{}.WithElementType(
 			types.ObjectType{}.WithAttributeTypes(addressAttrType),
@@ -26,7 +25,7 @@ var (
 
 	testValues = map[string]attr.Value{
 		"name": types.StringValue("John"),
-		"age":  types.NumberValue(new(big.Float).SetInt64(30)),
+		"age":  types.Int64Value(30),
 		"states": types.ListValueMust(
 			types.StringType,
 			[]attr.Value{types.StringValue("CA"), types.StringValue("NY")},
@@ -67,7 +66,7 @@ func TestGetType(t *testing.T) {
 			},
 			want: types.ObjectType{}.WithAttributeTypes(map[string]attr.Type{
 				"name":   types.StringType,
-				"age":    types.NumberType,
+				"age":    types.Int64Type,
 				"states": types.ListType{}.WithElementType(types.StringType),
 				"addresses": types.ListType{}.WithElementType(
 					types.ObjectType{}.WithAttributeTypes(map[string]attr.Type{

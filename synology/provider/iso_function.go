@@ -57,10 +57,28 @@ func (r *ISOFunction) Run(
 		return
 	}
 
-	iso, err := util.IsoFromFiles(ctx, volumeName, files)
+	iso, err := buildISOFromFiles(ctx, volumeName, files)
 	if err != nil {
 		resp.Error = function.NewFuncError(fmt.Sprintf("failed to create ISO: %v", err))
 		return
+	}
+
+	resp.Error = function.ConcatFuncErrors(
+		resp.Result.Set(ctx, iso),
+	)
+}
+
+// buildISOFromFiles is the NAS-free body of ISOFunction.Run. Extracted so
+// ordinary `go test` covers it; the TestAccISOFunction_* cases still need
+// Terraform 1.8+ and a configured provider.
+func buildISOFromFiles(
+	ctx context.Context,
+	volumeName string,
+	files map[string]string,
+) (string, error) {
+	iso, err := util.IsoFromFiles(ctx, volumeName, files)
+	if err != nil {
+		return "", err
 	}
 
 	// Zero out the PVD volume descriptor timestamps to ensure deterministic output.
@@ -76,9 +94,7 @@ func (r *ISOFunction) Run(
 		}
 	}
 
-	resp.Error = function.ConcatFuncErrors(
-		resp.Result.Set(ctx, string(iso)),
-	)
+	return string(iso), nil
 }
 
 func NewISOFunction() function.Function {

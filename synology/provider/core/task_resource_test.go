@@ -33,7 +33,11 @@ func TestAccTaskResource_basic(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			r.UnitTest(t, r.TestCase{
+			// r.UnitTest's whole implementation is "set IsUnitTest, then call
+			// r.Test" — the only observable difference is that it skips the
+			// TF_ACC opt-in, so this scheduled task ran against the real NAS
+			// on every plain `go test ./...`. r.Test restores the gate.
+			r.Test(t, r.TestCase{
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 				Steps: []r.TestStep{
 					{
