@@ -99,8 +99,7 @@ func TestReadExactIdentityAndFullDetail(t *testing.T) {
 							"type":       "script",
 						},
 					},
-					"total":  2,
-					"offset": 0,
+					"total": 2,
 				},
 			)
 		case "get":
@@ -137,6 +136,9 @@ func TestReadOnlyCompleteInventoryProvesAbsence(t *testing.T) {
 		absent     bool
 	}{
 		{"empty complete", `{"success":true,"data":{"tasks":[],"total":0,"offset":0}}`, true},
+		{"complete without offset", `{"success":true,"data":{"tasks":[],"total":0}}`, true},
+		{"null offset", `{"success":true,"data":{"tasks":[],"total":0,"offset":null}}`, false},
+		{"malformed offset", `{"success":true,"data":{"tasks":[],"total":0,"offset":"0"}}`, false},
 		{"missing tasks", `{"success":true,"data":{"total":0}}`, false},
 		{"null tasks", `{"success":true,"data":{"tasks":null,"total":0}}`, false},
 		{"missing total", `{"success":true,"data":{"tasks":[]}}`, false},
@@ -166,6 +168,22 @@ func TestReadOnlyCompleteInventoryProvesAbsence(t *testing.T) {
 				t.Fatalf("absence=%v error=%v count=%d", tt.absent, err, count)
 			}
 		})
+	}
+}
+
+func TestDecodePreservesCalendarVersion(t *testing.T) {
+	obj := object(t)
+	nestedObject(t, obj, "schedule")["version"] = 1
+	body, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := Decode(body, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(detail.schedule["version"]) != "1" {
+		t.Fatal("calendar version metadata was discarded")
 	}
 }
 

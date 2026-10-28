@@ -156,13 +156,20 @@ func (c *Client) Read(ctx context.Context, id int64) (*Detail, error) {
 	var inventory struct {
 		Tasks  []json.RawMessage `json:"tasks"`
 		Total  *int64            `json:"total"`
-		Offset *int64            `json:"offset"`
+		Offset json.RawMessage   `json:"offset"`
 	}
 	if json.Unmarshal(body, &inventory) != nil || inventory.Tasks == nil ||
 		inventory.Total == nil ||
-		inventory.Offset == nil || *inventory.Offset != 0 ||
 		*inventory.Total != int64(len(inventory.Tasks)) {
 		return nil, errors.New("scheduler inventory is incomplete or malformed; state retained")
+	}
+	// Complete unpaginated DSM responses may omit offset. The total and unique
+	// task IDs still establish completeness; an explicit offset must be zero.
+	if inventory.Offset != nil {
+		var offset *int64
+		if json.Unmarshal(inventory.Offset, &offset) != nil || offset == nil || *offset != 0 {
+			return nil, errors.New("scheduler inventory is incomplete or malformed; state retained")
+		}
 	}
 	var identity *struct {
 		ID        *int64  `json:"id"`
@@ -252,13 +259,13 @@ func Decode(body []byte, id int64) (*Detail, error) {
 		schedule:  wire.Schedule,
 		extra:     wire.Extra,
 	}
-	// Repeat picker choices are UI metadata. Unknown schedule constraints cannot
-	// safely be approximated; reject them even when the familiar fields decode.
+	// Repeat picker choices and version are metadata. Reject unknown calendar
+	// constraints even when familiar fields decode successfully.
 	for key := range wire.Schedule {
 		switch key {
 		case "date_type", "date", "week_day", "hour", "minute", "monthly_week",
 			"repeat_hour", "repeat_min", "repeat_date", "repeat_min_store_config",
-			"repeat_hour_store_config", "last_work_hour":
+			"repeat_hour_store_config", "last_work_hour", "version":
 		default:
 			return nil, errors.New(
 				"unsupported scheduler calendar field; use a supported daily/weekly or interval schedule",
