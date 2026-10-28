@@ -2,12 +2,12 @@
 page_title: "Core: synology_core_task"
 subcategory: "Core"
 description: |-
-  A Generic API Resource for making calls to the Synology DSM API.
+  Manages DSM scheduled tasks. Refresh uses exact numeric identity with TaskScheduler list v3/get v4 and a 30-second budget. Only a complete successful inventory proving the ID absent removes state; permission, session, transport and malformed-response failures retain state. Refresh never changes or executes tasks. Legacy API fallback is not provided.
 ---
 
 # Core: Task (Resource)
 
-A Generic API Resource for making calls to the Synology DSM API.
+Manages DSM scheduled tasks. Refresh uses exact numeric identity with TaskScheduler list v3/get v4 and a 30-second budget. Only a complete successful inventory proving the ID absent removes state; permission, session, transport and malformed-response failures retain state. Refresh never changes or executes tasks. Legacy API fallback is not provided.
 
 
 
@@ -21,10 +21,10 @@ A Generic API Resource for making calls to the Synology DSM API.
 
 ### Optional
 
+- `enable` (Boolean) Whether the task's schedule is enabled in DSM. DSM only writes a crontab row for enabled tasks, so a disabled task never fires regardless of `schedule`. This is the schedule's on/off state, and is distinct from `run`: `run` triggers one immediate, one-shot execution at `when` and has no effect on whether the schedule itself is active. Defaults to `true`, since a scheduled task that does not schedule is not a useful default.
 - `notify_enable` (Boolean) Whether DSM emails the task's run details.
 - `notify_if_error` (Boolean) Whether DSM sends run details only when the task fails.
 - `notify_mail` (String) Email address that receives task run details. Required when `notify_enable` is true.
-- `enable` (Boolean) Whether the task's schedule is enabled in DSM. DSM only writes a crontab row for enabled tasks, so a disabled task never fires regardless of `schedule`. This is the schedule's on/off state, and is distinct from `run`: `run` triggers one immediate, one-shot execution at `when` and has no effect on whether the schedule itself is active. Defaults to `true`, since a scheduled task that does not schedule is not a useful default.
 - `run` (Boolean) Whether to run the task after creation.
 - `schedule` (String) Schedule expressed in cron, mapped onto DSM's scheduler: a fixed time (`17 3 * * *`) becomes a daily task, a day-of-week restriction (`17 3 * * 1-5`) becomes a weekly one, and an even interval (`*/15 * * * *`, `30 */6 * * *`) becomes DSM's repeat_min/repeat_hour. Schedules DSM cannot represent are rejected rather than silently mis-stored: day-of-month or month restrictions, bounded windows (`0 9-17 * * *`), and unevenly spaced lists (`0,7,30`).
 - `script` (String) Script content to run in the task.
