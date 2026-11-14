@@ -71,3 +71,10 @@ func TestTaskSchema_EnableDescriptionDistinguishesFromRun(t *testing.T) {
 			`enabled state`)
 	}
 }
+
+func TestTaskSchemaConstruction(t *testing.T) {
+	s := taskSchema(t)
+	if diags := s.ValidateImplementation(t.Context()); diags.HasError() {
+		t.Fatal(diags)
+	}
+}
