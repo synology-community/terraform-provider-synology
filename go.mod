@@ -1,10 +1,10 @@
 module github.com/synology-community/terraform-provider-synology
 
-go 1.26.0
+go 1.26.11
 
 require (
 	github.com/99designs/keyring v1.2.2
-	github.com/compose-spec/compose-go/v2 v2.16.2
+	github.com/compose-spec/compose-go/v2 v2.17.0
 	github.com/distribution/reference v0.6.0
 	github.com/docker/compose/v2 v2.40.3
 	github.com/docker/go-connections v0.8.2
@@ -164,7 +164,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
+	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
