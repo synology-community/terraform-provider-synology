@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/synology-community/go-synology"
 	"github.com/synology-community/go-synology/pkg/api/core"
+	"github.com/synology-community/terraform-provider-synology/synology/provider/core/taskclient"
 	"github.com/synology-community/terraform-provider-synology/synology/util"
 )
 
@@ -48,6 +50,7 @@ func NewTaskResource() resource.Resource {
 
 type TaskResource struct {
 	client core.Api
+	tasks  taskclient.API
 }
 
 // Create implements resource.Resource.
@@ -239,22 +242,27 @@ func (p *TaskResource) Read(
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	taskID := data.ID.ValueInt64()
-	task, err := p.client.TaskGet(ctx, taskID)
-	if err != nil {
+	if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueInt64() <= 0 {
+		resp.Diagnostics.AddError(
+			"Invalid task identity",
+			"Task state must contain a known positive ID.",
+		)
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	task, err := p.tasks.Read(ctx, data.ID.ValueInt64())
+	if errors.Is(err, taskclient.ErrAbsent) {
 		resp.State.RemoveResource(ctx)
 		return
 	}
-
-	// enable is DSM's own schedule state, refreshed unconditionally (not only
-	// when null/unknown) so an out-of-band change -- e.g. toggling the task in
-	// DSM's Task Scheduler UI -- produces a plan diff instead of staying
-	// permanently invisible. TaskResult.Enable's `omitempty` json tag only
-	// affects marshalling, not unmarshalling, so it does not suppress a
-	// `false` value read back here.
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read task", err.Error())
+		return
+	}
+	// enable is DSM's own schedule state. Refresh it unconditionally so
+	// out-of-band changes produce a plan diff, including changes to false.
 	data.Enable = types.BoolValue(task.Enable)
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -265,7 +273,7 @@ func (p *TaskResource) Schema(
 	resp *resource.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A Generic API Resource for making calls to the Synology DSM API.",
+		MarkdownDescription: `Manages DSM scheduled tasks. Refresh uses exact numeric identity with TaskScheduler list v3/get v4 and a 30-second budget. Only a complete successful inventory proving the ID absent removes state; permission, session, transport and malformed-response failures retain state. Refresh never changes or executes tasks. Legacy API fallback is not provided.`,
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
@@ -323,6 +331,7 @@ func (p *TaskResource) Schema(
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
+			},
 			"enable": schema.BoolAttribute{
 				MarkdownDescription: "Whether the task's schedule is enabled in DSM. DSM only " +
 					"writes a crontab row for enabled tasks, so a disabled task never fires " +
@@ -400,6 +409,7 @@ func (f *TaskResource) Configure(
 	}
 
 	f.client = client.CoreAPI()
+	f.tasks = taskclient.New(client)
 }
 
 func (p *TaskResource) ImportState(
