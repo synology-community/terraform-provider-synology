@@ -1,0 +1,29 @@
+{
+  "id": 42,
+  "name": "Example maintenance runner",
+  "owner": "runner",
+  "real_owner": "root",
+  "type": "script",
+  "enable": false,
+  "schedule": {
+    "date_type": 0,
+    "date": "2026-01-01",
+    "week_day": "0,1,2,3,4,5,6",
+    "hour": 3,
+    "minute": 17,
+    "monthly_week": [],
+    "repeat_hour": 0,
+    "repeat_min": 0,
+    "repeat_date": 1001,
+    "repeat_min_store_config": [1,5,10,15,20,30],
+    "repeat_hour_store_config": [1,2,3,4,5,6],
+    "last_work_hour": 23
+  },
+  "extra": {
+    "script": "/usr/local/sbin/example-maintenance",
+    "notify_enable": true,
+    "notify_if_error": true,
+    "notify_mail": "operator@example.test",
+    "profile_extension": {"preserve": true}
+  }
+}
